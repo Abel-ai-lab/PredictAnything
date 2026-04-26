@@ -156,6 +156,156 @@ def _write_runtime_files(branch: Path) -> None:
     )
 
 
+def _edge_result(
+    *,
+    traced_inputs: list[str] | None = None,
+    verdict: str = "PASS",
+    sharpe: float = 1.2,
+) -> dict:
+    return {
+        "verdict": verdict,
+        "score": "7/7" if verdict == "PASS" else "3/7",
+        "failures": [],
+        "warnings": [],
+        "profile": "equity_daily",
+        "K": 1,
+        "metrics": {
+            "sharpe": sharpe,
+            "lo_adjusted": 1.5,
+            "position_ic": 0.02,
+            "omega": 1.3,
+            "total_return": 0.22,
+            "max_dd": -0.08,
+        },
+        "requested_window": {"start": "2020-01-01", "end": None},
+        "effective_window": {"start": "2020-01-01", "end": "2020-12-31"},
+        "diagnostics": {
+            "failure_signature": "healthy_signal",
+            "runtime_stage": "validation",
+            "signal": {"active_days": 120, "total_days": 252},
+            "hints": [],
+        },
+        "semantic": {
+            "verdict": "PASS",
+            "read_count": 3,
+            "prepared_inputs": {
+                "selected_inputs": ["AAPL", "MSFT"],
+                "traced_inputs": traced_inputs or [],
+                "effective_window": {"start": "2020-01-01", "end": "2020-12-31"},
+                "issues": [],
+            },
+        },
+    }
+
+
+def _record_synthetic_round(
+    session: Path,
+    branch: Path,
+    *,
+    spec: dict,
+    result: dict,
+    result_path_override: str | None = None,
+) -> None:
+    ni.write_branch_spec(branch, spec)
+    metrics = result.get("metrics", {})
+    outputs = branch / "outputs"
+    outputs.mkdir(exist_ok=True)
+    round_id = "round-001"
+    result_path = outputs / f"{round_id}-edge-result.json"
+    report_path = outputs / f"{round_id}-edge-validation.md"
+    handoff_path = outputs / f"{round_id}-edge-handoff.json"
+    context_path = outputs / f"{round_id}-alpha-context.json"
+    context_path.write_text(json.dumps({"branch_spec": spec}, indent=2), encoding="utf-8")
+    if result_path_override is None:
+        result_path.write_text(json.dumps(result), encoding="utf-8")
+    report_path.write_text("# validation\n", encoding="utf-8")
+    handoff_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+    result_rel = result_path_override or str(result_path.relative_to(session))
+    (branch / "rounds" / f"{round_id}.md").write_text(
+        ni.render_round_note(
+            ticker="TSLA",
+            exp_id=session.name,
+            branch_id=branch.name,
+            round_id=round_id,
+            mode="explore",
+            decision="keep",
+            description="synthetic evidence run",
+            result=result,
+            backtest_start="2020-01-01",
+            input_note="",
+            hypothesis=spec.get("hypothesis", ""),
+            expected_signal="",
+            trigger="test",
+            change_summary="test",
+            time_spent_min="1",
+            summary="",
+            next_step="",
+            actions=[],
+            context_mode="injected",
+            context_path=str(context_path.relative_to(session)),
+            result_path=result_rel,
+            report_path=str(report_path.relative_to(session)),
+            handoff_path=str(handoff_path.relative_to(session)),
+        ),
+        encoding="utf-8",
+    )
+    ni.append_tsv_row(
+        branch / "results.tsv",
+        ni.RESULTS_HEADER,
+        {
+            "exp_id": session.name,
+            "ticker": "TSLA",
+            "branch_id": branch.name,
+            "round_id": round_id,
+            "decision": "keep",
+            "lo_adj": "1.500",
+            "ic": "0.0200",
+            "omega": "1.300",
+            "sharpe": f"{float(metrics.get('sharpe', 0)):.3f}",
+            "max_dd": "-0.0800",
+            "pnl": "22.0",
+            "K": "1",
+            "score": result.get("score", "7/7"),
+            "verdict": result.get("verdict", "PASS"),
+            "mode": "explore",
+            "description": "synthetic evidence run",
+            "result_path": result_rel,
+            "report_path": str(report_path.relative_to(session)),
+            "handoff_path": str(handoff_path.relative_to(session)),
+        },
+    )
+
+
+def test_evidence_runtime_facts_prefers_edge_contract() -> None:
+    result = _edge_result(traced_inputs=[])
+    result["runtime_facts"] = {
+        "contract": "causal-edge.runtime-facts/v1",
+        "verdict": "PASS",
+        "semantic_verdict": "PASS",
+        "runtime_stage": "validation",
+        "workflow_status": "evaluation_completed",
+        "read_summary": {
+            "target_reads": ["primary"],
+            "auxiliary_reads": ["AAPL"],
+            "read_count": 4,
+            "decision_count": 120,
+        },
+        "prepared_inputs": {
+            "selected_inputs": ["AAPL"],
+            "traced_inputs": ["AAPL"],
+            "effective_window": {"start": "2020-01-01", "end": "2020-12-31"},
+            "issues": [],
+        },
+        "temporal_visibility": {"issue_kinds": [], "has_error": False},
+    }
+
+    facts = ni.evidence_runtime_facts(result)
+
+    assert facts["workflow_status"] == "evaluation_completed"
+    assert facts["auxiliary_reads"] == ["AAPL"]
+    assert facts["read_count"] == 4
+
+
 def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monkeypatch) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
     ni.write_discovery(session, _sample_discovery())
@@ -233,6 +383,395 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
     assert "DecisionContext" in context_guide
 
 
+def test_default_branch_spec_starts_as_draft_declaration(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-decl", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+
+    spec = ni.load_branch_spec(branch)
+    status = ni.branch_declaration_status(spec)
+
+    assert spec["evidence_intent"] == "draft"
+    assert spec["source_type"] == "draft"
+    assert spec["method_family"] == "unspecified"
+    assert spec["selected_drivers"] == []
+    assert status["protocol_complete"] is False
+    assert "hypothesis" in status["protocol_gaps"]
+    assert "evidence_intent:draft" in status["protocol_gaps"]
+
+
+def test_complete_branch_declaration_accepts_legacy_selected_drivers(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-decl-complete", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL and MSFT driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "No non-primary driver reads or negative out-of-sample IC.",
+            "selected_drivers": ["AAPL", "MSFT"],
+        }
+    )
+
+    status = ni.branch_declaration_status(spec)
+
+    assert status["protocol_complete"] is True
+    assert status["selected_inputs"] == ["AAPL", "MSFT"]
+
+
+def test_evidence_ledger_marks_missing_hypothesis_as_protocol_incomplete(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-ledger-missing", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "source_type": "causal",
+            "method_family": "graph",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "selected_drivers": ["AAPL", "MSFT"],
+        }
+    )
+    _record_synthetic_round(session, branch, spec=spec, result=_edge_result())
+
+    ni.render_session(session)
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+
+    row = ledger["rows"][-1]
+    assert row["evidence_label"] == "protocol_incomplete"
+    assert "hypothesis" in row["declaration_gaps"]
+
+
+def test_evidence_ledger_classifies_complete_target_control(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-ledger-control", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "control-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "TSLA target momentum persists over the next daily bar.",
+            "evidence_intent": "control",
+            "input_claim": "target_only",
+            "mechanism_family": "target_momentum",
+            "invalidation_condition": "Target-only validation loses positive IC.",
+        }
+    )
+    _record_synthetic_round(session, branch, spec=spec, result=_edge_result())
+
+    ni.render_session(session)
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+
+    row = ledger["rows"][-1]
+    assert row["evidence_label"] == "target_control_evidence"
+    assert row["comparable"] is True
+    assert row["workflow_status"] == "evaluation_completed"
+
+
+def test_evidence_ledger_classifies_missing_edge_result_as_workflow_blocker(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-ledger-blocker", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "control-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "TSLA target momentum persists over the next daily bar.",
+            "evidence_intent": "control",
+            "input_claim": "target_only",
+            "mechanism_family": "target_momentum",
+            "invalidation_condition": "Target-only validation loses positive IC.",
+        }
+    )
+    _record_synthetic_round(
+        session,
+        branch,
+        spec=spec,
+        result=_edge_result(verdict="ERROR"),
+        result_path_override="branches/control-v1/outputs/missing-edge-result.json",
+    )
+
+    ni.render_session(session)
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+
+    row = ledger["rows"][-1]
+    assert row["evidence_label"] == "workflow_blocker"
+    assert row["workflow_status"] == "blocked"
+
+
+def test_run_branch_round_records_network_failure_as_workflow_blocker(tmp_path, monkeypatch) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-network-blocker", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    _write_runtime_files(branch)
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "No AAPL reads or negative holdout IC.",
+            "selected_drivers": ["AAPL"],
+        }
+    )
+    ni.write_branch_spec(branch, spec)
+
+    def fake_subprocess_run(command, cwd=None, capture_output=None, text=None, env=None):
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout="",
+            stderr="HTTPSConnectionPool remote end closed connection without response",
+        )
+
+    monkeypatch.setattr(ni.subprocess, "run", fake_subprocess_run)
+
+    result = ni.run_branch_round(
+        Namespace(
+            branch=str(branch),
+            mode="explore",
+            description="network failure round",
+            input_note="",
+            hypothesis="AAPL driver strength leads TSLA next-day risk appetite.",
+            expected_signal="",
+            trigger="test",
+            change_summary="test",
+            time_spent_min="1",
+            summary="",
+            next_step="",
+            action=[],
+            python_bin=None,
+        )
+    )
+
+    assert result == 1
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+    row = ledger["rows"][-1]
+    assert row["evidence_label"] == "workflow_blocker"
+    assert row["runtime_stage"] == "data_access"
+    assert row["workflow_status"] == "not_completed"
+
+
+def test_starter_scaffold_round_is_diagnostic_only_not_candidate(tmp_path, monkeypatch) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-scaffold-diagnostic", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    _write_runtime_files(branch)
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "No AAPL reads or negative holdout IC.",
+            "selected_drivers": ["AAPL"],
+        }
+    )
+    ni.write_branch_spec(branch, spec)
+
+    def fake_subprocess_run(command, cwd=None, capture_output=None, text=None, env=None):
+        result_path = Path(command[command.index("--output-json") + 1])
+        report_path = Path(command[command.index("--output-md") + 1])
+        handoff_path = Path(command[command.index("--output-handoff") + 1])
+        result_path.write_text(
+            json.dumps(_edge_result(traced_inputs=["AAPL"], sharpe=2.3)),
+            encoding="utf-8",
+        )
+        report_path.write_text("# validation\n", encoding="utf-8")
+        handoff_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(ni.subprocess, "run", fake_subprocess_run)
+
+    result = ni.run_branch_round(
+        Namespace(
+            branch=str(branch),
+            mode="explore",
+            description="starter scaffold wiring check",
+            input_note="",
+            hypothesis="AAPL driver strength leads TSLA next-day risk appetite.",
+            expected_signal="",
+            trigger="test",
+            change_summary="test",
+            time_spent_min="1",
+            summary="",
+            next_step="",
+            action=[],
+            python_bin=None,
+        )
+    )
+
+    assert result == 0
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+    row = ledger["rows"][-1]
+    assert row["engine_scaffold_status"] == "starter_scaffold"
+    assert row["evidence_label"] == "diagnostic_only"
+
+
+def test_frontier_reports_coverage_without_route_recommendation(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-frontier", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL and MSFT driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "No non-primary driver reads or negative out-of-sample IC.",
+            "selected_drivers": ["AAPL", "MSFT"],
+        }
+    )
+    _record_synthetic_round(session, branch, spec=spec, result=_edge_result(traced_inputs=["AAPL"]))
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    frontier_text = (session / ni.FRONTIER_MARKDOWN_FILENAME).read_text(encoding="utf-8")
+    session_text = (session / "README.md").read_text(encoding="utf-8")
+
+    assert frontier["evidence_label_counts"]["candidate_causal_evidence"] == 1
+    assert frontier["mechanism_family_counts"]["driver_momentum"] == 1
+    assert frontier["driver_reads"] == ["AAPL"]
+    forbidden = ["try next", "recommend", "open a sibling", "resume `", "threshold"]
+    assert not any(term in frontier_text.lower() for term in forbidden)
+    assert "## Next Step" not in session_text
+    assert "candidate_causal_evidence" in session_text
+
+
+def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-third-party-replay", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+
+    for index in range(6):
+        branch = ni.init_branch_dir(session, f"ema-candidate-{index + 1}")
+        spec = ni.load_branch_spec(branch)
+        spec.update(
+            {
+                "evidence_intent": "candidate",
+                "input_claim": "graph_supported",
+                "mechanism_family": "target_ema",
+                "invalidation_condition": "No auxiliary driver reads or no positive holdout IC.",
+                "requested_start": "2020-01-01",
+                "selected_drivers": ["AAPL"],
+            }
+        )
+        _record_synthetic_round(
+            session,
+            branch,
+            spec=spec,
+            result=_edge_result(traced_inputs=[], sharpe=2.35),
+        )
+
+    control = ni.init_branch_dir(session, "target-ema-control")
+    control_spec = ni.load_branch_spec(control)
+    control_spec.update(
+        {
+            "hypothesis": "TSLA target EMA momentum persists over the next daily bar.",
+            "evidence_intent": "control",
+            "input_claim": "target_only",
+            "mechanism_family": "target_ema",
+            "invalidation_condition": "Target-only validation loses positive IC.",
+            "requested_start": "2020-01-01",
+        }
+    )
+    _record_synthetic_round(
+        session,
+        control,
+        spec=control_spec,
+        result=_edge_result(traced_inputs=[], sharpe=2.42),
+    )
+
+    draft = ni.init_branch_dir(session, "target-ema-draft")
+    draft_spec = ni.load_branch_spec(draft)
+    draft_spec.update(
+        {
+            "hypothesis": "TSLA target EMA momentum may persist over the next daily bar.",
+            "evidence_intent": "draft",
+            "input_claim": "target_only",
+            "mechanism_family": "target_ema",
+            "requested_start": "2020-01-01",
+        }
+    )
+    _record_synthetic_round(
+        session,
+        draft,
+        spec=draft_spec,
+        result=_edge_result(traced_inputs=[], sharpe=2.18),
+    )
+
+    blocker = ni.init_branch_dir(session, "runtime-blocker")
+    blocker_spec = ni.load_branch_spec(blocker)
+    blocker_spec.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "No AAPL reads or negative holdout IC.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["AAPL"],
+        }
+    )
+    _record_synthetic_round(
+        session,
+        blocker,
+        spec=blocker_spec,
+        result=_edge_result(verdict="ERROR"),
+        result_path_override="branches/runtime-blocker/outputs/missing-edge-result.json",
+    )
+
+    ni.render_session(session)
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    session_text = (session / "README.md").read_text(encoding="utf-8").lower()
+    frontier_text = (session / ni.FRONTIER_MARKDOWN_FILENAME).read_text(encoding="utf-8").lower()
+
+    labels = frontier["evidence_label_counts"]
+    assert labels.get("candidate_causal_evidence", 0) == 0
+    assert labels["protocol_incomplete"] == 7
+    assert labels["target_control_evidence"] == 1
+    assert labels["workflow_blocker"] == 1
+    assert frontier["mechanism_family_counts"]["target_ema"] == 8
+    assert frontier["driver_reads"] == []
+
+    high_sharpe_rows = [row for row in ledger["rows"] if float(row["sharpe"] or 0) > 2.0]
+    assert {row["evidence_label"] for row in high_sharpe_rows} == {
+        "protocol_incomplete",
+        "target_control_evidence",
+    }
+    assert all(
+        row["evidence_label"] != "candidate_causal_evidence"
+        for row in ledger["rows"]
+        if row["declared_input_claim"] == "target_only"
+    )
+    forbidden = [
+        "try next",
+        "recommend",
+        "open a sibling",
+        "resume `",
+        "next branch",
+        "proxy",
+        "threshold",
+    ]
+    assert not any(term in session_text for term in forbidden)
+    assert not any(term in frontier_text for term in forbidden)
+
+
 def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v2", tmp_path / "research")
     discovery = _sample_discovery()
@@ -261,3 +800,4 @@ def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
     assert sorted(context["_feeds"].keys()) == ["AAPL", "MSFT", "primary"]
     assert context["_feeds"]["AAPL"]["symbol"] == "AAPL"
     assert context["data_manifest"]["selected_drivers"] == ["AAPL", "MSFT"]
+    assert context["branch_declaration"]["evidence_intent"] == "draft"

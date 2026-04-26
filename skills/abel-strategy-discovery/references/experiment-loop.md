@@ -35,6 +35,16 @@ sidecar project.
 This is a compounding search loop, not a checklist of unrelated backtests.
 Each round should answer a question about mechanism, not just consume compute.
 
+After each render, treat `evidence_ledger.json` as the evidence record and
+`frontier.md` / `frontier.json` as factual coverage reports. They should show
+what happened, not tell you which branch, proxy, threshold, or mechanism to try
+next.
+
+Use `agent_context.md` to resume the session. When you learn something worth
+carrying forward, write it yourself with `add-memory` and cite `ledger:*`,
+`frontier:*`, or raw artifact references when the statement is a research
+conclusion.
+
 ## What Each Layer Owns
 
 - session: discovery and readiness
@@ -61,30 +71,47 @@ Before a recorded round, the branch should already have:
 - `inputs/context_guide.md`
 - `inputs/probe_samples.json`
 
+For protocol-complete candidate evidence, `branch.yaml` should explicitly
+declare:
+
+- `hypothesis`
+- `evidence_intent`
+- `input_claim`
+- `mechanism_family`
+- `invalidation_condition`
+- `requested_start`
+- `selected_inputs` or legacy `selected_drivers`
+
 `run-branch` is not the place to decide the branch universe implicitly.
 `debug-branch` is the place to test whether the branch can see the world it
 thinks it can see.
 
-## KEEP Rule
+## Evidence Admission Rule
 
-```
-KEEP if: semantic preflight is clean enough to trust the run AND causal-edge verdict == "PASS" AND metrics improve vs latest KEEP baseline
-DISCARD: everything else
-```
+The primary question after a run is not "KEEP or DISCARD?" It is "what kind of
+evidence did this produce?"
 
-Each KEEP updates the baseline. The next round should compound on the latest
-credible result rather than on a pre-declared static experiment grid.
-DISCARD is not wasted motion when it narrows the mechanism honestly.
+- complete graph-supported claim + actual discovered-driver reads +
+  completed validation: candidate causal evidence
+- complete target-only claim + completed validation: target control evidence
+- missing declaration fields: protocol incomplete
+- auth, cache, setup, command, or missing artifact failure: workflow blocker
+- semantic or temporal visibility violation: runtime invalid
+- debug/preflight-only run: diagnostic only
+
+KEEP/DISCARD can remain a secondary profile-specific note, but it is not the
+evidence class. Do not rank blocked, invalid, incomplete, or non-comparable
+runs as lead candidates.
 
 ## Explore vs Exploit
 
 - explore: genuinely new information or a different causal angle
 - exploit: parameter tuning, threshold tuning, or local refinement on the same idea
 
-Use branch history to compound on the latest credible baseline instead of
-pre-defining a large static experiment grid.
-If multiple exploit variants die the same death, stop polishing and force a
-real explore move.
+Use branch history, the ledger, and the frontier to understand what has already
+been covered. If multiple exploit variants die the same death, record that fact
+and choose the next research move yourself rather than following generated
+route guidance.
 
 ## Failure Interpretation
 
@@ -92,7 +119,8 @@ Treat failures as localization signals:
 
 - data/setup failure: fix branch spec or prepare step
 - semantic/runtime failure: fix engine visibility assumptions or output semantics
-- validation failure: change the strategy idea
+- validation failure: the mechanism has produced research evidence, but the
+  framework should not decide the next strategy route
 
 Do not mix these categories together. A branch that fails validation is still a
 useful research result if it tells you which mechanism is weak.
@@ -101,11 +129,11 @@ data path, semantic assumptions, implementation, or idea?"
 
 ## Compounding Rule
 
-Serial execution preserves learning. Static grids destroy it.
+Serial execution preserves learning. Static grids can hide it.
 
 - if a round reveals a stronger mechanism, compound from that mechanism
 - if a round only reveals a local implementation defect, fix the defect before changing the thesis
-- if repeated exploit variants keep failing the same way, force a genuine explore move
+- if repeated exploit variants keep failing the same way, mark the concentration in the frontier before continuing
 - if the failure signature changes after a branch edit, that change is itself evidence about the mechanism
 
 ## Honest Stop

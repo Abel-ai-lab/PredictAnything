@@ -7,7 +7,7 @@ workspace setup into session and branch work.
 
 - `discovery.json` is only the session candidate snapshot
 - `readiness.json` is only the session coverage/advisory report
-- `branch.yaml` defines the branch runtime intent
+- `branch.yaml` defines the branch research declaration and runtime intent
 - `prepare-branch` resolves inputs, writes the branch contract, and warms edge
   cache before a recorded round
 - `debug-branch` is the semantic preflight step
@@ -15,7 +15,33 @@ workspace setup into session and branch work.
 - session `backtest_start` is the default research target; `branch.yaml.requested_start` may override it explicitly
 
 Discovery gives leads, not answers. Readiness gives coverage clues, not
-permission. A branch is where the research becomes a falsifiable bet.
+permission. A branch is where the research becomes a falsifiable bet, and the
+evidence ledger is where the framework decides whether a run counts as
+candidate evidence, control evidence, diagnostic evidence, or a blocker.
+
+## Evidence Boundary
+
+`branch.yaml` is a claim, not proof. Fill these fields before expecting a run
+to count as protocol-complete candidate evidence:
+
+- `hypothesis`
+- `evidence_intent`: `candidate`, `control`, `diagnostic`, or `draft`
+- `input_claim`: `graph_supported`, `target_only`, `supplement`, or `mixed`
+- `mechanism_family`
+- `invalidation_condition`
+- `requested_start`
+- `selected_inputs` or legacy `selected_drivers`
+
+Legacy `source_type` and `method_family` may still appear, but they do not make
+a result causal evidence by themselves. The generated `evidence_ledger.json`
+derives the evidence label from the declaration plus actual edge runtime facts.
+The generated `frontier.md` and `frontier.json` report coverage facts; they are
+not a strategy advisor.
+
+`agent_context.md` is the compact resume surface for the next agent turn. It
+combines frontier facts, recent evidence rows, and agent-authored memory. Use
+`add-memory` for your own insights, open questions, and directions; do not wait
+for generated strategy guidance.
 
 ## What `prepare-branch` Produces
 
@@ -38,8 +64,10 @@ should inspect them before changing strategy logic.
 - inspect the prepared inputs
 - write `engine.py`
 - read semantic preflight before recording a round
-- interpret the result honestly
-- decide the next branch move
+- inspect `evidence_ledger.json` and `frontier.md` after a recorded round
+- record agent-owned memory when a result changes your research state
+- interpret the result as evidence, protocol gap, runtime invalidity, or
+  workflow blocker before choosing your own next research move
 
 Alpha owns the bookkeeping so the branch can focus on mechanism, not file
 management theater.
@@ -71,7 +99,7 @@ Do not reach for raw loaders or ad hoc alignment helpers from inside
 surface that mismatch and fix the framework or branch inputs instead of writing
 around the contract.
 
-## Recommended Loop
+## Protocol Checklist
 
 1. State the branch thesis in `branch.yaml`.
 2. Run `prepare-branch`.
@@ -79,7 +107,12 @@ around the contract.
 4. Implement or revise `compute_decisions(self, ctx)`.
 5. Run `abel-alpha debug-branch --branch ...`.
 6. Read the semantic verdict and traces.
-7. Only then decide whether `run-branch` is justified.
+7. Run `abel-alpha run-branch --branch ...` when the declaration and debug facts
+   are ready enough for the evidence label you want.
+8. Read `evidence_ledger.json` and `frontier.md`; do not look for a generated
+   next-strategy recommendation.
+9. Record only your own grounded follow-up state with `add-memory`, using
+   evidence references when the statement is meant as a research conclusion.
 
 ## Readiness
 
@@ -92,8 +125,10 @@ Keep readiness advisory:
 
 ## Research Judgment
 
-- start causal-first; correlation-derived signals may help, but do not replace Abel discovery as the main search prior
+- causal discovery is a prior, not an evidence label
+- target-only controls are allowed, but declare them as controls or drafts
 - explore means new information, a new transmission path, or a genuinely different mechanism
+- branch count is not exploration breadth if every branch is the same family and input claim
 - weird low-attention parents are not automatically noise; explain them before discarding them
 - treat semantic failure as a signal about visibility or timing assumptions
 - treat metric failure as direction, not as a prompt to hack metrics

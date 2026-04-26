@@ -1,7 +1,10 @@
 # Methodology
 
-causal-edge owns the metric triangle definition and the "why causal" argument.
-See `causal-edge docs/why-causal.md` for the full derivation (Pearl, DGP, regime invariance).
+causal-edge owns runtime legality and the metric triangle definition.
+Branch declarations and the evidence ledger own the product-level question of
+what kind of research evidence a run produced.
+See `causal-edge docs/why-causal.md` for the causal prior and validation
+background (Pearl, DGP, regime invariance).
 
 This file covers only what causal-edge doesn't: the axiom/constraint distinction
 and production proofs specific to the research loop.
@@ -26,7 +29,8 @@ The principle is permanent. Proof: xcorr scale sweep, 2.0/0.0 passed Lo+Sharpe b
 collapsed 29% — only the triangle caught concentration gaming.
 
 **C2. Serial compounding > pre-defined grid.**
-Each KEEP updates baseline. 200+ experiments across 6 assets confirm. BNB: 158 serial
+Protocol-complete comparable evidence should update the human research baseline.
+200+ experiments across 6 assets support the serial style. BNB: 158 serial
 → Sharpe 2.82. Grid search of same space → lower optimum.
 
 **C3. Explore = genuinely new information.**
@@ -43,15 +47,21 @@ If Abel is unavailable, heuristic discovery can keep the research loop moving an
 
 In the current branch workflow, the right burden split is:
 
-- `Abel-alpha` makes the branch world explicit
+- `Abel-alpha` makes the branch declaration and branch world explicit
 - `causal-edge` owns temporal/runtime legality
+- the evidence ledger classifies evidence labels from declaration plus runtime facts
+- agent memory preserves the agent's own grounded research state between turns
 - the strategy owns mechanism design inside that visible world
 
 That is why the branch-default path is now:
 
+- declare hypothesis, evidence intent, input claim, mechanism family, invalidation condition, and selected inputs
 - inspect prepared inputs
 - write `compute_decisions(self, ctx)`
 - use semantic preflight before a recorded run
+- inspect `evidence_ledger.json` and `frontier.md` after the run
+- record agent-authored memory only when it helps the next research turn resume
+  or compound
 
 not:
 
