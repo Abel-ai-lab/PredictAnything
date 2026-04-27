@@ -22,7 +22,7 @@ from pathlib import Path
 import yaml
 
 from abel_strategy_discovery.doctor import (
-    build_auth_handoff_command,
+    build_auth_recovery_instruction,
     doctor_exit_code,
     render_doctor_report,
     run_doctor,
@@ -1019,13 +1019,11 @@ def fetch_live_discovery(ticker: str, *, limit: int) -> dict:
     try:
         require_api_key()
     except MissingAbelApiKeyError as exc:
-        python_bin = resolve_default_python_bin(workspace_root or Path.cwd())
         raise RuntimeError(
             "init-session live graph discovery is blocked on Abel auth. "
-            "No reusable auth was found, so start explicit auth handoff now with:\n"
-            f"{build_auth_handoff_command(python_bin)}\n\n"
-            "Surface the URL immediately when it appears, complete authorization, "
-            "then retry `abel-strategy-discovery init-session --ticker "
+            "No reusable auth was found. "
+            f"{build_auth_recovery_instruction(workspace_root or Path.cwd())}\n\n"
+            "After auth is ready, retry `abel-strategy-discovery init-session --ticker "
             f"{ticker.upper()} --exp-id <exp-id>`."
         ) from exc
 
@@ -1252,8 +1250,8 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
         if "Abel API key not found" in runtime_error_text:
             raise RuntimeError(
                 "Branch preparation is blocked on Abel auth. "
-                "Start explicit auth handoff now with:\n"
-                f"{build_auth_handoff_command(python_bin)}"
+                "Use abel-auth, then rerun "
+                f"`abel-strategy-discovery prepare-branch --branch {branch}`."
             )
         raise RuntimeError(
             "Abel-edge warm-cache did not produce dependencies output. "
@@ -1358,7 +1356,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     print("")
     print("From here:")
     if auth_handoff_needed:
-        print(f"  {build_auth_handoff_command(python_bin)}")
+        print("  Use abel-auth")
         print(f"  abel-strategy-discovery prepare-branch --branch {branch}")
     else:
         print("  The branch inputs are ready; use debug preflight first, then record a round once the engine reflects the branch thesis.")
@@ -4045,7 +4043,7 @@ def classify_result_frame(result: dict[str, object]) -> tuple[str, str]:
     if failure_signature == "auth_missing" or "api key not found" in failures_lower:
         return (
             "workflow_boundary",
-            "The branch is still blocked on auth for a data path; complete the auth handoff before treating this as an engine or strategy issue.",
+            "The branch is still blocked on auth for a data path; use abel-auth before treating this as an engine or strategy issue.",
         )
 
     if verdict == "ERROR":

@@ -308,7 +308,7 @@ Run `abel-strategy-discovery doctor` before opening a session.
 
 - `ready`: you can start research
 - `ready` means continue with `init-session -> init-branch -> branch.yaml -> prepare-branch`
-- `auth_missing`: no reusable auth was found; start the explicit workspace-runtime auth handoff immediately and surface the URL as soon as it appears
+- `auth_missing`: no reusable auth was found; use `abel-auth`, then rerun `doctor`
 - `env_missing`, `edge_missing`, or `edge_contract_missing`: rerun `abel-strategy-discovery env init`
 """
 
@@ -344,9 +344,8 @@ abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/gra
 abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/graph-v1 -d "baseline"
 ```
 
-Run `doctor` before `init-session`. If it reports `auth_missing`, move
-immediately into the workspace runtime's explicit auth handoff and surface the
-URL as soon as it appears.
+Run `doctor` before `init-session`. If it reports `auth_missing`, use
+`abel-auth`, then rerun `doctor`.
 Treat `branch.yaml` as the place where target, start, drivers, and overlap
 become explicit. Treat `prepare-branch` as the moment that makes those inputs
 real. Treat the generated `engine.py` as a starter path check; once the branch

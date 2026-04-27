@@ -25,9 +25,12 @@ SUCCESS_STATUSES = {"ready"}
 WORKSPACE_MODE = "alpha-managed branch research"
 
 
-def build_auth_handoff_command(python_path: str | Path) -> str:
-    """Return the explicit auth handoff command for the active workspace runtime."""
-    return f"{python_path} -m causal_edge.cli login --json --no-browser"
+def build_auth_recovery_instruction(root: Path | str) -> str:
+    """Return the agent-facing recovery instruction when reusable auth is missing."""
+    return (
+        "Use abel-auth, then rerun "
+        f"abel-strategy-discovery doctor --path {Path(root)}."
+    )
 
 
 def run_doctor(start: Path | None = None) -> dict[str, object]:
@@ -53,7 +56,6 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
                 "edge_discovery_payload": "not_run",
                 "edge_context_json": "not_run",
                 "auth": "not_run",
-                "edge_login_fallback": "not_run",
             },
             "next_step": (
                 "abel-strategy-discovery workspace bootstrap --path "
@@ -76,7 +78,6 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
                 "edge_discovery_payload": "not_run",
                 "edge_context_json": "not_run",
                 "auth": "not_run",
-                "edge_login_fallback": "not_run",
             },
             "next_step": "fix alpha.workspace.yaml",
         }
@@ -90,7 +91,6 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
         "edge_discovery_payload": "not_run",
         "edge_context_json": "not_run",
         "auth": "not_run",
-        "edge_login_fallback": "not_run",
     }
 
     result: dict[str, object] = {
@@ -137,7 +137,6 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
 
     auth_check = probe_abel_auth(python_path, root)
     checks["auth"] = "pass" if auth_check.get("ok") else "fail"
-    checks["edge_login_fallback"] = "pass" if checks["causal_edge_cli"] == "pass" else "fail"
     result["auth"] = auth_check
     result["auth_scope"] = classify_auth_scope(root, auth_check)
 
@@ -155,16 +154,16 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
         return result
 
     if not auth_check.get("ok"):
-        handoff_command = build_auth_handoff_command(python_path)
+        auth_instruction = build_auth_recovery_instruction(root)
         result.update(
             {
                 "status": "auth_missing",
                 "summary": (
                     "Workspace environment is ready, but no reusable Abel auth was detected. "
-                    "Start explicit auth handoff now."
+                    "Use abel-auth before live discovery or evaluation."
                 ),
-                "auth_handoff_command": handoff_command,
-                "next_step": handoff_command,
+                "auth_action": auth_instruction,
+                "next_step": auth_instruction,
             }
         )
         return result
@@ -256,8 +255,8 @@ def render_doctor_report(result: dict[str, object]) -> str:
     auth_scope = result.get("auth_scope")
     if auth_scope:
         lines.append(f"Auth scope: {auth_scope}")
-    auth_handoff_command = result.get("auth_handoff_command")
-    if auth_handoff_command:
-        lines.append(f"Auth handoff command: {auth_handoff_command}")
+    auth_action = result.get("auth_action")
+    if auth_action:
+        lines.append(f"Auth action: {auth_action}")
     lines.append(f"Next step: {result.get('next_step', '')}")
     return "\n".join(lines)
