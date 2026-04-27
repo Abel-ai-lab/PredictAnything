@@ -76,6 +76,16 @@ After repeated same-neighborhood validation failures, use
 `--continuation-rationale` if continuing the branch still reflects your own
 research judgment.
 
+## Driver/Input Breadth And Memory
+
+Driver/input breadth is about candidate input hypotheses. Target-only controls
+are useful contrast evidence, but they do not cover graph-supported candidate
+driver sets.
+
+Use `agent_memory.jsonl` as agent resume state. When frontier or warning facts
+show enough evidence has accumulated, write your own `add-memory` insight with
+`ledger:*` or `frontier:*` references before continuing deep refinement.
+
 ## What `prepare-branch` Produces
 
 The branch contract is materialized under `inputs/`:

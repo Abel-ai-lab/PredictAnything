@@ -30,6 +30,8 @@ Operating rules:
 10. Do not call parameter, sizing, threshold, filter, or window tweaks broad
     exploration. Use changed-dimension and continuation-rationale fields to keep
     local refinement accountable.
+11. When evidence accumulates, write agent-owned memory with ledger or frontier
+    references before continuing deep refinement.
 
 Read `references/workspace-bootstrap.md` before bootstrapping a new workspace.
 Read `references/branch-authoring.md` before creating or revising a branch.
