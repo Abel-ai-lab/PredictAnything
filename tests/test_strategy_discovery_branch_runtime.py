@@ -908,6 +908,77 @@ def test_frontier_surfaces_candidate_failures_and_resume_facts(tmp_path) -> None
     assert not any(term in context_text.lower() for term in forbidden)
 
 
+def test_init_session_creates_research_journal(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-journal-init", tmp_path / "research")
+
+    journal_path = session / ni.RESEARCH_JOURNAL_FILENAME
+    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+
+    assert journal_path.exists()
+    assert "agent-owned research notes" in journal_path.read_text(encoding="utf-8")
+    assert "## Research Journal" in context_text
+    assert "- evidence_reference_count: `0`" in context_text
+    assert "- has_evidence_linked_update: `false`" in context_text
+    assert "- recent_excerpt: `none`" in context_text
+
+
+def test_agent_context_reads_evidence_linked_research_journal(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-journal-linked", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["AAPL"],
+        }
+    )
+    _record_synthetic_round(
+        session,
+        branch,
+        spec=spec,
+        result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+    )
+    (session / ni.RESEARCH_JOURNAL_FILENAME).write_text(
+        "# Research Journal\n\n## Notes\n\n"
+        "AAPL-only failed cleanly in ledger:graph-v1:round-001; the useful "
+        "artifact is branches/graph-v1/outputs/round-001-edge-result.json.\n",
+        encoding="utf-8",
+    )
+
+    ni.render_session(session)
+    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+
+    assert "- evidence_reference_count: `2`" in context_text
+    assert "- resolved_evidence_reference_count: `2`" in context_text
+    assert "- has_evidence_linked_update: `true`" in context_text
+    assert "AAPL-only failed cleanly" in context_text
+
+
+def test_journal_prose_without_refs_is_not_evidence_linked(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-journal-prose", tmp_path / "research")
+    (session / ni.RESEARCH_JOURNAL_FILENAME).write_text(
+        "# Research Journal\n\n## Notes\n\nThis direction feels too narrow.\n",
+        encoding="utf-8",
+    )
+
+    ni.render_session(session)
+    status = ni.build_research_journal_status(
+        session,
+        ledger=json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8")),
+        frontier=json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8")),
+    )
+
+    assert status["evidence_reference_count"] == 0
+    assert status["has_evidence_linked_update"] is False
+    assert status["recent_excerpt"] == "This direction feels too narrow."
+
+
 def test_exploration_breadth_marks_single_branch_local_refinement(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-breadth-local", tmp_path / "research")
     ni.write_discovery(session, _sample_discovery())
@@ -1462,14 +1533,15 @@ def test_pre_run_warning_before_fourth_same_branch_round(tmp_path) -> None:
     assert quiet_lines == []
 
 
-def test_init_session_output_uses_breadth_first_start_protocol() -> None:
+def test_init_session_output_uses_graph_first_research_loop() -> None:
     lines = ni.render_breadth_first_start_lines(Path("research/tsla/demo"))
     rendered = "\n".join(lines)
 
     assert "<family-a-branch>" in rendered
     assert "<family-b-branch>" in rendered
     assert "graph-v1" not in rendered
-    assert "graph-first breadth protocol" in rendered
+    assert "graph-first research loop" in rendered
+    assert "research_journal.md" in rendered
 
 
 def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_path) -> None:
