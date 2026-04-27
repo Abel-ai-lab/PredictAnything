@@ -577,7 +577,7 @@ def main() -> int:
             readiness_summary = format_data_readiness_summary(readiness)
             if readiness_summary:
                 print(f"  data_readiness: {readiness_summary}")
-            for line in readiness_recommendation_lines(readiness):
+            for line in readiness_coverage_hint_lines(readiness):
                 print(f"  {line}")
             warning = build_readiness_warning(readiness)
             if warning:
@@ -608,7 +608,7 @@ def main() -> int:
         readiness_summary = format_data_readiness_summary(readiness)
         if readiness_summary:
             print(f"  data_readiness: {readiness_summary}")
-        for line in readiness_recommendation_lines(readiness):
+        for line in readiness_coverage_hint_lines(readiness):
             print(f"  {line}")
         warning = build_readiness_warning(readiness)
         if warning:
@@ -669,7 +669,7 @@ def main() -> int:
         if warning:
             print("Readiness:")
             print(f"  warning: {warning}")
-            for line in readiness_recommendation_lines(readiness):
+            for line in readiness_coverage_hint_lines(readiness):
                 print(f"  coverage_hint: {line}")
         print("")
         render_section(
@@ -1665,7 +1665,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
             print(f"Branch context: {line}", file=sys.stderr)
         if warning and backtest_start == _get_backtest_start(discovery):
             print(f"Readiness warning: {warning}", file=sys.stderr)
-        for line in readiness_recommendation_lines(readiness):
+        for line in readiness_coverage_hint_lines(readiness):
             print(f"Coverage hint: {line}", file=sys.stderr)
     rows = read_tsv_rows(branch / "results.tsv")
     round_id = f"round-{len(rows) + 1:03d}"
@@ -1710,7 +1710,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
             f"Warning: {warning}",
             file=sys.stderr,
         )
-        for line in readiness_recommendation_lines(readiness):
+        for line in readiness_coverage_hint_lines(readiness):
             print(f"Coverage hint: {line}", file=sys.stderr)
 
     python_bin = args.python_bin or resolve_default_python_bin(branch)
@@ -2247,17 +2247,19 @@ def print_status(session: Path) -> None:
         warning = build_readiness_warning(readiness)
         if warning:
             print(f"Readiness warning: {warning}")
-        for line in readiness_recommendation_lines(readiness):
+        for line in readiness_coverage_hint_lines(readiness):
             print(f"Coverage hint: {line}")
-    leader = select_leader(branches)
-    if leader and leader["rows"]:
-        latest = leader["rows"][-1]
-        latest_note = read_round_note(leader["branch_dir"], latest.get("round_id", ""))
+    frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
+    if frontier:
+        labels = frontier.get("evidence_label_counts") or {}
+        graph_priority = frontier.get("graph_priority") or {}
         print(
-            "Top snapshot: "
-            f"{leader['branch_id']} {latest.get('decision', 'pending')} {latest.get('verdict', 'n/a')} "
-            f"{latest.get('score', '?/?')} {latest_note.get('failure_signature', 'unknown')} "
-            f"active={latest_note.get('signal_activity', 'n/a')}"
+            "Evidence frontier: "
+            f"rows={frontier.get('row_count', 0)} "
+            f"candidate_causal={labels.get('candidate_causal_evidence', 0)} "
+            f"target_control={labels.get('target_control_evidence', 0)} "
+            f"workflow_blockers={frontier.get('workflow_blockers', 0)} "
+            f"graph_first_uncovered={str(graph_priority.get('graph_first_uncovered', False)).lower()}"
         )
     for branch in branches:
         latest = branch["rows"][-1] if branch["rows"] else {}
@@ -2546,69 +2548,6 @@ def pending_initial_breadth_state(
     }
 
 
-def select_leader(branches: list[dict]) -> dict | None:
-    ranked = ranked_branches(branches)
-    return ranked[0] if ranked else None
-
-
-def ranked_branches(branches: list[dict]) -> list[dict]:
-    scored = [branch for branch in branches if branch["rows"]]
-    return sorted(scored, key=branch_rank_key, reverse=True)
-
-
-def branch_rank_key(branch: dict) -> tuple:
-    rows = branch["rows"]
-    latest = rows[-1]
-    note = read_round_note(branch["branch_dir"], latest.get("round_id", ""))
-    return (
-        decision_rank(latest.get("decision", "")),
-        verdict_rank(latest.get("verdict", "")),
-        parse_score_ratio(latest.get("score", "")),
-        float(latest.get("lo_adj") or 0),
-        float(latest.get("sharpe") or 0),
-        signal_activity_ratio(note.get("signal_activity", "")),
-        len(rows),
-    )
-
-
-def decision_rank(decision: str) -> int:
-    return {"keep": 3, "pending": 2, "discard": 1}.get(str(decision or "").strip(), 0)
-
-
-def verdict_rank(verdict: str) -> int:
-    return {"PASS": 3, "FAIL": 2, "ERROR": 1}.get(str(verdict or "").strip().upper(), 0)
-
-
-def parse_score_ratio(score: str) -> float:
-    text = str(score or "").strip()
-    if "/" not in text:
-        return 0.0
-    left, right = text.split("/", 1)
-    try:
-        numerator = float(left)
-        denominator = float(right)
-    except ValueError:
-        return 0.0
-    if denominator <= 0:
-        return 0.0
-    return numerator / denominator
-
-
-def signal_activity_ratio(activity: str) -> float:
-    text = str(activity or "").strip()
-    if "/" not in text:
-        return 0.0
-    left, right = [part.strip() for part in text.split("/", 1)]
-    try:
-        active = float(left)
-        total = float(right)
-    except ValueError:
-        return 0.0
-    if total <= 0:
-        return 0.0
-    return active / total
-
-
 def normalize_hypothesis_text(value: str) -> str:
     text = str(value or "").strip()
     if text:
@@ -2644,7 +2583,7 @@ def build_session_readme(
         for branch in branches
         if branch["rows"] and branch["rows"][-1].get("decision") == "discard"
     ]
-    leader = select_leader(branches)
+    recorded_round_count = sum(len(branch["rows"]) for branch in branches)
     debugged_branches = [
         branch for branch in branches if latest_debug_snapshot(branch["branch_dir"])
     ]
@@ -2665,18 +2604,11 @@ def build_session_readme(
             )
         else:
             executive += " Evidence labels remain empty until a runtime result is recorded."
-    if leader and leader["rows"]:
-        latest = leader["rows"][-1]
-        leader_note = read_round_note(leader["branch_dir"], latest.get("round_id", ""))
-        snapshot_label = "Latest KEEP row"
-        if latest.get("decision") != "keep":
-            snapshot_label = "Latest evaluated row"
+    elif recorded_round_count:
         executive = (
-            f"Session has {len(branches)} branch(es): {len(keep_branches)} keep and {len(discard_branches)} discard. "
-            f"{snapshot_label} is `{leader['branch_id']}` at `{latest.get('round_id', 'none')}` with Lo {float(latest.get('lo_adj') or 0):.3f}, "
-            f"Sharpe {float(latest.get('sharpe') or 0):.3f}, PnL {float(latest.get('pnl') or 0):.1f}%, "
-            f"failure signature `{leader_note.get('failure_signature', 'unknown')}`, "
-            f"active `{leader_note.get('signal_activity', 'n/a')}`."
+            f"Session has {len(branches)} branch(es) and {recorded_round_count} recorded round(s): "
+            f"{len(keep_branches)} keep and {len(discard_branches)} discard. "
+            "Evidence labels, coverage, and runtime facts are summarized below without ranking branches by metrics."
         )
 
     branch_lines = (
@@ -2780,8 +2712,6 @@ def build_branch_readme(branch: dict, latest_note: dict[str, str], exp_id: str) 
     diagnostics_note = latest_note or debug_note
     keep_rows = [row for row in rows if row.get("decision") == "keep"]
     branch_hypothesis = current_branch_hypothesis(branch["branch_dir"], rows)
-    source_type = branch_source_type(branch["branch_dir"], {})
-    method_family = branch_method_family(branch["branch_dir"])
     parent_branch_id = branch_parent_branch_id(branch["branch_dir"])
     declaration = branch_declaration_status_for_branch(branch["branch_dir"])
     protocol_gaps = ", ".join(str(item) for item in declaration["protocol_gaps"]) or "none"
@@ -2801,10 +2731,9 @@ generated by Abel strategy discovery narrative layer
 - branch_id: `{branch["branch_id"]}`
 - ticker: `{latest.get("ticker", branch["ticker"])}`
 - exp_id: `{exp_id}`
-- source_type: `{source_type}`
-- method_family: `{method_family}`
-- evidence_intent: `{declaration["evidence_intent"]}`
+- evidence_intent: `{declaration["evidence_intent"] or "not_declared"}`
 - input_claim: `{declaration["input_claim"] or "not_declared"}`
+- mechanism_family: `{declaration["mechanism_family"] or "not_declared"}`
 - declaration_protocol_complete: `{declaration["protocol_complete"]}`
 - declaration_gaps: `{protocol_gaps}`
 - parent_branch_id: `{parent_branch_id or 'none'}`
@@ -4193,37 +4122,6 @@ def derive_evidence_label(
     return "supplemental_evidence"
 
 
-def branch_source_type(branch_dir: Path, discovery: dict) -> str:
-    branch_spec = load_branch_spec(branch_dir)
-    configured = str(branch_spec.get("source_type") or "").strip().lower()
-    if configured in {"causal", "baseline", "hybrid", "draft", "diagnostic", "supplemental"}:
-        return configured
-    name = branch_dir.name.lower()
-    if "baseline" in name or name.startswith("sma") or name.startswith("rule"):
-        return "baseline"
-    if "graph" in name:
-        return "causal"
-    return "unknown"
-
-
-def branch_method_family(branch_dir: Path) -> str:
-    branch_spec = load_branch_spec(branch_dir)
-    configured = str(branch_spec.get("method_family") or "").strip().lower()
-    if configured in {"graph", "technical", "rule", "ml", "hybrid", "unspecified"}:
-        return configured
-    configured = str(branch_spec.get("mechanism_family") or "").strip().lower()
-    if configured and configured not in {"draft"}:
-        return configured
-    name = branch_dir.name.lower()
-    if "graph" in name:
-        return "graph"
-    if "sma" in name or "rule" in name:
-        return "rule"
-    if "ml" in name:
-        return "ml"
-    return "hybrid"
-
-
 def branch_parent_branch_id(branch_dir: Path) -> str:
     branch_spec = load_branch_spec(branch_dir)
     return str(branch_spec.get("parent_branch_id") or "").strip()
@@ -4331,7 +4229,7 @@ def render_readiness_guidance(readiness: dict) -> str:
     dense_overlap = coverage_hints.get("dense_overlap_hint_start")
     if target_safe and dense_overlap and target_safe != dense_overlap:
         return (
-            f"Desired start remains {requested_start}. Target-first research can begin around "
+            f"Desired start remains {requested_start}. Target-safe coverage is currently observed from "
             f"{target_safe}, while denser driver overlap appears around {dense_overlap} if the branch needs it."
         )
     if target_safe and target_safe != requested_start:
@@ -4342,7 +4240,7 @@ def render_readiness_guidance(readiness: dict) -> str:
     if dense_overlap:
         return (
             f"Desired start remains {requested_start}. Dense overlap is hinted around {dense_overlap}, "
-            "but target-first branches may continue earlier if they tolerate partial driver coverage."
+            "while earlier starts remain a branch-level coverage tradeoff."
         )
     return (
         f"Desired start remains {requested_start}. Use readiness as a coverage profile, not as a mandatory "
@@ -4366,7 +4264,7 @@ def render_discovery_readiness_section(readiness: dict) -> str:
     warning = build_readiness_warning(readiness)
     if warning:
         lines.append(f"- warning: `{warning}`")
-    for line in readiness_recommendation_lines(readiness):
+    for line in readiness_coverage_hint_lines(readiness):
         lines.append(f"- coverage_hint: `{line}`")
     guidance = render_readiness_guidance(readiness)
     if guidance:
@@ -4404,13 +4302,13 @@ def build_readiness_warning(readiness: dict) -> str:
     if int(summary.get("start_covered_count", 0) or 0) <= 0:
         return (
             "Discovered drivers are only partially available from the session requested start "
-            f"{requested_start}. Target-first research can still continue; use coverage hints only "
-            "if your branch depends on strict overlap."
+            f"{requested_start}. Treat this as coverage context; branches that depend on strict "
+            "overlap should inspect coverage hints."
         )
     return ""
 
 
-def readiness_recommendation_lines(readiness: dict) -> list[str]:
+def readiness_coverage_hint_lines(readiness: dict) -> list[str]:
     report = readiness or {}
     coverage_hints = report.get("coverage_hints") or {}
     lines: list[str] = []
@@ -4919,26 +4817,13 @@ def normalize_evidence_intent(branch_spec: dict) -> str:
     configured = str(branch_spec.get("evidence_intent") or "").strip().lower()
     if configured in EVIDENCE_INTENTS:
         return configured
-    source_type = str(branch_spec.get("source_type") or "").strip().lower()
-    if source_type == "baseline":
-        return "control"
-    if source_type == "causal":
-        return "candidate"
-    return "draft"
+    return ""
 
 
 def normalize_input_claim(branch_spec: dict) -> str:
     configured = str(branch_spec.get("input_claim") or "").strip().lower()
     if configured in INPUT_CLAIMS:
         return configured
-    source_type = str(branch_spec.get("source_type") or "").strip().lower()
-    if source_type == "baseline":
-        return "target_only"
-    if source_type == "causal":
-        return "graph_supported"
-    overlap_mode = str(branch_spec.get("overlap_mode") or "").strip().lower()
-    if overlap_mode == "target_only":
-        return "target_only"
     return ""
 
 
@@ -4946,13 +4831,6 @@ def normalize_model_family(branch_spec: dict) -> str:
     configured = str(branch_spec.get("model_family") or "").strip().lower()
     if configured in MODEL_FAMILIES:
         return configured
-    method_family = str(branch_spec.get("method_family") or "").strip().lower()
-    if method_family == "ml":
-        return "learned_model"
-    if method_family in {"rule", "technical"}:
-        return "rule_signal"
-    if method_family == "hybrid":
-        return "hybrid"
     return "unspecified"
 
 
@@ -5017,11 +4895,7 @@ def branch_declaration_status(branch_spec: dict) -> dict[str, object]:
     hypothesis = str(branch_spec.get("hypothesis") or "").strip()
     evidence_intent = normalize_evidence_intent(branch_spec)
     input_claim = normalize_input_claim(branch_spec)
-    mechanism_family = str(
-        branch_spec.get("mechanism_family")
-        or branch_spec.get("method_family")
-        or ""
-    ).strip().lower()
+    mechanism_family = str(branch_spec.get("mechanism_family") or "").strip().lower()
     invalidation_condition = str(branch_spec.get("invalidation_condition") or "").strip()
     requested_start = str(branch_spec.get("requested_start") or "").strip()
     selected_inputs = branch_selected_inputs(branch_spec)
@@ -5116,8 +4990,6 @@ def build_default_branch_spec(*, branch: Path, discovery: dict, readiness: dict)
         "input_claim": "graph_supported" if graph_first else "target_only",
         "mechanism_family": "unspecified",
         "invalidation_condition": "",
-        "source_type": "causal" if graph_first else "draft",
-        "method_family": "graph" if graph_first else "unspecified",
         "model_family": "unspecified",
         "complexity_class": "unspecified",
         "exploration_role": "candidate",
@@ -5647,7 +5519,7 @@ def render_default_engine_template(discovery: dict, readiness: dict, session: Pa
     return ENGINE_TEMPLATE.format(
         ticker=discovery.get("ticker", session.parent.name.upper()),
         readiness_warning=build_readiness_warning(readiness) or "none",
-        coverage_hints_text=", ".join(readiness_recommendation_lines(readiness)) or "none",
+        coverage_hints_text=", ".join(readiness_coverage_hint_lines(readiness)) or "none",
     )
 
 

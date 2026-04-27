@@ -464,8 +464,8 @@ def test_default_branch_spec_starts_as_graph_first_draft_declaration(tmp_path) -
 
     assert spec["evidence_intent"] == "draft"
     assert spec["input_claim"] == "graph_supported"
-    assert spec["source_type"] == "causal"
-    assert spec["method_family"] == "graph"
+    assert "source_type" not in spec
+    assert "method_family" not in spec
     assert spec["model_family"] == "unspecified"
     assert spec["complexity_class"] == "unspecified"
     assert spec["exploration_role"] == "candidate"
@@ -485,8 +485,8 @@ def test_default_branch_spec_stays_target_only_when_discovery_is_pending(tmp_pat
 
     assert spec["evidence_intent"] == "draft"
     assert spec["input_claim"] == "target_only"
-    assert spec["source_type"] == "draft"
-    assert spec["method_family"] == "unspecified"
+    assert "source_type" not in spec
+    assert "method_family" not in spec
     assert spec["selected_inputs"] == []
     assert spec["selected_drivers"] == []
 
@@ -594,6 +594,27 @@ def test_complete_branch_declaration_accepts_legacy_selected_drivers(tmp_path) -
     assert status["selected_inputs"] == ["AAPL", "MSFT"]
 
 
+def test_legacy_source_type_and_method_family_do_not_complete_declaration() -> None:
+    spec = {
+        "source_type": "causal",
+        "method_family": "graph",
+        "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+        "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
+        "requested_start": "2020-01-01",
+        "selected_drivers": ["AAPL"],
+    }
+
+    status = ni.branch_declaration_status(spec)
+
+    assert status["protocol_complete"] is False
+    assert status["evidence_intent"] == ""
+    assert status["input_claim"] == ""
+    assert status["mechanism_family"] == ""
+    assert "evidence_intent" in status["protocol_gaps"]
+    assert "input_claim" in status["protocol_gaps"]
+    assert "mechanism_family" in status["protocol_gaps"]
+
+
 def test_evidence_ledger_marks_missing_hypothesis_as_protocol_incomplete(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-ledger-missing", tmp_path / "research")
     ni.write_discovery(session, _sample_discovery())
@@ -602,8 +623,6 @@ def test_evidence_ledger_marks_missing_hypothesis_as_protocol_incomplete(tmp_pat
     spec = ni.load_branch_spec(branch)
     spec.update(
         {
-            "source_type": "causal",
-            "method_family": "graph",
             "evidence_intent": "candidate",
             "input_claim": "graph_supported",
             "mechanism_family": "driver_momentum",
@@ -1218,6 +1237,32 @@ def test_graph_priority_warns_when_graph_candidates_are_uncovered(tmp_path) -> N
     assert ni.graph_priority_warning_lines(session) == [
         "graph_first_uncovered=true graph_discovery_k=2 target_only_saturation=true"
     ]
+
+
+def test_mixed_graph_reads_remain_supplemental_for_graph_priority(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-mixed-supplemental", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "mixed-aapl")
+    spec = _complete_candidate_spec(branch, selected_drivers=["AAPL"])
+    spec["input_claim"] = "mixed"
+
+    for index in range(3):
+        _record_synthetic_round(
+            session,
+            branch,
+            spec=spec,
+            result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+        )
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+
+    assert frontier["evidence_label_counts"]["supplemental_evidence"] == 3
+    assert frontier["input_breadth"]["graph_supported_candidate_round_count"] == 0
+    assert frontier["graph_priority"]["graph_first_uncovered"] is True
 
 
 def test_graph_priority_warns_when_discovery_is_missing_and_target_only_saturates(tmp_path) -> None:

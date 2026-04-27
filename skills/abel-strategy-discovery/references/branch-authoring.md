@@ -36,11 +36,11 @@ to count as protocol-complete candidate evidence:
 - `complexity_class`
 - `exploration_role`
 
-Legacy `source_type` and `method_family` may still appear, but they do not make
-a result causal evidence by themselves. The generated `evidence_ledger.json`
-derives the evidence label from the declaration plus actual edge runtime facts.
-The generated `frontier.md` and `frontier.json` report coverage facts; they are
-not a strategy advisor.
+Legacy `source_type` and `method_family` may still appear in old workspaces, but
+declaration status ignores them. The generated `evidence_ledger.json` derives
+the evidence label from explicit declaration fields plus actual edge runtime
+facts. The generated `frontier.md` and `frontier.json` report coverage facts;
+they are not a strategy advisor.
 
 `agent_context.md` is the compact resume surface for the next agent turn. It
 combines frontier facts, recent evidence rows, and agent-authored memory. Use
@@ -84,7 +84,9 @@ research judgment.
 
 Driver/input breadth is about candidate input hypotheses. Target-only controls
 are useful contrast evidence, but they do not cover graph-supported candidate
-driver sets.
+driver sets. `mixed` and `supplement` rows can be useful supplemental evidence,
+but they do not close graph-first candidate coverage unless the branch declares
+`input_claim: graph_supported` and actually reads discovered drivers.
 
 Use `agent_memory.jsonl` as agent resume state. When frontier or warning facts
 show enough evidence has accumulated, write your own `add-memory` insight with

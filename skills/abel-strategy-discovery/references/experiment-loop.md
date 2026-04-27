@@ -115,6 +115,8 @@ evidence did this produce?"
 
 - complete graph-supported claim + actual discovered-driver reads +
   completed validation: candidate causal evidence
+- mixed or supplement claims with auxiliary reads: supplemental evidence, not
+  graph-first candidate coverage
 - complete target-only claim + completed validation: target control evidence
 - missing declaration fields: protocol incomplete
 - auth, cache, setup, command, or missing artifact failure: workflow blocker
