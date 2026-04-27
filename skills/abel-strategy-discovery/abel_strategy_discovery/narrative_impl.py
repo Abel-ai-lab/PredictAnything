@@ -2897,6 +2897,7 @@ def build_evidence_ledger(session: Path, discovery: dict, branches: list[dict]) 
         "exp_id": session.name,
         "asset_scope": discovery.get("ticker", session.parent.name.upper()),
         "generated_at": _now(),
+        "discovered_drivers": discovered_driver_tickers(discovery),
         "rows": rows,
     }
 
@@ -2916,6 +2917,7 @@ def write_frontier(session: Path, ledger: dict) -> dict:
 
 def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
     rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
+    discovered_drivers = ordered_unique_upper(ledger.get("discovered_drivers") or [])
     label_counts: dict[str, int] = {}
     label_verdict_counts: dict[str, dict[str, int]] = {}
     label_decision_counts: dict[str, dict[str, int]] = {}
@@ -2935,6 +2937,10 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
     complexity_class_counts: dict[str, int] = {}
     exploration_role_counts: dict[str, int] = {}
     driver_reads: set[str] = set()
+    candidate_driver_sets: set[str] = set()
+    candidate_discovered_drivers: set[str] = set()
+    target_only_recorded_round_count = 0
+    graph_supported_candidate_round_count = 0
     protocol_complete = 0
     comparable_candidates = 0
     comparable_controls = 0
@@ -2958,6 +2964,17 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
             increment_count(recorded_branch_counts, str(row.get("branch_id") or "unknown"))
             increment_count(branch_family_counts, str(row.get("branch_family_key") or branch_family_key(row)))
             increment_count(recorded_neighborhood_counts, str(row.get("exploration_neighborhood_key") or exploration_neighborhood_key(row)))
+            if str(row.get("declared_input_claim") or "") == "target_only":
+                target_only_recorded_round_count += 1
+            if label == "candidate_causal_evidence":
+                if str(row.get("declared_input_claim") or "") == "graph_supported":
+                    graph_supported_candidate_round_count += 1
+                selected = ordered_unique_upper(row.get("declared_selected_inputs") or [])
+                if selected:
+                    candidate_driver_sets.add(",".join(selected))
+                    for item in selected:
+                        if item in discovered_drivers:
+                            candidate_discovered_drivers.add(item)
         increment_count(neighborhood_counts, str(row.get("exploration_neighborhood_key") or exploration_neighborhood_key(row)))
         increment_count(exploration_class_counts, str(row.get("derived_exploration_class") or "unknown"))
         increment_count(model_family_counts, str(row.get("declared_model_family") or "unspecified"))
@@ -3042,6 +3059,19 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
             "candidate_causal_evidence": comparable_candidates,
             "target_control_evidence": comparable_controls,
         },
+        "input_breadth": {
+            "discovered_driver_count": len(discovered_drivers),
+            "discovered_drivers": discovered_drivers,
+            "candidate_driver_set_count": len(candidate_driver_sets),
+            "candidate_driver_sets": sorted(candidate_driver_sets),
+            "candidate_discovered_driver_coverage_count": len(candidate_discovered_drivers),
+            "discovered_driver_coverage": fraction_pair(
+                len(candidate_discovered_drivers),
+                len(discovered_drivers),
+            ),
+            "target_only_recorded_round_count": target_only_recorded_round_count,
+            "graph_supported_candidate_round_count": graph_supported_candidate_round_count,
+        },
         "coverage_concentration": {
             "branch_count": len(branch_counts),
             "max_rounds_in_one_branch": same_branch_max_rounds,
@@ -3119,6 +3149,29 @@ def fraction_pair(count: int, total: int) -> str:
     return f"{count}/{total}" if total else "0/0"
 
 
+def discovered_driver_tickers(discovery: dict) -> list[str]:
+    target = str(discovery.get("ticker") or discovery.get("target_asset") or "").strip().upper()
+    raw_nodes: list[object] = []
+    for key in ("parents", "blanket_new"):
+        values = discovery.get(key) or []
+        if isinstance(values, list):
+            raw_nodes.extend(values)
+    tickers: list[str] = []
+    for node in raw_nodes:
+        value = ""
+        if isinstance(node, dict):
+            value = str(node.get("ticker") or node.get("symbol") or "").strip()
+            if not value:
+                node_id = str(node.get("node_id") or "").strip()
+                value = node_id.split(".", 1)[0]
+        else:
+            value = str(node or "").strip()
+        value = value.upper()
+        if value and value != target:
+            tickers.append(value)
+    return ordered_unique_upper(tickers)
+
+
 def canonical_driver_set_label(row: dict) -> str:
     values = row.get("declared_selected_inputs") or row.get("actual_auxiliary_reads") or []
     selected = ordered_unique_upper(values if isinstance(values, list) else [])
@@ -3142,6 +3195,7 @@ def render_frontier_markdown(frontier: dict) -> str:
     candidate = frontier.get("candidate_causal_summary") or {}
     concentration = frontier.get("coverage_concentration") or {}
     exploration = frontier.get("exploration_breadth") or {}
+    input_breadth = frontier.get("input_breadth") or {}
     return f"""# Evidence Frontier
 
 generated by Abel strategy discovery narrative layer
@@ -3221,6 +3275,16 @@ generated by Abel strategy discovery narrative layer
 - continuation_rationale_required_count: `{exploration.get("continuation_rationale_required_count", 0)}`
 - continuation_rationale_missing_count: `{exploration.get("continuation_rationale_missing_count", 0)}`
 
+## Input Breadth
+
+- discovered_driver_count: `{input_breadth.get("discovered_driver_count", 0)}`
+- discovered_drivers: `{", ".join(input_breadth.get("discovered_drivers") or []) or "none"}`
+- candidate_driver_set_count: `{input_breadth.get("candidate_driver_set_count", 0)}`
+- candidate_driver_sets: `{", ".join(input_breadth.get("candidate_driver_sets") or []) or "none"}`
+- discovered_driver_coverage: `{input_breadth.get("discovered_driver_coverage", "0/0")}`
+- target_only_recorded_round_count: `{input_breadth.get("target_only_recorded_round_count", 0)}`
+- graph_supported_candidate_round_count: `{input_breadth.get("graph_supported_candidate_round_count", 0)}`
+
 ## Runtime Reads
 
 - driver_read_count: `{frontier.get("driver_read_count", 0)}`
@@ -3271,6 +3335,7 @@ def render_session_frontier_summary(frontier: dict) -> str:
     candidate = frontier.get("candidate_causal_summary") or {}
     concentration = frontier.get("coverage_concentration") or {}
     exploration = frontier.get("exploration_breadth") or {}
+    input_breadth = frontier.get("input_breadth") or {}
     return "\n".join(
         [
             f"- evidence_rows: `{frontier.get('row_count', 0)}`",
@@ -3287,6 +3352,7 @@ def render_session_frontier_summary(frontier: dict) -> str:
             f"- dominant_driver_set: `{concentration.get('dominant_driver_set', 'none')}` (`{concentration.get('dominant_driver_set_share', '0/0')}`)",
             f"- agent_memory_records: `{concentration.get('agent_memory_records', 0)}`",
             f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
+            f"- candidate_driver_set_count: `{input_breadth.get('candidate_driver_set_count', 0)}`",
             f"- initial_breadth_incomplete: `{str(exploration.get('initial_breadth_incomplete', False)).lower()}`",
             f"- local_refinement_count: `{exploration.get('local_refinement_count', 0)}`",
             f"- continuation_rationale_missing_count: `{exploration.get('continuation_rationale_missing_count', 0)}`",
@@ -3337,6 +3403,10 @@ generated by Abel strategy discovery narrative layer
 
 {render_agent_context_exploration_breadth(frontier)}
 
+## Input Breadth
+
+{render_agent_context_input_breadth(frontier)}
+
 ## Breadth Protocol State
 
 {render_agent_context_breadth_protocol_state(frontier)}
@@ -3378,6 +3448,23 @@ def render_agent_context_exploration_breadth(frontier: dict) -> str:
             f"- exploration_class_counts: `{render_inline_counts(exploration.get('exploration_class_counts') or {})}`",
             f"- continuation_rationale_required_count: `{exploration.get('continuation_rationale_required_count', 0)}`",
             f"- continuation_rationale_missing_count: `{exploration.get('continuation_rationale_missing_count', 0)}`",
+        ]
+    )
+
+
+def render_agent_context_input_breadth(frontier: dict) -> str:
+    input_breadth = frontier.get("input_breadth") or {}
+    if not input_breadth:
+        return "- not generated"
+    return "\n".join(
+        [
+            f"- discovered_driver_count: `{input_breadth.get('discovered_driver_count', 0)}`",
+            f"- discovered_drivers: `{', '.join(input_breadth.get('discovered_drivers') or []) or 'none'}`",
+            f"- candidate_driver_set_count: `{input_breadth.get('candidate_driver_set_count', 0)}`",
+            f"- candidate_driver_sets: `{', '.join(input_breadth.get('candidate_driver_sets') or []) or 'none'}`",
+            f"- discovered_driver_coverage: `{input_breadth.get('discovered_driver_coverage', '0/0')}`",
+            f"- target_only_recorded_round_count: `{input_breadth.get('target_only_recorded_round_count', 0)}`",
+            f"- graph_supported_candidate_round_count: `{input_breadth.get('graph_supported_candidate_round_count', 0)}`",
         ]
     )
 

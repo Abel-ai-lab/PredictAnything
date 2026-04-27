@@ -946,6 +946,62 @@ def test_second_branch_family_clears_initial_breadth_warning(tmp_path) -> None:
     assert frontier["exploration_breadth"]["model_family_counts"]["linear_model"] == 1
 
 
+def test_input_breadth_reports_candidate_driver_set_coverage(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-input-breadth", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    graph_branch = ni.init_branch_dir(session, "graph-aapl")
+    graph_spec = _complete_candidate_spec(graph_branch, selected_drivers=["AAPL"])
+    target_branch = ni.init_branch_dir(session, "target-control")
+    target_spec = _complete_candidate_spec(
+        target_branch,
+        selected_drivers=[],
+        mechanism_family="target_momentum",
+    )
+    target_spec["input_claim"] = "target_only"
+    target_spec["selected_drivers"] = []
+    target_spec["selected_inputs"] = []
+
+    for index in range(2):
+        _record_synthetic_round(
+            session,
+            graph_branch,
+            spec=graph_spec,
+            result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+        )
+    for index in range(3):
+        _record_synthetic_round(
+            session,
+            target_branch,
+            spec=target_spec,
+            result=_edge_result(traced_inputs=[], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+        )
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    frontier_text = (session / ni.FRONTIER_MARKDOWN_FILENAME).read_text(encoding="utf-8")
+    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+    input_breadth = frontier["input_breadth"]
+
+    assert input_breadth["discovered_driver_count"] == 2
+    assert input_breadth["discovered_drivers"] == ["AAPL", "MSFT"]
+    assert input_breadth["candidate_driver_set_count"] == 1
+    assert input_breadth["candidate_driver_sets"] == ["AAPL"]
+    assert input_breadth["candidate_discovered_driver_coverage_count"] == 1
+    assert input_breadth["discovered_driver_coverage"] == "1/2"
+    assert input_breadth["target_only_recorded_round_count"] == 3
+    assert input_breadth["graph_supported_candidate_round_count"] == 2
+    assert "## Input Breadth" in frontier_text
+    assert "candidate_driver_set_count: `1`" in context_text
+    forbidden = ["try next", "recommend", "which driver", "driver to try"]
+    assert not any(term in frontier_text.lower() for term in forbidden)
+    assert not any(term in context_text.lower() for term in forbidden)
+
+
 def test_debug_rows_do_not_cross_initial_breadth_threshold(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-breadth-debug", tmp_path / "research")
     ni.write_discovery(session, _sample_discovery())
