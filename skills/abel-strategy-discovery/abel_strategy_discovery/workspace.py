@@ -188,7 +188,7 @@ def build_default_manifest(name: str) -> dict:
             "python": default_python_path(),
             "edge_package": "causal-edge",
             "edge_spec": DEFAULT_EDGE_SPEC,
-            "auth_strategy": "reuse_causal_abel_first",
+            "auth_strategy": "reuse_abel_auth_first",
         },
         "defaults": {
             "backtest_start": "2020-01-01",
@@ -270,6 +270,7 @@ edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
 abel-strategy-discovery prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+abel-strategy-discovery upload-dashboard-bundle --branch research/tsla/tsla-v1/branches/<chosen-branch> --base-url <router-base-url>
 ```
 
 Use that path as orientation, not as a rigid script. The important boundary is:
@@ -291,9 +292,13 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 ## What This Workspace Makes Explicit
 
 - session owns `discovery.json` and `readiness.json`
+- session owns `evidence_ledger.json`, `frontier.md`, `agent_context.md`, and
+  `research_journal.md` after rendering
 - branch owns `branch.yaml`
 - edge owns the market-data cache
 - `prepare-branch` should run before a recorded round
+- `upload-dashboard-bundle` uploads branch evidence from the current workspace
+  surfaces, not promotion or replay artifacts
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter baseline for the first end-to-end run, not a finished branch thesis
 
@@ -353,6 +358,7 @@ edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
 abel-strategy-discovery prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+abel-strategy-discovery upload-dashboard-bundle --branch research/tsla/tsla-v1/branches/<chosen-branch> --base-url <router-base-url>
 ```
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
@@ -365,7 +371,9 @@ readiness as advisory context; the branch's explicit `requested_start` is the
 runtime start when it is set. Treat this workspace `.venv` as the canonical
 runtime for daily work. Treat branch count as a file-organization fact, not as
 proof of graph/input breadth. Use `research_journal.md` to record your own
-evidence-linked insight and pivot reasoning.
+evidence-linked insight and pivot reasoning. When a branch has candidate
+evidence worth external inspection, `upload-dashboard-bundle` sends branch
+evidence from the current workspace surfaces.
 This workspace is for alpha-managed branch research, so do not create a
 standalone `causal-edge init` project inside it. Put standalone edge work in a
 separate directory.

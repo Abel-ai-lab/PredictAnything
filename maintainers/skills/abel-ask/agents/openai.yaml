@@ -1,4 +1,0 @@
-interface:
-  display_name: "Abel Ask"
-  short_description: "Abel causal reads for market nodes and proxy-routed decisions."
-  default_prompt: "Use $abel-ask when the user wants an Abel causal read on a market, company, asset, sector, or macro question, or wants a decision evaluated through Abel proxy signals."

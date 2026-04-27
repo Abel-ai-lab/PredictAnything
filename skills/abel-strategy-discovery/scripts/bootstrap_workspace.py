@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thin system-Python entrypoint for bootstrapping an Abel strategy workspace."""
+"""Thin system-Python entrypoint for bootstrapping an Abel strategy discovery workspace."""
 
 from __future__ import annotations
 

@@ -17,7 +17,7 @@ Use `Abel` as the main entrypoint.
 
 Before routing, verify auth state by running:
 
-`python ../abel-ask/scripts/cap_probe.py auth-status`
+`python ../abel-common/python/abel_common/cap/graph_probe.py auth-status`
 
 Do not guess from shell environment alone.
 

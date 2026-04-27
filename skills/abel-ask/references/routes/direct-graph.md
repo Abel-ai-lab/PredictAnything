@@ -87,6 +87,10 @@ If the graph answer and the intuitive real-world story do not line up, preserve 
 - Use `../../assets/report-guide.md` to make sure the report covers the right content. Natural longform prose is acceptable if it still covers the same contract fields.
 - Main answer uses company names, industries, products, or roles by default.
 - If the user's question is explicitly about a ticker or named investment asset, the verdict may keep that ticker or asset name, but still avoid raw node ids and prediction decimals.
+- If the user asked with a raw node id such as `TSLA.price`, answer the graph fact in human-readable form unless they explicitly asked for trace, debug output, evidence details, reproducibility, or raw payloads.
+- If the user explicitly asked for trace, debug output, evidence details, reproducibility, raw payloads, or raw output, bypass the normal report contract and return the requested raw artifact directly.
+- Requests such as "don't translate" or "I asked about `TSLA.price`" do not by themselves authorize raw node ids in the normal visible answer.
+- Run `scripts/render_guard.py --mode direct_graph` on any normal visible answer. Skipping the guard is allowed only for explicit trace, debug output, evidence details, reproducibility, raw payload, or raw output requests.
 - Include the pressure-test result or, if no live intervention was run, the cleanest next-step probe.
 - If a repeated bridge node looks like microcap or crypto-heavy transmission noise, summarize it as noise unless external evidence says it matters.
 - If the user asked for a literal graph fact, make that fact the first sentence, not the caveat.

@@ -26,7 +26,7 @@ Beyond `direct_graph` and `proxy_routed`, recognize these question archetypes th
 - **Allocation** → Multi-node portfolio analysis. Concrete ratio with per-slice reasoning. For multi-horizon (education 5yr vs retirement 30yr), split by time horizon. For products Abel can't model directly (insurance), use underlying macro drivers.
 - **Regret minimization** → Forward-looking scan across asset classes and sectors by causal momentum strength. Ranked shortlist with confidence levels.
 - **Cross-market comparison** → Compare within-market momentum, explicitly name cross-market uncontrollables (currency, regulation, capital controls).
-- **Broad macro** → Decompose into 3-5 measurable proxy dimensions first. **Horizon rule:** >3 years → structural trend analysis (web) with graph as validator, not predictor.
+- **Broad macro** → Decompose into 3-5 measurable proxy dimensions first. For shortlist, broad-theme, or first-round screening questions, run one narrative scout pass before large web expansion so the graph and the web both start from a better anchor set.
 - **Graph-sparse** → Before declaring, search for capillary proxies (see Step 3b in SKILL.md). Every human activity has an economic shadow in equity markets. Only declare graph-sparse after capillary search fails. When truly sparse, graph = economic context, web = primary answer.
 
 ### Archetype Answer Shapes
@@ -123,6 +123,7 @@ L0.5 is the center of the experience. L1/L2 amplify its credibility. L0 web sear
 
 - **Verdict: ≤3 sentences.** Position + mechanism + action. Everything else is body.
 - **Graph voice first, web voice second.** The verdict must lead with what the GRAPH uniquely discovered — not with web facts anyone could find. Web facts support the graph insight, not the other way around. If your verdict could be written without the graph, you haven't used Abel. The graph's contribution must be FELT in the first sentence.
+- **Broad-theme routing rule:** when the user is asking for shortlist generation, candidate expansion, or first-round screening, do not jump straight from the question into graph plus web. Use one narrative scout pass first to widen the candidate set and reduce wasted web search.
 - **Insight → action translation is mandatory.** Every insight must end with a specific recommendation, timing trigger, or threshold. If an insight does not change action, cut it from the normal answer.
 - The full report body follows the verdict for those who want depth. Keep it structured but concise.
 - Analysis process (which probes ran, what surprised what) stays internal unless the user explicitly asks for trace, debug, or evidence details.
@@ -219,7 +220,7 @@ When a verb materially shapes the answer, these are the useful things to render:
 - `result`: which surrounding nodes best localize the node's informational neighborhood
 - `meaning`: what this says about the node's most relevant local causal context
 
-#### `paths` / `validate-connectivity`
+#### `graph.paths`
 
 - `result`: whether a connection exists, through which intermediaries, and whether it looks direct or indirect
 - `meaning`: what this says about transmission, mediation, or whether the proposed relationship is structurally plausible

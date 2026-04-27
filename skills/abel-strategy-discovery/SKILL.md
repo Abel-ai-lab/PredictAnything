@@ -71,9 +71,16 @@ Always start by resolving workspace state before strategy work.
 10. Do not treat branch count as proof of breadth. Graph/input concentration,
    strategy-variant coverage, and local refinement pressure are separate facts.
 11. Do not call parameter, sizing, threshold, filter, or window tweaks broad
-   exploration.
+    exploration.
 12. When evidence accumulates or a pivot checkpoint is due, update
-   `research_journal.md` with agent-owned reflection and evidence references
-   before continuing deep local refinement.
-13. The framework defines evidence validity. The agent owns the strategy
+    `research_journal.md` with agent-owned reflection and evidence references
+    before continuing deep local refinement.
+13. When a branch has meaningful candidate evidence worth inspecting, upload
+    the branch evidence bundle to the skill dashboard with
+    `abel-strategy-discovery upload-dashboard-bundle --branch <branch>
+    --base-url <router-base-url>`. Upload only branch evidence from the current
+    workspace surfaces; do not upload promotion bundles, replay snapshots,
+    paper-trading summaries, or finished strategy narratives as dashboard
+    input.
+14. The framework defines evidence validity. The agent owns the strategy
     thinking.

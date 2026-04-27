@@ -9,7 +9,7 @@ def test_abel_auth_skill_mentions_reuse_then_oauth() -> None:
 
 def test_abel_auth_skill_points_to_setup_ref_and_probe_command() -> None:
     text = Path("skills/abel-auth/SKILL.md").read_text(encoding="utf-8").lower()
-    assert "python ../abel-ask/scripts/cap_probe.py auth-status" in text
+    assert "python ../abel-common/python/abel_common/cap/graph_probe.py auth-status" in text
     assert "references/setup-guide.md" in text
 
 

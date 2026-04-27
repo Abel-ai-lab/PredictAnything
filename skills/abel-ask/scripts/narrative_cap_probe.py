@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thin wrapper around the shared graph CAP probe implementation."""
+"""Thin wrapper around the shared narrative CAP probe implementation."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_BASE_URL = "https://cap.abel.ai/api"
+DEFAULT_BASE_URL = "https://cap.abel.ai/narrative"
+DEFAULT_API_KEY_ENV = ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -16,9 +17,10 @@ def main(argv: list[str] | None = None) -> int:
     if str(common_python_root) not in sys.path:
         sys.path.insert(0, str(common_python_root))
 
-    from abel_common.cap import graph_probe
+    from abel_common.cap import narrative_probe
 
-    graph_probe.DEFAULT_BASE_URL = DEFAULT_BASE_URL
+    narrative_probe.DEFAULT_BASE_URL = DEFAULT_BASE_URL
+    narrative_probe.DEFAULT_API_KEY_ENV = DEFAULT_API_KEY_ENV
     effective_argv = list(argv or sys.argv[1:])
     if "--env-file" not in effective_argv:
         effective_argv = [
@@ -26,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
             str(skill_root / ".env.skill"),
             *effective_argv,
         ]
-    return graph_probe.main(effective_argv)
+    return narrative_probe.main(effective_argv)
 
 
 if __name__ == "__main__":

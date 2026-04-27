@@ -17,7 +17,7 @@ metadata:
 
 Any dollar-value decision, just Abel it. Finance and crypto nodes are the signal layer (the graph's proxy vocabulary), not the product.
 
-**Do not use Abel for pure fact lookup, news recap, or operational how-to when no real decision is being made; use normal retrieval first. Abel starts when the user needs a causal read on a choice that allocates money, time, career-capital, or downside risk.**
+**Do not use Abel for pure fact lookup, news recap, or operational how-to when no real decision is being made; use normal retrieval first. Abel starts when the user needs a causal read on a choice that allocates money, time, career-capital, or downside risk. Exception: graph-native direct-graph facts such as node descriptions, parent/child membership, path existence, or other CAP surface facts are valid direct-graph requests inside this skill.**
 
 ## Step 1: Preflight + Classify
 
@@ -52,11 +52,19 @@ If the contrarian or confounder is missing, stop and fix that before moving on.
 
 ## Step 3: Screen + Discover (L0.5)
 
-Map the mechanisms to graph nodes and separate them into:
+Map the mechanisms to executable anchors. For `proxy_routed` questions, you may use narrative CAP first to map the topic, discover anchors, or generate candidate mechanisms, then try to carry the question into graph CAP. Internally, `hybrid` means narrative CAP plus graph CAP. Graph CAP plus normal web-grounding is still graph-backed with freshness support, not hybrid by itself. Do not default to the word `hybrid` in the visible answer; tell the user when you used both narrative scouting and the Abel graph. Separate the result into:
 
-- structurally supported
+- graph-supported
 - weakly connected
 - narrative-only
+
+If graph CAP can validate the discovered anchors, lead with graph-backed findings. If graph CAP cannot carry the question, say that this part comes from narrative scouting and has not yet been graph-validated. Never present narrative-only outputs as graph-validated observational or interventional effects.
+
+Prefer the lighter narrative verbs first. For a concrete candidate, default to `narrate` as the first narrative read. Add `extensions.abel.query_node` or `extensions.abel.stateless.resolve_entity` only when disambiguation, id discovery, or coverage checks are actually needed before the next step. Use `extensions.abel.stateful.search_prepare` only when you need provider-owned handles for a deeper follow-up. Do not default to `explain_read_bundle`, `explain_outcome`, `focus_execution`, `predict`, or `what_if` unless the user explicitly wants a deeper workflow and you already have a concrete anchor worth carrying forward.
+
+For broad-theme, shortlist, or first-round screening questions, run at least one narrative CAP scout call before deep graph discovery or broad web expansion. In practice, start with `narrative_cap_probe.py query-node` for theme-first prompts, or `narrative_cap_probe.py narrate` when the candidate is already concrete. Do not jump straight into `graph.paths`, `discover_*`, or multi-search web grounding unless the narrative scout has either produced usable anchors or clearly failed after a query rewrite. If the scout fails, say that and then fall back to graph plus web without claiming narrative assistance.
+
+Broad theme queries that contain ticker-like tokens can collapse to the wrong symbol (`AI`, `CAT`, and similar). If the prompt is theme-first rather than entity-first, rewrite or narrow the query before trusting narrative CAP entity resolution.
 
 When `extensions.abel.query_node` is used for fuzzy mapping, inspect `node_kind` before picking the next surface. Do not assume every returned node can be coerced into `<ticker>.price` or `<ticker>.volume`. If the hit is `macro`, prefer direct `verb` calls for macro-capable structural surfaces instead of asset-only probe shortcuts.
 
@@ -67,6 +75,7 @@ Required passes:
 - do not declare graph-sparse until capillary discovery is exhausted
 
 Follow the full `proxy_routed` loop in `references/routes/proxy-routed.md`.
+Use `references/narrative-probe-usage.md` when `proxy_routed` needs narrative CAP probing before graph validation.
 
 ## Step 4: Observe + Verify (L1 + L2)
 
@@ -105,9 +114,9 @@ The causal graph is universal. The verdict is personal.
 
 Read `assets/report-guide.md` and `references/rendering.md` before writing.
 
-**Render gate (MANDATORY):** apply the label-pass and guard workflow from `references/rendering.md` before finalizing. For non-asset or `proxy_routed` questions, raw tickers, raw node ids, graph paths, signed prediction decimals, and rendering scratch work stay out of visible prose.
+**Render gate (MANDATORY):** apply the label-pass and guard workflow from `references/rendering.md` before finalizing every normal visible answer, including `direct_graph`. For `proxy_routed`, non-asset, or broad-macro questions, raw tickers, raw node ids, graph paths, signed prediction decimals, and rendering scratch work stay out of visible prose. For `direct_graph` asset questions, ticker or asset names may remain in visible prose, but raw node ids, graph paths, signed prediction decimals, and rendering scratch work still stay out unless the user explicitly asks for trace, debug output, evidence details, reproducibility, raw payloads, or raw output.
 
-**Output default (MANDATORY):** default to main answer only. Do not emit an appendix, trace block, evidence dump, rendering scratch work, or probe/process transcript unless the user explicitly asks for evidence details, debug output, reproducibility steps, or a trace.
+**Output default (MANDATORY):** default to main answer only. Do not emit an appendix, trace block, evidence dump, rendering scratch work, or probe/process transcript unless the user explicitly asks for trace, debug output, evidence details, reproducibility steps, raw payloads, or raw output.
 
 Write the final answer to the contract in `assets/report-guide.md`.
 
@@ -117,6 +126,7 @@ Keep claim-strength honesty explicit: life decisions are graph-grounded advice, 
 
 - `references/routes/direct-graph.md` — ticker question routing
 - `references/routes/proxy-routed.md` — proxy-routed graph workflow
+- `references/narrative-probe-usage.md` — narrative CAP probe workflow inside proxy-routed
 - `references/probe-usage.md` — exact `cap_probe.py` command shapes
 - `references/rendering.md` — label-pass rules, visible/internal split, guard usage
 - `assets/report-guide.md` — full output contract with archetypes, rendering rules, coverage areas

@@ -207,7 +207,7 @@ def create_workspace_venv(*, interpreter: str, venv_path: Path, cwd: Path) -> st
 
 
 def resolve_alpha_source(explicit: str | Path | None = None) -> Path:
-    """Resolve the Abel strategy discovery source tree used for workspace installs."""
+    """Resolve the strategy-discovery skill source tree used for workspace installs."""
     if explicit is not None:
         return validate_source_tree(Path(explicit).expanduser().resolve(), "Abel strategy discovery")
 
@@ -217,7 +217,7 @@ def resolve_alpha_source(explicit: str | Path | None = None) -> Path:
 
     raise RuntimeError(
         "Could not resolve a local Abel strategy discovery source tree. "
-        "Pass `--alpha-source /path/to/Abel strategy discovery`."
+        "Pass `--alpha-source /path/to/skills/abel-strategy-discovery`."
     )
 
 
