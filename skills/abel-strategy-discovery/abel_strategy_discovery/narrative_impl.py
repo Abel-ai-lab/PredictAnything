@@ -134,7 +134,7 @@ BROAD_CHANGED_DIMENSIONS = {"drivers", "mechanism", "model_family", "complexity"
 LOCAL_CHANGED_DIMENSIONS = {"sizing", "thresholds", "filters", "window", "implementation"}
 INPUT_BREADTH_ROUND_THRESHOLD = 8
 GRAPH_PRIORITY_ROUND_MINIMUM = 3
-RESEARCH_REFLECTION_ROUND_THRESHOLD = 3
+JOURNAL_GENERATED_HEADER_END = "<!-- ABEL_GENERATED_HEADER_END -->"
 JOURNAL_REFERENCE_RE = re.compile(
     r"(ledger:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+|"
     r"frontier:[A-Za-z0-9_.-]+|"
@@ -1407,10 +1407,12 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
     branch = resolve_workspace_arg_path(branch).resolve()
     session = branch.parent.parent
     discovery = load_discovery(session)
+    render_session(session)
     frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
     ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
     if not ledger:
         ledger = build_evidence_ledger(session, discovery, load_branches(session))
+        frontier = build_frontier(ledger, journal_status=build_research_journal_status(session, ledger=ledger, frontier={}))
     branch_spec = load_branch_spec(branch)
     branch_state = load_branch_state(branch)
     rows = read_tsv_rows(branch / "results.tsv")
@@ -1450,6 +1452,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
     graph_priority = frontier.get("graph_priority") if isinstance(frontier.get("graph_priority"), dict) else {}
     input_realization = frontier.get("input_realization") if isinstance(frontier.get("input_realization"), dict) else {}
     research_reflection = frontier.get("research_reflection") if isinstance(frontier.get("research_reflection"), dict) else {}
+    journal_coverage = frontier.get("journal_coverage") if isinstance(frontier.get("journal_coverage"), dict) else {}
     return {
         "sessionId": session.name,
         "branchId": branch.name,
@@ -1466,6 +1469,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
                 "frontierRows": frontier.get("row_count", 0),
                 "graphFirstUncovered": bool(graph_priority.get("graph_first_uncovered")),
                 "researchReflection": research_reflection,
+                "journalCoverage": journal_coverage,
                 "inputRealization": input_realization,
             },
             "branch": branch_payload,
@@ -1823,6 +1827,17 @@ def run_branch_round(args: argparse.Namespace) -> int:
     workspace_root = find_workspace_root(branch)
     discovery = load_discovery(session)
     readiness = load_readiness(session)
+    with SessionLock(session):
+        render_session(session)
+    blocking_missing_journal = journal_coverage_missing_rounds(session)
+    if blocking_missing_journal:
+        print(
+            "Journal required before next recorded round: "
+            f"missing_journal_rounds={', '.join(blocking_missing_journal)}. "
+            f"Update {RESEARCH_JOURNAL_FILENAME} with evidence-linked notes for each missing ledger round.",
+            file=sys.stderr,
+        )
+        return 2
     if not branch_inputs_ready(branch):
         print(
             "Branch inputs have not been prepared yet. "
@@ -2065,8 +2080,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
         render_session(session)
     for line in graph_priority_warning_lines(session):
         print(f"Exploration protocol: {line}")
-    for line in research_reflection_warning_lines(session):
-        print(f"Research reflection: {line}")
+    for line in journal_coverage_warning_lines(session):
+        print(f"Journal required: {line}")
     print(f"Alpha context: {context_path.relative_to(session)}")
     print(f"Edge result: {result_path.relative_to(session)}")
     print(f"Edge validation: {report_path.relative_to(session)}")
@@ -2451,6 +2466,7 @@ def print_status(session: Path) -> None:
         labels = frontier.get("evidence_label_counts") or {}
         graph_priority = frontier.get("graph_priority") or {}
         reflection = frontier.get("research_reflection") or {}
+        journal_coverage = frontier.get("journal_coverage") or {}
         print(
             "Evidence frontier: "
             f"rows={frontier.get('row_count', 0)} "
@@ -2458,7 +2474,8 @@ def print_status(session: Path) -> None:
             f"target_control={labels.get('target_control_evidence', 0)} "
             f"workflow_blockers={frontier.get('workflow_blockers', 0)} "
             f"graph_first_uncovered={str(graph_priority.get('graph_first_uncovered', False)).lower()} "
-            f"research_reflection_due={str(reflection.get('research_reflection_due', False)).lower()}"
+            f"research_reflection_due={str(reflection.get('research_reflection_due', False)).lower()} "
+            f"journal_coverage_complete={str(journal_coverage.get('journal_coverage_complete', False)).lower()}"
         )
     for branch in branches:
         latest = branch["rows"][-1] if branch["rows"] else {}
@@ -2576,13 +2593,16 @@ def check_session(session: Path, *, strict: bool) -> int:
 
 def validate_exploration_protocol(session: Path, failures: list[str]) -> None:
     frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
-    reflection = frontier.get("research_reflection") if isinstance(frontier.get("research_reflection"), dict) else {}
-    if not reflection:
-        return
-    if reflection.get("research_reflection_due"):
+    journal_coverage = (
+        frontier.get("journal_coverage")
+        if isinstance(frontier.get("journal_coverage"), dict)
+        else {}
+    )
+    missing_rounds = list(journal_coverage.get("missing_journal_rounds") or [])
+    if missing_rounds:
         failures.append(
-            "research reflection due without evidence-linked journal update: "
-            f"recorded_round_count={reflection.get('recorded_round_count', 0)}"
+            "journal coverage incomplete: "
+            f"missing_journal_rounds={', '.join(str(item) for item in missing_rounds)}"
         )
 
 
@@ -2608,15 +2628,24 @@ def graph_priority_warning_lines(session: Path) -> list[str]:
     return lines
 
 
-def research_reflection_warning_lines(session: Path) -> list[str]:
+def journal_coverage_missing_rounds(session: Path) -> list[str]:
     frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
-    reflection = frontier.get("research_reflection") if isinstance(frontier.get("research_reflection"), dict) else {}
-    if not reflection or not reflection.get("research_reflection_due"):
+    journal_coverage = (
+        frontier.get("journal_coverage")
+        if isinstance(frontier.get("journal_coverage"), dict)
+        else {}
+    )
+    return [str(item) for item in journal_coverage.get("missing_journal_rounds") or []]
+
+
+def journal_coverage_warning_lines(session: Path) -> list[str]:
+    missing_rounds = journal_coverage_missing_rounds(session)
+    if not missing_rounds:
         return []
     return [
-        "research_reflection_due=true "
-        f"recorded_round_count={reflection.get('recorded_round_count', 0)} "
-        "required_action=update_research_journal_with_evidence_refs"
+        "journal_coverage_complete=false "
+        f"missing_journal_rounds={', '.join(missing_rounds)} "
+        f"required_action=update_{RESEARCH_JOURNAL_FILENAME}_with_round_insights"
     ]
 
 
@@ -3127,10 +3156,8 @@ def build_frontier(
     ablation_evidence_count = exploration_role_counts.get("ablation", 0)
     expansion_probe_count = exploration_role_counts.get("expansion_probe", 0)
     compact_journal = compact_research_journal_status(journal_status)
-    research_reflection_due = (
-        recorded_round_count >= RESEARCH_REFLECTION_ROUND_THRESHOLD
-        and not compact_journal.get("has_evidence_linked_update")
-    )
+    journal_coverage = build_journal_coverage(rows, compact_journal)
+    research_reflection_due = not bool(journal_coverage.get("journal_coverage_complete"))
     return {
         "schema_version": 1,
         "exp_id": ledger.get("exp_id", ""),
@@ -3188,10 +3215,12 @@ def build_frontier(
             "graph_priority_round_minimum": GRAPH_PRIORITY_ROUND_MINIMUM,
         },
         "research_journal": compact_journal,
+        "journal_coverage": journal_coverage,
         "research_reflection": {
             "research_reflection_due": research_reflection_due,
             "recorded_round_count": recorded_round_count,
-            "required_recorded_round_count": RESEARCH_REFLECTION_ROUND_THRESHOLD,
+            "journal_coverage_complete": bool(journal_coverage.get("journal_coverage_complete")),
+            "missing_journal_round_count": len(journal_coverage.get("missing_journal_rounds") or []),
             "evidence_linked_journal_update": bool(
                 compact_journal.get("has_evidence_linked_update")
             ),
@@ -3253,6 +3282,35 @@ def build_frontier(
 def increment_count(counter: dict[str, int], key: str) -> None:
     normalized = key.strip() or "unknown"
     counter[normalized] = counter.get(normalized, 0) + 1
+
+
+def build_journal_coverage(rows: list[dict[str, object]], journal_status: dict[str, object]) -> dict[str, object]:
+    recorded_rounds = [
+        journal_round_key(row.get("branch_id"), row.get("round_id") or row.get("run_id"))
+        for row in rows
+        if row.get("run_type") == "round"
+    ]
+    recorded_rounds = [item for item in ordered_unique_strings(recorded_rounds) if item]
+    journaled_rounds = sorted(
+        set(recorded_rounds).intersection(
+            set(str(item) for item in journal_status.get("resolved_ledger_round_refs") or [])
+        )
+    )
+    missing_rounds = sorted(set(recorded_rounds).difference(journaled_rounds))
+    return {
+        "recorded_round_count": len(recorded_rounds),
+        "journaled_round_count": len(journaled_rounds),
+        "journal_coverage_complete": not missing_rounds,
+        "missing_journal_rounds": missing_rounds,
+    }
+
+
+def journal_round_key(branch_id: object, round_id: object) -> str:
+    branch = str(branch_id or "").strip()
+    round_text = str(round_id or "").strip()
+    if not branch or not round_text:
+        return ""
+    return f"{branch}:{round_text}"
 
 
 def increment_nested_count(counter: dict[str, dict[str, int]], outer: str, inner: str) -> None:
@@ -3330,6 +3388,7 @@ def render_frontier_markdown(frontier: dict) -> str:
     graph_priority = frontier.get("graph_priority") or {}
     research_reflection = frontier.get("research_reflection") or {}
     input_realization = frontier.get("input_realization") or {}
+    journal_coverage = frontier.get("journal_coverage") or {}
     research_journal = frontier.get("research_journal") or {}
     return f"""# Evidence Frontier
 
@@ -3431,10 +3490,18 @@ generated by Abel strategy discovery narrative layer
 
 - research_reflection_due: `{str(research_reflection.get("research_reflection_due", False)).lower()}`
 - recorded_round_count: `{research_reflection.get("recorded_round_count", 0)}`
-- required_recorded_round_count: `{research_reflection.get("required_recorded_round_count", 0)}`
+- journal_coverage_complete: `{str(research_reflection.get("journal_coverage_complete", False)).lower()}`
+- missing_journal_round_count: `{research_reflection.get("missing_journal_round_count", 0)}`
 - evidence_linked_journal_update: `{str(research_reflection.get("evidence_linked_journal_update", False)).lower()}`
 - journal_evidence_reference_count: `{research_reflection.get("journal_evidence_reference_count", 0)}`
 - resolved_evidence_reference_count: `{research_reflection.get("resolved_evidence_reference_count", 0)}`
+
+## Journal Coverage
+
+- recorded_round_count: `{journal_coverage.get("recorded_round_count", 0)}`
+- journaled_round_count: `{journal_coverage.get("journaled_round_count", 0)}`
+- journal_coverage_complete: `{str(journal_coverage.get("journal_coverage_complete", False)).lower()}`
+- missing_journal_rounds: `{", ".join(journal_coverage.get("missing_journal_rounds") or []) or "none"}`
 
 ## Input Realization
 
@@ -3505,6 +3572,7 @@ def render_session_frontier_summary(frontier: dict) -> str:
     graph_priority = frontier.get("graph_priority") or {}
     research_reflection = frontier.get("research_reflection") or {}
     input_realization = frontier.get("input_realization") or {}
+    journal_coverage = frontier.get("journal_coverage") or {}
     return "\n".join(
         [
             f"- evidence_rows: `{frontier.get('row_count', 0)}`",
@@ -3524,6 +3592,8 @@ def render_session_frontier_summary(frontier: dict) -> str:
             f"- graph_first_uncovered: `{str(graph_priority.get('graph_first_uncovered', False)).lower()}`",
             f"- graph_discovery_missing: `{str(graph_priority.get('graph_discovery_missing', False)).lower()}`",
             f"- research_reflection_due: `{str(research_reflection.get('research_reflection_due', False)).lower()}`",
+            f"- journal_coverage_complete: `{str(journal_coverage.get('journal_coverage_complete', False)).lower()}`",
+            f"- missing_journal_rounds: `{', '.join(journal_coverage.get('missing_journal_rounds') or []) or 'none'}`",
             f"- graph_input_read_gap_count: `{input_realization.get('graph_input_read_gap_count', 0)}`",
             f"- local_refinement_count: `{exploration.get('local_refinement_count', 0)}`",
         ]
@@ -3561,6 +3631,10 @@ generated by Abel strategy discovery narrative layer
 ## Research Reflection
 
 {render_agent_context_research_reflection(frontier)}
+
+## Journal Coverage
+
+{render_agent_context_journal_coverage(frontier)}
 
 ## Input Realization
 
@@ -3620,9 +3694,24 @@ def render_agent_context_research_reflection(frontier: dict) -> str:
         [
             f"- research_reflection_due: `{str(reflection.get('research_reflection_due', False)).lower()}`",
             f"- recorded_round_count: `{reflection.get('recorded_round_count', 0)}`",
-            f"- required_recorded_round_count: `{reflection.get('required_recorded_round_count', 0)}`",
+            f"- journal_coverage_complete: `{str(reflection.get('journal_coverage_complete', False)).lower()}`",
+            f"- missing_journal_round_count: `{reflection.get('missing_journal_round_count', 0)}`",
             f"- evidence_linked_journal_update: `{str(reflection.get('evidence_linked_journal_update', False)).lower()}`",
             f"- journal_evidence_reference_count: `{reflection.get('journal_evidence_reference_count', 0)}`",
+        ]
+    )
+
+
+def render_agent_context_journal_coverage(frontier: dict) -> str:
+    coverage = frontier.get("journal_coverage") or {}
+    if not coverage:
+        return "- not generated"
+    return "\n".join(
+        [
+            f"- recorded_round_count: `{coverage.get('recorded_round_count', 0)}`",
+            f"- journaled_round_count: `{coverage.get('journaled_round_count', 0)}`",
+            f"- journal_coverage_complete: `{str(coverage.get('journal_coverage_complete', False)).lower()}`",
+            f"- missing_journal_rounds: `{', '.join(coverage.get('missing_journal_rounds') or []) or 'none'}`",
         ]
     )
 
@@ -5792,7 +5881,11 @@ agent-owned research notes for session `{session.name}`
 
 - `evidence_ledger.json` and `frontier.md` are the system-owned evidence facts.
 - This journal is for the agent's hypotheses, observations, pivots, and stop/continue reasoning.
-- Cite evidence when an insight should survive as a research conclusion, for example `ledger:<branch_id>:<round_id>` or `branches/<branch_id>/outputs/<round_id>-edge-result.json`.
+- Every recorded round requires an agent-written note below with its ledger evidence reference.
+- Capture what changed, what happened, what was learned, and what that implies for the next exploration step.
+- The generated header above this marker never counts as journal coverage.
+
+{JOURNAL_GENERATED_HEADER_END}
 
 ## Notes
 
@@ -5813,6 +5906,7 @@ def build_research_journal_status(
             "line_count": 0,
             "evidence_reference_count": 0,
             "resolved_evidence_reference_count": 0,
+            "resolved_ledger_round_refs": [],
             "has_evidence_linked_update": False,
             "last_evidence_linked_update_line": 0,
             "recent_excerpt": "",
@@ -5827,11 +5921,17 @@ def build_research_journal_status(
         for ref in refs
         if resolve_journal_reference(ref, session=session, ledger=ledger, frontier=frontier)
     ]
+    resolved_ledger_round_refs = [
+        ledger_round_key_from_ref(ref)
+        for ref in resolved_refs
+        if ledger_round_key_from_ref(ref)
+    ]
     last_line = 0
     for index, line in note_lines:
         line_refs = extract_journal_evidence_refs(line)
         if any(
-            resolve_journal_reference(ref, session=session, ledger=ledger, frontier=frontier)
+            ledger_round_key_from_ref(ref)
+            and resolve_journal_reference(ref, session=session, ledger=ledger, frontier=frontier)
             for ref in line_refs
         ):
             last_line = index
@@ -5841,7 +5941,8 @@ def build_research_journal_status(
         "line_count": len(lines),
         "evidence_reference_count": len(refs),
         "resolved_evidence_reference_count": len(resolved_refs),
-        "has_evidence_linked_update": bool(resolved_refs),
+        "resolved_ledger_round_refs": ordered_unique_strings(resolved_ledger_round_refs),
+        "has_evidence_linked_update": bool(resolved_ledger_round_refs),
         "last_evidence_linked_update_line": last_line,
         "recent_excerpt": recent_journal_excerpt(lines),
     }
@@ -5856,6 +5957,7 @@ def compact_research_journal_status(status: dict[str, object] | None) -> dict[st
         "resolved_evidence_reference_count": int(
             status.get("resolved_evidence_reference_count") or 0
         ),
+        "resolved_ledger_round_refs": list(status.get("resolved_ledger_round_refs") or []),
         "has_evidence_linked_update": bool(status.get("has_evidence_linked_update")),
         "last_evidence_linked_update_line": int(
             status.get("last_evidence_linked_update_line") or 0
@@ -5891,6 +5993,16 @@ def resolve_journal_reference(
     return resolve_evidence_reference(ref, session=session, ledger=ledger, frontier=frontier)
 
 
+def ledger_round_key_from_ref(ref: str) -> str:
+    text = str(ref or "").strip()
+    if not text.startswith("ledger:"):
+        return ""
+    parts = text.split(":")
+    if len(parts) < 3:
+        return ""
+    return journal_round_key(parts[1], parts[2])
+
+
 def recent_journal_excerpt(lines: list[str]) -> str:
     user_lines = [line.rstrip() for _, line in journal_note_line_items(lines) if line.strip()]
     return "\n".join(user_lines[-8:])
@@ -5899,8 +6011,22 @@ def recent_journal_excerpt(lines: list[str]) -> str:
 def journal_note_line_items(lines: list[str]) -> list[tuple[int, str]]:
     note_start = 0
     for index, line in enumerate(lines):
+        if line.strip() == JOURNAL_GENERATED_HEADER_END:
+            note_start = index + 1
+            break
+    else:
+        note_start = 0
+    if note_start == 0:
+        # This fallback keeps local tests and hand-authored scratch files readable;
+        # new generated journals use the explicit header marker above.
+        for index, line in enumerate(lines):
+            if line.strip().lower() == "## notes":
+                note_start = index + 1
+                break
+    for index, line in enumerate(lines[note_start:], start=note_start):
         if line.strip().lower() == "## notes":
             note_start = index + 1
+            break
     return [(index + 1, line) for index, line in enumerate(lines[note_start:], start=note_start)]
 
 

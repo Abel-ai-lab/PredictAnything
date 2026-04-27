@@ -93,10 +93,16 @@ Use the journal for:
 When an insight should survive as a research conclusion, cite evidence such as
 `ledger:<branch_id>:<round_id>`, `frontier.md`, or a raw artifact path.
 
-When `research_reflection_due=true`, use frontier facts and the journal to state
-whether you are continuing the neighborhood, pivoting graph/input, changing
-strategy family, adding contrast evidence, or stopping. The framework exposes
-the shape of the search; it should not choose the route.
+Every recorded round needs its own agent-written journal entry before the next
+recorded round. The entry does not need a fixed template, but it must cite the
+round ledger ref and preserve the observation or insight that should guide later
+exploration.
+
+When `journal_coverage_complete=false`, use frontier facts and the journal to
+close the missing entries. State whether you are continuing the neighborhood,
+pivoting graph/input, changing strategy family, adding contrast evidence, or
+stopping. The framework exposes the shape of the search; it should not choose
+the route.
 
 ## Prepared Inputs
 

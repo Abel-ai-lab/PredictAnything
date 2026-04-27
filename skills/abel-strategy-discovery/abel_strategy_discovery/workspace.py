@@ -270,6 +270,7 @@ edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
 abel-strategy-discovery prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+edit research/tsla/tsla-v1/research_journal.md
 abel-strategy-discovery upload-dashboard-bundle --branch research/tsla/tsla-v1/branches/<chosen-branch> --base-url <router-base-url>
 ```
 
@@ -280,8 +281,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - the starter `engine.py` is only there to verify branch wiring before a branch-specific mechanism exists
 - new sessions default to graph-first research: use causal graph inputs first,
   then strategy variants, then parameters
-- when `research_reflection_due=true`, update `research_journal.md` with
-  evidence-linked reflection before continuing
+- every recorded round requires an agent-written `research_journal.md` entry
+  with the round ledger ref before the next recorded round
 
 ## Re-entry
 
@@ -361,6 +362,7 @@ edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
 abel-strategy-discovery prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+edit research/tsla/tsla-v1/research_journal.md
 abel-strategy-discovery upload-dashboard-bundle --branch research/tsla/tsla-v1/branches/<chosen-branch> --base-url <router-base-url>
 ```
 
@@ -374,8 +376,8 @@ readiness as advisory context; the branch's explicit `requested_start` is the
 runtime start when it is set. Treat this workspace `.venv` as the canonical
 runtime for daily work. Treat branch count as a file-organization fact, not as
 proof of graph/input breadth. Use `research_journal.md` to record your own
-evidence-linked insight and continue/pivot reasoning, especially when
-`research_reflection_due=true`. Check input realization before treating a
+evidence-linked insight and continue/pivot reasoning after each recorded round.
+Check journal coverage before starting another round. Check input realization before treating a
 declared graph-supported branch as graph-supported evidence. When a branch has
 candidate evidence worth external inspection, `upload-dashboard-bundle` sends
 branch evidence from the current workspace surfaces.

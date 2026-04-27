@@ -910,8 +910,11 @@ def test_init_session_creates_research_journal(tmp_path) -> None:
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
 
     assert journal_path.exists()
-    assert "agent-owned research notes" in journal_path.read_text(encoding="utf-8")
+    journal_text = journal_path.read_text(encoding="utf-8")
+    assert "agent-owned research notes" in journal_text
+    assert ni.JOURNAL_GENERATED_HEADER_END in journal_text
     assert "## Research Journal" in context_text
+    assert "## Journal Coverage" in context_text
     assert "- evidence_reference_count: `0`" in context_text
     assert "- has_evidence_linked_update: `false`" in context_text
     assert "- recent_excerpt: `none`" in context_text
@@ -953,6 +956,7 @@ def test_agent_context_reads_evidence_linked_research_journal(tmp_path) -> None:
     assert "- evidence_reference_count: `2`" in context_text
     assert "- resolved_evidence_reference_count: `2`" in context_text
     assert "- has_evidence_linked_update: `true`" in context_text
+    assert "- journal_coverage_complete: `true`" in context_text
     assert "AAPL-only failed cleanly" in context_text
 
 
@@ -975,7 +979,7 @@ def test_journal_prose_without_refs_is_not_evidence_linked(tmp_path) -> None:
     assert status["recent_excerpt"] == "This direction feels too narrow."
 
 
-def test_research_reflection_due_after_recorded_evidence_without_journal(tmp_path) -> None:
+def test_journal_coverage_required_after_recorded_evidence_without_round_entries(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-reflection-due", tmp_path / "research")
     ni.write_discovery(session, _sample_discovery())
     branch_a = ni.init_branch_dir(session, "momentum-parents")
@@ -1038,21 +1042,40 @@ def test_research_reflection_due_after_recorded_evidence_without_journal(tmp_pat
     reflection = frontier["research_reflection"]
     assert reflection["research_reflection_due"] is True
     assert reflection["recorded_round_count"] == 6
-    assert reflection["required_recorded_round_count"] == 3
+    assert reflection["journal_coverage_complete"] is False
+    assert reflection["missing_journal_round_count"] == 6
     assert reflection["evidence_linked_journal_update"] is False
+    assert frontier["journal_coverage"] == {
+        "recorded_round_count": 6,
+        "journaled_round_count": 0,
+        "journal_coverage_complete": False,
+        "missing_journal_rounds": [
+            "momentum-parents:round-001",
+            "momentum-parents:round-002",
+            "momentum-parents:round-003",
+            "momentum-parents:round-004",
+            "momentum-parents:round-005",
+            "regime-parents:round-001",
+        ],
+    }
     assert "research_reflection_due: `true`" in context_text
+    assert "journal_coverage_complete: `false`" in context_text
     assert "same_driver_set_concentration" not in json.dumps(frontier)
     assert "pivot_checkpoint" not in frontier
-    assert ni.research_reflection_warning_lines(session) == [
-        "research_reflection_due=true "
-        "recorded_round_count=6 "
-        "required_action=update_research_journal_with_evidence_refs"
+    assert ni.journal_coverage_warning_lines(session) == [
+        "journal_coverage_complete=false "
+        "missing_journal_rounds=momentum-parents:round-001, momentum-parents:round-002, momentum-parents:round-003, momentum-parents:round-004, momentum-parents:round-005, regime-parents:round-001 "
+        "required_action=update_research_journal.md_with_round_insights"
     ]
 
     (session / ni.RESEARCH_JOURNAL_FILENAME).write_text(
         "# Research Journal\n\n## Notes\n\n"
-        "The parent-set neighborhood has six failed candidates; see "
-        "ledger:momentum-parents:round-005 before continuing local refinement.\n",
+        "- The first momentum attempt failed; ledger:momentum-parents:round-001\n"
+        "- Window change still failed; ledger:momentum-parents:round-002\n"
+        "- Window change still failed; ledger:momentum-parents:round-003\n"
+        "- Window change still failed; ledger:momentum-parents:round-004\n"
+        "- Window change still failed; ledger:momentum-parents:round-005\n"
+        "- Regime branch also failed; ledger:regime-parents:round-001\n",
         encoding="utf-8",
     )
     ni.render_session(session)
@@ -1060,6 +1083,7 @@ def test_research_reflection_due_after_recorded_evidence_without_journal(tmp_pat
 
     assert updated["research_reflection"]["research_reflection_due"] is False
     assert updated["research_reflection"]["evidence_linked_journal_update"] is True
+    assert updated["journal_coverage"]["journal_coverage_complete"] is True
 
 
 def test_exploration_breadth_marks_single_branch_local_refinement(tmp_path) -> None:
@@ -1360,7 +1384,7 @@ def test_input_breadth_remains_factual_without_route_warning(tmp_path) -> None:
     assert frontier["graph_priority"]["graph_candidates_available"] is True
     assert "input_breadth_thin: `true`" in context_text
     assert "input_breadth_thin=true" not in "\n".join(
-        ni.research_reflection_warning_lines(session)
+        ni.journal_coverage_warning_lines(session)
     )
 
     msft_branch = ni.init_branch_dir(session, "graph-msft")

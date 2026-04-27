@@ -42,7 +42,7 @@ Always start by resolving workspace state before strategy work.
 - Live graph discovery, graph/input expansion, or graph-first reasoning:
   read `references/discovery-protocol.md`.
 - Creating or revising `branch.yaml`, reviewing evidence labels,
-  `research_reflection_due`, input realization, or research journal use:
+  journal coverage, input realization, or research journal use:
   read `references/branch-authoring.md`.
 - Writing `engine.py`, handling semantic/runtime failures, or checking
   temporal legality:
@@ -72,8 +72,8 @@ Always start by resolving workspace state before strategy work.
    strategy-variant coverage, and local refinement pressure are separate facts.
 11. Do not call parameter, sizing, threshold, filter, or window tweaks broad
     exploration.
-12. When `research_reflection_due=true`, update `research_journal.md` with
-    agent-owned reflection and evidence references before continuing.
+12. Every recorded round requires an agent-written `research_journal.md` entry
+    with the round ledger reference before the next recorded round.
 13. Treat input realization as an evidence fact: a graph-supported declaration
     only becomes graph-supported evidence when runtime reads the prepared graph
     inputs.

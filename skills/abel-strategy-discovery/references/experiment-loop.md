@@ -20,6 +20,7 @@ edit research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py
 abel-strategy-discovery prepare-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 abel-strategy-discovery debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 abel-strategy-discovery run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
+edit research/<ticker>/<exp_id>/research_journal.md  # add the round's ledger ref and insight before another run
 
 # when the branch has candidate evidence worth external inspection
 abel-strategy-discovery upload-dashboard-bundle --branch research/<ticker>/<exp_id>/branches/<chosen-branch> --base-url <router-base-url>
@@ -44,9 +45,9 @@ Each round should answer a mechanism question, not just consume compute.
 7. Run `run-branch` only when declaration and debug facts are ready enough for
    the evidence label you want.
 8. Re-read `evidence_ledger.json` and `frontier.md`.
-9. If `research_reflection_due=true`, update `research_journal.md` with
-   evidence references before continuing. Even when it is false, update the
-   journal when a result should survive as research insight.
+9. Update `research_journal.md` for the recorded round before starting another
+   recorded round. Cite the round ledger ref and capture what changed, what
+   happened, what was learned, and what that implies next.
 
 ## Layer Ownership
 
@@ -70,9 +71,9 @@ After each render, treat:
 - `agent_context.md` as the compact factual resume surface
 - `research_journal.md` as agent-owned research state
 
-`research_reflection_due=true` means enough recorded evidence exists that the
-agent should preserve evidence-linked research judgment before continuing. It
-does not mean the system has chosen a route.
+`journal_coverage_complete=false` means at least one recorded round still needs
+an agent-written journal entry. `research_reflection_due=true` is derived from
+that missing coverage; it does not mean the system has chosen a route.
 
 Input realization separates declaration from runtime behavior: a branch can
 declare `input_claim=graph_supported`, but if the strategy does not read

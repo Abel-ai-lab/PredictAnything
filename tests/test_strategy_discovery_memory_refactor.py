@@ -69,6 +69,7 @@ def test_render_writes_agent_context_with_journal_view(tmp_path: Path) -> None:
     assert "## Evidence Frontier" in context_text
     assert "## Research Journal" in context_text
     assert "## Research Reflection" in context_text
+    assert "## Journal Coverage" in context_text
     assert "## Input Realization" in context_text
 
 
@@ -241,6 +242,27 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     assert "Research journal:" in status_output
     assert "Agent memory:" not in status_output
     assert ni.check_session(session, strict=False) == 0
+    assert ni.check_session(session, strict=True) == 1
+
+    blocked = ni.run_branch_round(
+        Namespace(
+            branch=str(branch),
+            mode="explore",
+            description="second pass",
+            input_note="",
+            hypothesis="AAPL driver strength leads TSLA next-day risk appetite.",
+            expected_signal="",
+            trigger="follow-up",
+            change_summary="second pass",
+            time_spent_min="10",
+            summary="",
+            next_step="",
+            action=[],
+            python_bin=None,
+        )
+    )
+    assert blocked == 2
+    assert "Journal required before next recorded round" in capsys.readouterr().err
 
 
 def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: Path) -> None:
@@ -354,6 +376,12 @@ def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: P
         "realized_graph_supported_rounds": 1,
         "graph_input_read_gap_count": 0,
         "graph_input_read_gap_rows": [],
+    }
+    assert bundle["payload"]["session"]["journalCoverage"] == {
+        "recorded_round_count": 1,
+        "journaled_round_count": 1,
+        "journal_coverage_complete": True,
+        "missing_journal_rounds": [],
     }
     assert bundle["payload"]["rounds"][0]["roundId"] == "round-001"
     assert bundle["payload"]["rounds"][0]["evidenceLabel"] == "candidate_causal_evidence"
