@@ -97,6 +97,50 @@ AGENT_MEMORY_TYPES = {
     "branch_relation",
     "note",
 }
+MODEL_FAMILIES = {
+    "rule_signal",
+    "linear_model",
+    "tree_model",
+    "learned_model",
+    "ensemble",
+    "hybrid",
+    "unspecified",
+}
+COMPLEXITY_CLASSES = {
+    "simple_signal",
+    "interaction",
+    "regime",
+    "portfolio",
+    "learned_model",
+    "hybrid",
+    "unspecified",
+}
+EXPLORATION_ROLES = {
+    "candidate",
+    "control",
+    "ablation",
+    "expansion_probe",
+    "refinement",
+    "diagnostic",
+    "unspecified",
+}
+CHANGED_DIMENSIONS = {
+    "drivers",
+    "mechanism",
+    "model_family",
+    "complexity",
+    "sizing",
+    "thresholds",
+    "filters",
+    "window",
+    "implementation",
+}
+BROAD_CHANGED_DIMENSIONS = {"drivers", "mechanism", "model_family", "complexity"}
+LOCAL_CHANGED_DIMENSIONS = {"sizing", "thresholds", "filters", "window", "implementation"}
+INITIAL_BREADTH_ROUND_THRESHOLD = 3
+INITIAL_BRANCH_FAMILY_MINIMUM = 2
+SAME_NEIGHBORHOOD_FAIL_THRESHOLD = 5
+SAME_BRANCH_ROUND_THRESHOLD = 8
 
 RESULTS_HEADER = [
     "exp_id",
@@ -442,6 +486,15 @@ def main() -> int:
     run_branch.add_argument("--change-summary", default="")
     run_branch.add_argument("--time-spent-min", default="")
     run_branch.add_argument("--action", action="append", default=[])
+    run_branch.add_argument(
+        "--changed-dimension",
+        action="append",
+        default=[],
+        choices=sorted(CHANGED_DIMENSIONS),
+        help="Factual dimension changed in this round; repeat for multiple dimensions",
+    )
+    run_branch.add_argument("--continuation-rationale", default="")
+    run_branch.add_argument("--single-branch-rationale", default="")
     run_branch.add_argument(
         "--python-bin",
         default=None,
@@ -1727,6 +1780,9 @@ def run_branch_round(args: argparse.Namespace) -> int:
             expected_signal=args.expected_signal,
             trigger=args.trigger,
             change_summary=args.change_summary,
+            changed_dimensions=getattr(args, "changed_dimension", []),
+            continuation_rationale=getattr(args, "continuation_rationale", ""),
+            single_branch_rationale=getattr(args, "single_branch_rationale", ""),
             time_spent_min=args.time_spent_min,
             summary=args.summary,
             next_step=args.next_step,
@@ -1789,6 +1845,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
             },
         )
         render_session(session)
+    for line in exploration_protocol_warning_lines(session, branch.name, round_id):
+        print(f"Exploration protocol: {line}")
     print(f"Alpha context: {context_path.relative_to(session)}")
     print(f"Edge result: {result_path.relative_to(session)}")
     print(f"Edge validation: {report_path.relative_to(session)}")
@@ -1879,6 +1937,9 @@ def record_workflow_blocker_round(
             expected_signal=args.expected_signal,
             trigger=args.trigger,
             change_summary=args.change_summary,
+            changed_dimensions=getattr(args, "changed_dimension", []),
+            continuation_rationale=getattr(args, "continuation_rationale", ""),
+            single_branch_rationale=getattr(args, "single_branch_rationale", ""),
             time_spent_min=args.time_spent_min,
             summary="Workflow blocker recorded before edge evaluation completed.",
             next_step="",
@@ -2155,7 +2216,7 @@ def print_status(session: Path) -> None:
         latest = leader["rows"][-1]
         latest_note = read_round_note(leader["branch_dir"], latest.get("round_id", ""))
         print(
-            "Lead: "
+            "Top snapshot: "
             f"{leader['branch_id']} {latest.get('decision', 'pending')} {latest.get('verdict', 'n/a')} "
             f"{latest.get('score', '?/?')} {latest_note.get('failure_signature', 'unknown')} "
             f"active={latest_note.get('signal_activity', 'n/a')}"
@@ -2262,6 +2323,9 @@ def check_session(session: Path, *, strict: bool) -> int:
                         f"{branch_dir.name}: unresolved placeholder in {text_path.name}"
                     )
 
+    if strict:
+        validate_exploration_protocol(session, failures)
+
     if failures:
         print("Narrative check failed:")
         for failure in failures:
@@ -2269,6 +2333,57 @@ def check_session(session: Path, *, strict: bool) -> int:
         return 1
     print(f"Narrative check passed for {session}")
     return 0
+
+
+def validate_exploration_protocol(session: Path, failures: list[str]) -> None:
+    frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
+    exploration = frontier.get("exploration_breadth") if isinstance(frontier.get("exploration_breadth"), dict) else {}
+    if not exploration:
+        return
+    if exploration.get("initial_breadth_incomplete"):
+        failures.append(
+            "initial breadth incomplete: branch_family_count="
+            f"{exploration.get('branch_family_count', 0)} "
+            f"same_branch_max_rounds={exploration.get('same_branch_max_rounds', 0)} "
+            f"single_branch_rationale_present={str(exploration.get('single_branch_rationale_present', False)).lower()}"
+        )
+    missing = int(exploration.get("continuation_rationale_missing_count") or 0)
+    if missing:
+        failures.append(
+            "continuation rationale missing: "
+            f"continuation_rationale_missing_count={missing}"
+        )
+
+
+def exploration_protocol_warning_lines(session: Path, branch_id: str, round_id: str) -> list[str]:
+    ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
+    rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
+    row = next(
+        (
+            item
+            for item in reversed(rows)
+            if item.get("branch_id") == branch_id and item.get("round_id") == round_id
+        ),
+        None,
+    )
+    if not row:
+        return []
+    lines: list[str] = []
+    if row.get("initial_breadth_incomplete"):
+        lines.append(
+            "initial_breadth_incomplete=true "
+            f"branch_family_count={row.get('branch_family_count', 0)} "
+            f"same_branch_rounds={row.get('same_branch_round_index', 0)} "
+            f"single_branch_rationale_present={str(row.get('single_branch_rationale_present', False)).lower()}"
+        )
+    if row.get("continuation_rationale_required"):
+        lines.append(
+            "continuation_rationale_required=true "
+            f"same_neighborhood_failed_rows={row.get('same_neighborhood_failed_rows', 0)} "
+            f"same_branch_rounds={row.get('same_branch_round_index', 0)} "
+            f"continuation_rationale_present={str(row.get('continuation_rationale_present', False)).lower()}"
+        )
+    return lines
 
 
 def select_leader(branches: list[dict]) -> dict | None:
@@ -2393,12 +2508,12 @@ def build_session_readme(
     if leader and leader["rows"]:
         latest = leader["rows"][-1]
         leader_note = read_round_note(leader["branch_dir"], latest.get("round_id", ""))
-        lead_label = "Latest KEEP baseline"
+        snapshot_label = "Latest KEEP row"
         if latest.get("decision") != "keep":
-            lead_label = "Latest evaluated branch"
+            snapshot_label = "Latest evaluated row"
         executive = (
             f"Session has {len(branches)} branch(es): {len(keep_branches)} keep and {len(discard_branches)} discard. "
-            f"{lead_label} is `{leader['branch_id']}` at `{latest.get('round_id', 'none')}` with Lo {float(latest.get('lo_adj') or 0):.3f}, "
+            f"{snapshot_label} is `{leader['branch_id']}` at `{latest.get('round_id', 'none')}` with Lo {float(latest.get('lo_adj') or 0):.3f}, "
             f"Sharpe {float(latest.get('sharpe') or 0):.3f}, PnL {float(latest.get('pnl') or 0):.1f}%, "
             f"failure signature `{leader_note.get('failure_signature', 'unknown')}`, "
             f"active `{leader_note.get('signal_activity', 'n/a')}`."
@@ -2683,6 +2798,7 @@ def build_evidence_ledger(session: Path, discovery: dict, branches: list[dict]) 
     rows: list[dict[str, object]] = []
     for branch in branches:
         rows.extend(build_evidence_rows_for_branch(session, branch))
+    annotate_exploration_protocol(rows)
     return {
         "schema_version": 1,
         "exp_id": session.name,
@@ -2717,6 +2833,12 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
     metric_failure_counts: dict[str, int] = {}
     branch_counts: dict[str, int] = {}
     driver_set_counts: dict[str, int] = {}
+    branch_family_counts: dict[str, int] = {}
+    neighborhood_counts: dict[str, int] = {}
+    exploration_class_counts: dict[str, int] = {}
+    model_family_counts: dict[str, int] = {}
+    complexity_class_counts: dict[str, int] = {}
+    exploration_role_counts: dict[str, int] = {}
     driver_reads: set[str] = set()
     protocol_complete = 0
     comparable_candidates = 0
@@ -2737,6 +2859,13 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
         increment_count(branch_counts, str(row.get("branch_id") or "unknown"))
         driver_set = canonical_driver_set_label(row)
         increment_count(driver_set_counts, driver_set)
+        if row.get("run_type") == "round":
+            increment_count(branch_family_counts, str(row.get("branch_family_key") or branch_family_key(row)))
+        increment_count(neighborhood_counts, str(row.get("exploration_neighborhood_key") or exploration_neighborhood_key(row)))
+        increment_count(exploration_class_counts, str(row.get("derived_exploration_class") or "unknown"))
+        increment_count(model_family_counts, str(row.get("declared_model_family") or "unspecified"))
+        increment_count(complexity_class_counts, str(row.get("declared_complexity_class") or "unspecified"))
+        increment_count(exploration_role_counts, str(row.get("declared_exploration_role") or "unspecified"))
         if row.get("declaration_protocol_complete"):
             protocol_complete += 1
         for item in row.get("actual_auxiliary_reads") or []:
@@ -2758,10 +2887,25 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
         result_ref = str(row.get("result_ref") or "").strip()
         if result_ref:
             increment_count(window_counts, str(row.get("runtime_stage") or "unknown"))
-    dominant_branch, dominant_branch_count = dominant_count(branch_counts)
+    dominant_branch, _ = dominant_count(branch_counts)
     dominant_mechanism, dominant_mechanism_count = dominant_count(mechanism_counts)
     dominant_input, dominant_input_count = dominant_count(input_claim_counts)
     dominant_driver_set, dominant_driver_set_count = dominant_count(driver_set_counts)
+    dominant_neighborhood, dominant_neighborhood_count = dominant_count(neighborhood_counts)
+    same_branch_max_rounds = max(branch_counts.values(), default=0)
+    single_branch_rationale_present = any(bool(row.get("single_branch_rationale")) for row in rows)
+    initial_breadth_incomplete = (
+        same_branch_max_rounds > INITIAL_BREADTH_ROUND_THRESHOLD
+        and len(branch_family_counts) < INITIAL_BRANCH_FAMILY_MINIMUM
+        and not single_branch_rationale_present
+    )
+    continuation_required_count = sum(1 for row in rows if row.get("continuation_rationale_required"))
+    continuation_missing_count = sum(
+        1
+        for row in rows
+        if row.get("continuation_rationale_required")
+        and not row.get("continuation_rationale_present")
+    )
     return {
         "schema_version": 1,
         "exp_id": ledger.get("exp_id", ""),
@@ -2796,7 +2940,7 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
         },
         "coverage_concentration": {
             "branch_count": len(branch_counts),
-            "max_rounds_in_one_branch": dominant_branch_count,
+            "max_rounds_in_one_branch": same_branch_max_rounds,
             "dominant_branch": dominant_branch,
             "dominant_mechanism_family": dominant_mechanism,
             "dominant_mechanism_family_count": dominant_mechanism_count,
@@ -2810,6 +2954,29 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
             "target_control_evidence": label_counts.get("target_control_evidence", 0),
             "comparable_controls": comparable_controls,
             "agent_memory_records": int(agent_memory_count),
+        },
+        "exploration_breadth": {
+            "branch_count": len(branch_counts),
+            "branch_family_count": len(branch_family_counts),
+            "initial_breadth_incomplete": initial_breadth_incomplete,
+            "single_branch_rationale_present": single_branch_rationale_present,
+            "same_branch_max_rounds": same_branch_max_rounds,
+            "dominant_neighborhood": dominant_neighborhood,
+            "dominant_neighborhood_rows": dominant_neighborhood_count,
+            "dominant_mechanism_family": dominant_mechanism,
+            "dominant_mechanism_family_share": fraction_pair(dominant_mechanism_count, len(rows)),
+            "dominant_driver_set": dominant_driver_set,
+            "dominant_driver_set_share": fraction_pair(dominant_driver_set_count, len(rows)),
+            "exploration_class_counts": dict(sorted(exploration_class_counts.items())),
+            "model_family_counts": dict(sorted(model_family_counts.items())),
+            "complexity_class_counts": dict(sorted(complexity_class_counts.items())),
+            "exploration_role_counts": dict(sorted(exploration_role_counts.items())),
+            "control_evidence_count": label_counts.get("target_control_evidence", 0),
+            "ablation_evidence_count": exploration_role_counts.get("ablation", 0),
+            "expansion_probe_count": exploration_role_counts.get("expansion_probe", 0),
+            "local_refinement_count": exploration_class_counts.get("local_refinement", 0),
+            "continuation_rationale_required_count": continuation_required_count,
+            "continuation_rationale_missing_count": continuation_missing_count,
         },
     }
 
@@ -2866,6 +3033,7 @@ def render_frontier_markdown(frontier: dict) -> str:
     hypothesis = frontier.get("hypothesis_coverage") or {}
     candidate = frontier.get("candidate_causal_summary") or {}
     concentration = frontier.get("coverage_concentration") or {}
+    exploration = frontier.get("exploration_breadth") or {}
     return f"""# Evidence Frontier
 
 generated by Abel strategy discovery narrative layer
@@ -2924,6 +3092,25 @@ generated by Abel strategy discovery narrative layer
 - comparable_controls: `{concentration.get("comparable_controls", 0)}`
 - agent_memory_records: `{concentration.get("agent_memory_records", 0)}`
 
+## Exploration Breadth
+
+- branch_count: `{exploration.get("branch_count", 0)}`
+- branch_family_count: `{exploration.get("branch_family_count", 0)}`
+- initial_breadth_incomplete: `{str(exploration.get("initial_breadth_incomplete", False)).lower()}`
+- single_branch_rationale_present: `{str(exploration.get("single_branch_rationale_present", False)).lower()}`
+- same_branch_max_rounds: `{exploration.get("same_branch_max_rounds", 0)}`
+- dominant_neighborhood: `{exploration.get("dominant_neighborhood", "none")}`
+- dominant_neighborhood_rows: `{exploration.get("dominant_neighborhood_rows", 0)}`
+- model_family_counts: `{render_inline_counts(exploration.get("model_family_counts") or {})}`
+- complexity_class_counts: `{render_inline_counts(exploration.get("complexity_class_counts") or {})}`
+- exploration_class_counts: `{render_inline_counts(exploration.get("exploration_class_counts") or {})}`
+- control_evidence_count: `{exploration.get("control_evidence_count", 0)}`
+- ablation_evidence_count: `{exploration.get("ablation_evidence_count", 0)}`
+- expansion_probe_count: `{exploration.get("expansion_probe_count", 0)}`
+- local_refinement_count: `{exploration.get("local_refinement_count", 0)}`
+- continuation_rationale_required_count: `{exploration.get("continuation_rationale_required_count", 0)}`
+- continuation_rationale_missing_count: `{exploration.get("continuation_rationale_missing_count", 0)}`
+
 ## Runtime Reads
 
 - driver_read_count: `{frontier.get("driver_read_count", 0)}`
@@ -2959,6 +3146,12 @@ def render_nested_count_lines(counts: dict) -> str:
     return "\n".join(lines)
 
 
+def render_inline_counts(counts: dict) -> str:
+    if not counts:
+        return "none"
+    return ", ".join(f"{key}={value}" for key, value in sorted(counts.items()))
+
+
 def render_session_frontier_summary(frontier: dict) -> str:
     if not frontier:
         return "- evidence_frontier: `not generated`"
@@ -2967,6 +3160,7 @@ def render_session_frontier_summary(frontier: dict) -> str:
     hypothesis = frontier.get("hypothesis_coverage") or {}
     candidate = frontier.get("candidate_causal_summary") or {}
     concentration = frontier.get("coverage_concentration") or {}
+    exploration = frontier.get("exploration_breadth") or {}
     return "\n".join(
         [
             f"- evidence_rows: `{frontier.get('row_count', 0)}`",
@@ -2982,6 +3176,10 @@ def render_session_frontier_summary(frontier: dict) -> str:
             f"- dominant_mechanism_family: `{concentration.get('dominant_mechanism_family', 'none')}` (`{concentration.get('dominant_mechanism_family_share', '0/0')}`)",
             f"- dominant_driver_set: `{concentration.get('dominant_driver_set', 'none')}` (`{concentration.get('dominant_driver_set_share', '0/0')}`)",
             f"- agent_memory_records: `{concentration.get('agent_memory_records', 0)}`",
+            f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
+            f"- initial_breadth_incomplete: `{str(exploration.get('initial_breadth_incomplete', False)).lower()}`",
+            f"- local_refinement_count: `{exploration.get('local_refinement_count', 0)}`",
+            f"- continuation_rationale_missing_count: `{exploration.get('continuation_rationale_missing_count', 0)}`",
         ]
     )
 
@@ -3025,6 +3223,10 @@ generated by Abel strategy discovery narrative layer
 
 {render_resume_state_facts(records, session=session, ledger=ledger, frontier=frontier)}
 
+## Exploration Breadth
+
+{render_agent_context_exploration_breadth(frontier)}
+
 ## Recent Evidence Rows
 
 {render_agent_context_evidence_rows(recent_rows)}
@@ -3044,6 +3246,25 @@ generated by Abel strategy discovery narrative layer
 - raw artifacts: branch `outputs/`
 - session: `{session.name}`
 """
+
+
+def render_agent_context_exploration_breadth(frontier: dict) -> str:
+    exploration = frontier.get("exploration_breadth") or {}
+    if not exploration:
+        return "- not generated"
+    return "\n".join(
+        [
+            f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
+            f"- initial_breadth_incomplete: `{str(exploration.get('initial_breadth_incomplete', False)).lower()}`",
+            f"- same_branch_max_rounds: `{exploration.get('same_branch_max_rounds', 0)}`",
+            f"- dominant_neighborhood_rows: `{exploration.get('dominant_neighborhood_rows', 0)}`",
+            f"- model_family_counts: `{render_inline_counts(exploration.get('model_family_counts') or {})}`",
+            f"- complexity_class_counts: `{render_inline_counts(exploration.get('complexity_class_counts') or {})}`",
+            f"- exploration_class_counts: `{render_inline_counts(exploration.get('exploration_class_counts') or {})}`",
+            f"- continuation_rationale_required_count: `{exploration.get('continuation_rationale_required_count', 0)}`",
+            f"- continuation_rationale_missing_count: `{exploration.get('continuation_rationale_missing_count', 0)}`",
+        ]
+    )
 
 
 def render_resume_state_facts(
@@ -3092,6 +3313,7 @@ def render_agent_context_evidence_rows(rows: list[dict]) -> str:
             f"label=`{row.get('evidence_label', 'unknown')}` "
             f"verdict=`{row.get('verdict', 'unknown')}` "
             f"decision=`{row.get('decision', 'unknown')}` "
+            f"exploration=`{row.get('derived_exploration_class', 'unknown')}` "
             f"intent=`{row.get('declared_evidence_intent', 'unknown')}` "
             f"input=`{row.get('declared_input_claim', 'unknown')}` "
             f"workflow=`{row.get('workflow_status', 'unknown')}`"
@@ -3201,6 +3423,14 @@ def build_evidence_row(
         result_present=bool(result),
         engine_scaffold_status=engine_scaffold_status,
     )
+    changed_dimensions = parse_changed_dimensions(note.get("changed_dimensions", ""))
+    exploration_class = derive_exploration_class(
+        run_type=run_type,
+        declared_mode=row.get("mode", ""),
+        evidence_label=label,
+        declaration=declaration,
+        changed_dimensions=changed_dimensions,
+    )
     return {
         "branch_id": branch_id,
         "run_id": run_id,
@@ -3213,7 +3443,13 @@ def build_evidence_row(
         "declared_evidence_intent": declaration["evidence_intent"],
         "declared_input_claim": declaration["input_claim"],
         "declared_mechanism_family": declaration["mechanism_family"],
+        "declared_model_family": declaration["model_family"],
+        "declared_complexity_class": declaration["complexity_class"],
+        "declared_exploration_role": declaration["exploration_role"],
         "declared_selected_inputs": list(declaration["selected_inputs"]),
+        "changed_dimensions": changed_dimensions,
+        "continuation_rationale": normalize_optional_note(note.get("continuation_rationale", "")),
+        "single_branch_rationale": normalize_optional_note(note.get("single_branch_rationale", "")),
         "engine_scaffold_status": engine_scaffold_status or "unknown",
         "actual_auxiliary_reads": runtime["auxiliary_reads"],
         "actual_read_count": runtime["read_count"],
@@ -3227,6 +3463,8 @@ def build_evidence_row(
         "metric_failure_metrics": runtime["metric_failure_metrics"],
         "metric_failures": runtime["metric_failures"],
         "evidence_label": label,
+        "derived_exploration_class": exploration_class,
+        "exploration_neighborhood_key": "",
         "comparable": comparable,
         "comparable_reason": comparable_reason,
         "metrics_ref": result_rel,
@@ -3238,6 +3476,135 @@ def build_evidence_row(
         "sharpe": row.get("sharpe", metric_string(result, "sharpe")),
         "lo_adj": row.get("lo_adj", metric_string(result, "lo_adjusted")),
     }
+
+
+def parse_changed_dimensions(value: object) -> list[str]:
+    if isinstance(value, list):
+        raw_items = value
+    else:
+        text = str(value or "").strip()
+        if not text or text == "none":
+            return []
+        raw_items = text.replace(";", ",").split(",")
+    return [
+        item
+        for item in ordered_unique_strings(str(raw).strip().lower() for raw in raw_items)
+        if item in CHANGED_DIMENSIONS
+    ]
+
+
+def normalize_optional_note(value: object) -> str:
+    text = str(value or "").strip()
+    return "" if text in {"", "not recorded", "none"} else text
+
+
+def derive_exploration_class(
+    *,
+    run_type: str,
+    declared_mode: str,
+    evidence_label: str,
+    declaration: dict[str, object],
+    changed_dimensions: list[str],
+) -> str:
+    role = str(declaration.get("exploration_role") or "unspecified")
+    input_claim = str(declaration.get("input_claim") or "")
+    intent = str(declaration.get("evidence_intent") or "")
+    if run_type == "debug" or evidence_label in {"diagnostic_only", "workflow_blocker", "runtime_invalid"}:
+        return "diagnostic"
+    if role == "diagnostic" or intent == "diagnostic":
+        return "diagnostic"
+    if role in {"control", "ablation"} or intent == "control" or input_claim == "target_only":
+        return "control"
+    if role == "expansion_probe" or any(item in BROAD_CHANGED_DIMENSIONS for item in changed_dimensions):
+        return "broad_explore"
+    if role == "refinement" or any(item in LOCAL_CHANGED_DIMENSIONS for item in changed_dimensions):
+        return "local_refinement"
+    if declared_mode == "exploit":
+        return "local_refinement"
+    return "broad_explore"
+
+
+def annotate_exploration_protocol(rows: list[dict[str, object]]) -> None:
+    round_rows = [row for row in rows if row.get("run_type") == "round"]
+    family_keys = {
+        branch_family_key(row)
+        for row in round_rows
+        if branch_family_key(row)
+    }
+    branch_totals: dict[str, int] = {}
+    branch_seen: dict[str, int] = {}
+    neighborhood_fail_seen: dict[str, int] = {}
+    single_branch_rationale_present = any(
+        bool(row.get("single_branch_rationale")) for row in round_rows
+    )
+    for row in round_rows:
+        increment_count(branch_totals, str(row.get("branch_id") or "unknown"))
+    max_branch_rounds = max(branch_totals.values(), default=0)
+    initial_breadth_incomplete = (
+        max_branch_rounds > INITIAL_BREADTH_ROUND_THRESHOLD
+        and len(family_keys) < INITIAL_BRANCH_FAMILY_MINIMUM
+        and not single_branch_rationale_present
+    )
+
+    for row in rows:
+        neighborhood = exploration_neighborhood_key(row)
+        row["exploration_neighborhood_key"] = neighborhood
+        row["branch_family_key"] = branch_family_key(row)
+        row["branch_family_count"] = len(family_keys)
+        row["single_branch_rationale_present"] = bool(row.get("single_branch_rationale"))
+        row["initial_breadth_incomplete"] = initial_breadth_incomplete
+        if row.get("run_type") != "round":
+            row["same_branch_round_index"] = 0
+            row["same_neighborhood_failed_rows"] = 0
+            row["continuation_rationale_required"] = False
+            row["continuation_rationale_present"] = bool(row.get("continuation_rationale"))
+            continue
+        branch_id = str(row.get("branch_id") or "unknown")
+        branch_seen[branch_id] = branch_seen.get(branch_id, 0) + 1
+        same_branch_rounds = branch_seen[branch_id]
+        failed_before = neighborhood_fail_seen.get(neighborhood, 0)
+        if (
+            row.get("derived_exploration_class") == "broad_explore"
+            and same_branch_rounds > 1
+            and not row.get("changed_dimensions")
+        ):
+            row["derived_exploration_class"] = "local_refinement"
+        required = (
+            failed_before >= SAME_NEIGHBORHOOD_FAIL_THRESHOLD
+            or same_branch_rounds > SAME_BRANCH_ROUND_THRESHOLD
+        )
+        row["same_branch_round_index"] = same_branch_rounds
+        row["same_neighborhood_failed_rows"] = failed_before
+        row["continuation_rationale_required"] = bool(required)
+        row["continuation_rationale_present"] = bool(row.get("continuation_rationale"))
+        if row.get("comparable") and row.get("verdict") == "FAIL":
+            neighborhood_fail_seen[neighborhood] = failed_before + 1
+
+
+def exploration_neighborhood_key(row: dict[str, object]) -> str:
+    return "|".join(
+        [
+            str(row.get("branch_id") or "unknown"),
+            str(row.get("declared_mechanism_family") or "unknown"),
+            str(row.get("declared_input_claim") or "unknown"),
+            canonical_driver_set_label(row),
+            str(row.get("declared_model_family") or "unspecified"),
+            str(row.get("declared_complexity_class") or "unspecified"),
+        ]
+    )
+
+
+def branch_family_key(row: dict[str, object]) -> str:
+    return "|".join(
+        [
+            str(row.get("declared_mechanism_family") or "unknown"),
+            str(row.get("declared_input_claim") or "unknown"),
+            canonical_driver_set_label(row),
+            str(row.get("declared_model_family") or "unspecified"),
+            str(row.get("declared_complexity_class") or "unspecified"),
+            str(row.get("declared_exploration_role") or "unspecified"),
+        ]
+    )
 
 
 def load_json_object(path: Path | None) -> dict:
@@ -4166,6 +4533,46 @@ def normalize_input_claim(branch_spec: dict) -> str:
     return ""
 
 
+def normalize_model_family(branch_spec: dict) -> str:
+    configured = str(branch_spec.get("model_family") or "").strip().lower()
+    if configured in MODEL_FAMILIES:
+        return configured
+    method_family = str(branch_spec.get("method_family") or "").strip().lower()
+    if method_family == "ml":
+        return "learned_model"
+    if method_family in {"rule", "technical"}:
+        return "rule_signal"
+    if method_family == "hybrid":
+        return "hybrid"
+    return "unspecified"
+
+
+def normalize_complexity_class(branch_spec: dict) -> str:
+    configured = str(branch_spec.get("complexity_class") or "").strip().lower()
+    if configured in COMPLEXITY_CLASSES:
+        return configured
+    model_family = normalize_model_family(branch_spec)
+    if model_family in {"tree_model", "learned_model", "ensemble"}:
+        return "learned_model"
+    if model_family == "hybrid":
+        return "hybrid"
+    return "unspecified"
+
+
+def normalize_exploration_role(branch_spec: dict) -> str:
+    configured = str(branch_spec.get("exploration_role") or "").strip().lower()
+    if configured in EXPLORATION_ROLES:
+        return configured
+    evidence_intent = normalize_evidence_intent(branch_spec)
+    if evidence_intent == "control":
+        return "control"
+    if evidence_intent == "diagnostic":
+        return "diagnostic"
+    if evidence_intent == "candidate":
+        return "candidate"
+    return "unspecified"
+
+
 def branch_selected_inputs(branch_spec: dict) -> list[str]:
     raw = branch_spec.get("selected_inputs")
     if raw is None or raw == []:
@@ -4235,6 +4642,9 @@ def branch_declaration_status(branch_spec: dict) -> dict[str, object]:
         "evidence_intent": evidence_intent,
         "input_claim": input_claim,
         "mechanism_family": mechanism_family,
+        "model_family": normalize_model_family(branch_spec),
+        "complexity_class": normalize_complexity_class(branch_spec),
+        "exploration_role": normalize_exploration_role(branch_spec),
         "invalidation_condition": invalidation_condition,
         "requested_start": requested_start,
         "selected_inputs": selected_inputs,
@@ -4297,6 +4707,9 @@ def build_default_branch_spec(*, branch: Path, discovery: dict, readiness: dict)
         "invalidation_condition": "",
         "source_type": "draft",
         "method_family": "unspecified",
+        "model_family": "unspecified",
+        "complexity_class": "unspecified",
+        "exploration_role": "candidate",
         "parent_branch_id": "",
         "requested_start": _get_backtest_start(discovery),
         "resolved_start_policy": "requested",
@@ -4855,6 +5268,9 @@ def read_round_note(branch_dir: Path, round_id: str) -> dict[str, str]:
             "hypothesis",
             "expected_signal",
             "change_summary",
+            "changed_dimensions",
+            "continuation_rationale",
+            "single_branch_rationale",
             "time_spent_min",
             "failures",
             "failure_signature",
@@ -4884,6 +5300,7 @@ def render_round_note(**kwargs) -> str:
     signal = diagnostics.get("signal") or {}
     actions = kwargs.get("actions") or ["Executed raw causal-edge evaluation"]
     action_lines = "\n".join(f"1. {action}" for action in actions)
+    changed_dimensions = ordered_unique_strings(kwargs.get("changed_dimensions") or [])
     return f"""# {kwargs["round_id"]}
 
 ## Basic Info
@@ -4914,6 +5331,12 @@ def render_round_note(**kwargs) -> str:
 ## Actions
 
 {action_lines}
+
+## Exploration Protocol
+
+- changed_dimensions: `{", ".join(changed_dimensions) or "none"}`
+- continuation_rationale: `{kwargs.get("continuation_rationale") or "not recorded"}`
+- single_branch_rationale: `{kwargs.get("single_branch_rationale") or "not recorded"}`
 
 ## Key Results
 

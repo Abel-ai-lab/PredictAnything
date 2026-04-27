@@ -34,6 +34,9 @@ under `research/` rather than creating a standalone `causal-edge init`
 sidecar project.
 This is a compounding search loop, not a checklist of unrelated backtests.
 Each round should answer a question about mechanism, not just consume compute.
+Each branch should stay a hypothesis family. If a new round changes drivers,
+mechanism, model family, or complexity class, record that dimension explicitly
+or use a new branch when the thesis has materially changed.
 
 After each render, treat `evidence_ledger.json` as the evidence record and
 `frontier.md` / `frontier.json` as factual coverage reports. They should show
@@ -86,6 +89,18 @@ declare:
 `debug-branch` is the place to test whether the branch can see the world it
 thinks it can see.
 
+When recording a round, use these protocol fields when they apply:
+
+```bash
+abel-alpha run-branch --branch ... -d "..." \
+  --changed-dimension sizing \
+  --continuation-rationale "agent-authored reason for continuing this neighborhood" \
+  --single-branch-rationale "agent-authored reason for a narrow start"
+```
+
+Use only the rationale fields that are true for the current round. They are
+agent-authored research state, not system-written strategy advice.
+
 ## Evidence Admission Rule
 
 The primary question after a run is not "KEEP or DISCARD?" It is "what kind of
@@ -109,8 +124,10 @@ runs as lead candidates.
 - exploit: parameter tuning, threshold tuning, or local refinement on the same idea
 
 Use branch history, the ledger, and the frontier to understand what has already
-been covered. If multiple exploit variants die the same death, record that fact
-and choose the next research move yourself rather than following generated
+been covered. The framework records broad exploration, local refinement,
+controls, ablations, diagnostics, model-family coverage, and continuation
+rationale facts. If multiple exploit variants die the same death, record that
+fact and choose the next research move yourself rather than following generated
 route guidance.
 
 ## Failure Interpretation

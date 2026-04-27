@@ -229,6 +229,10 @@ def _record_synthetic_round(
     result: dict,
     round_id: str = "round-001",
     decision: str = "keep",
+    mode: str = "explore",
+    changed_dimensions: list[str] | None = None,
+    continuation_rationale: str = "",
+    single_branch_rationale: str = "",
     result_path_override: str | None = None,
 ) -> None:
     ni.write_branch_spec(branch, spec)
@@ -251,7 +255,7 @@ def _record_synthetic_round(
             exp_id=session.name,
             branch_id=branch.name,
             round_id=round_id,
-            mode="explore",
+            mode=mode,
             decision=decision,
             description="synthetic evidence run",
             result=result,
@@ -261,6 +265,9 @@ def _record_synthetic_round(
             expected_signal="",
             trigger="test",
             change_summary="test",
+            changed_dimensions=changed_dimensions or [],
+            continuation_rationale=continuation_rationale,
+            single_branch_rationale=single_branch_rationale,
             time_spent_min="1",
             summary="",
             next_step="",
@@ -291,7 +298,7 @@ def _record_synthetic_round(
             "K": "1",
             "score": result.get("score", "7/7"),
             "verdict": result.get("verdict", "PASS"),
-            "mode": "explore",
+            "mode": mode,
             "description": "synthetic evidence run",
             "result_path": result_rel,
             "report_path": str(report_path.relative_to(session)),
@@ -427,6 +434,9 @@ def test_default_branch_spec_starts_as_draft_declaration(tmp_path) -> None:
     assert spec["evidence_intent"] == "draft"
     assert spec["source_type"] == "draft"
     assert spec["method_family"] == "unspecified"
+    assert spec["model_family"] == "unspecified"
+    assert spec["complexity_class"] == "unspecified"
+    assert spec["exploration_role"] == "candidate"
     assert spec["selected_drivers"] == []
     assert status["protocol_complete"] is False
     assert "hypothesis" in status["protocol_gaps"]
@@ -749,6 +759,163 @@ def test_frontier_surfaces_candidate_failures_and_resume_facts(tmp_path) -> None
     forbidden = ["try next", "recommend", "open a sibling", "switch mechanism"]
     assert not any(term in frontier_text.lower() for term in forbidden)
     assert not any(term in context_text.lower() for term in forbidden)
+
+
+def test_exploration_breadth_marks_single_branch_local_refinement(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-breadth-local", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "model_family": "rule_signal",
+            "complexity_class": "simple_signal",
+            "exploration_role": "candidate",
+            "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["AAPL"],
+        }
+    )
+    for index in range(6):
+        _record_synthetic_round(
+            session,
+            branch,
+            spec=spec,
+            result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+        )
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+    exploration = frontier["exploration_breadth"]
+
+    assert exploration["branch_family_count"] == 1
+    assert exploration["initial_breadth_incomplete"] is True
+    assert exploration["same_branch_max_rounds"] == 6
+    assert exploration["exploration_class_counts"]["broad_explore"] == 1
+    assert exploration["exploration_class_counts"]["local_refinement"] == 5
+    assert exploration["continuation_rationale_required_count"] == 1
+    assert exploration["continuation_rationale_missing_count"] == 1
+    assert ledger["rows"][-1]["continuation_rationale_required"] is True
+    assert ledger["rows"][-1]["same_neighborhood_failed_rows"] == 5
+    assert "initial_breadth_incomplete: `true`" in context_text
+    assert "continuation_rationale_missing_count: `1`" in context_text
+
+
+def test_single_branch_rationale_clears_initial_breadth_warning(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-breadth-rationale", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "model_family": "rule_signal",
+            "complexity_class": "simple_signal",
+            "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["AAPL"],
+        }
+    )
+    for index in range(4):
+        _record_synthetic_round(
+            session,
+            branch,
+            spec=spec,
+            result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+            single_branch_rationale=(
+                "One-branch start is intentional for isolated runtime comparison."
+                if index == 3
+                else ""
+            ),
+        )
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    exploration = frontier["exploration_breadth"]
+
+    assert exploration["branch_family_count"] == 1
+    assert exploration["same_branch_max_rounds"] == 4
+    assert exploration["single_branch_rationale_present"] is True
+    assert exploration["initial_breadth_incomplete"] is False
+    failures: list[str] = []
+    ni.validate_exploration_protocol(session, failures)
+    assert failures == []
+
+
+def test_second_branch_family_clears_initial_breadth_warning(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-breadth-second-family", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    first = ni.init_branch_dir(session, "graph-v1")
+    first_spec = ni.load_branch_spec(first)
+    first_spec.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "model_family": "rule_signal",
+            "complexity_class": "simple_signal",
+            "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["AAPL"],
+        }
+    )
+    second = ni.init_branch_dir(session, "model-v1")
+    second_spec = ni.load_branch_spec(second)
+    second_spec.update(
+        {
+            "hypothesis": "MSFT driver strength interacts with TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_interaction",
+            "model_family": "linear_model",
+            "complexity_class": "interaction",
+            "invalidation_condition": "MSFT reads disappear or validation fails repeatedly.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["MSFT"],
+        }
+    )
+    for index in range(4):
+        _record_synthetic_round(
+            session,
+            first,
+            spec=first_spec,
+            result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+        )
+    _record_synthetic_round(
+        session,
+        second,
+        spec=second_spec,
+        result=_edge_result(traced_inputs=["MSFT"], verdict="FAIL"),
+        round_id="round-001",
+        decision="discard",
+        changed_dimensions=["model_family", "complexity"],
+    )
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+
+    assert frontier["exploration_breadth"]["branch_family_count"] == 2
+    assert frontier["exploration_breadth"]["initial_breadth_incomplete"] is False
+    assert frontier["exploration_breadth"]["model_family_counts"]["linear_model"] == 1
 
 
 def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_path) -> None:

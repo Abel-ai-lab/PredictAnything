@@ -15,9 +15,10 @@ workspace setup into session and branch work.
 - session `backtest_start` is the default research target; `branch.yaml.requested_start` may override it explicitly
 
 Discovery gives leads, not answers. Readiness gives coverage clues, not
-permission. A branch is where the research becomes a falsifiable bet, and the
-evidence ledger is where the framework decides whether a run counts as
-candidate evidence, control evidence, diagnostic evidence, or a blocker.
+permission. A branch is a hypothesis family: a coherent thesis, driver set,
+mechanism, model family, and complexity class. The evidence ledger is where the
+framework decides whether a run counts as candidate evidence, control evidence,
+diagnostic evidence, or a blocker.
 
 ## Evidence Boundary
 
@@ -31,6 +32,9 @@ to count as protocol-complete candidate evidence:
 - `invalidation_condition`
 - `requested_start`
 - `selected_inputs` or legacy `selected_drivers`
+- `model_family`
+- `complexity_class`
+- `exploration_role`
 
 Legacy `source_type` and `method_family` may still appear, but they do not make
 a result causal evidence by themselves. The generated `evidence_ledger.json`
@@ -42,6 +46,32 @@ not a strategy advisor.
 combines frontier facts, recent evidence rows, and agent-authored memory. Use
 `add-memory` for your own insights, open questions, and directions; do not wait
 for generated strategy guidance.
+
+## Exploration Protocol
+
+Use branch fields to describe the hypothesis family:
+
+- `model_family`: `rule_signal`, `linear_model`, `tree_model`, `learned_model`,
+  `ensemble`, `hybrid`, or `unspecified`
+- `complexity_class`: `simple_signal`, `interaction`, `regime`, `portfolio`,
+  `learned_model`, `hybrid`, or `unspecified`
+- `exploration_role`: `candidate`, `control`, `ablation`, `expansion_probe`,
+  `refinement`, `diagnostic`, or `unspecified`
+
+Use `run-branch --changed-dimension` to describe what changed in a round:
+`drivers`, `mechanism`, `model_family`, `complexity`, `sizing`, `thresholds`,
+`filters`, `window`, or `implementation`.
+
+Broad exploration means a new hypothesis family, driver set, mechanism family,
+model family, complexity class, or expansion probe. Local refinement means
+parameter, sizing, threshold, filter, window, or implementation work inside the
+same family.
+
+Before spending many rounds in one branch, either make more than one branch
+family visible or record why the single-branch start is intentional with
+`--single-branch-rationale`. After repeated same-neighborhood validation
+failures, use `--continuation-rationale` if continuing the branch still reflects
+your own research judgment.
 
 ## What `prepare-branch` Produces
 
