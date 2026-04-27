@@ -212,6 +212,18 @@ def test_run_branch_round_updates_ledger_and_agent_context(
         raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.setattr(ni.subprocess, "run", fake_subprocess_run)
+    expected_experiment = {
+        "protocol_id": "alpha-exec-sandbox-v1",
+        "experiment_mode": "causal",
+        "round_budget": "10",
+        "abel_skills_commit": "skills-sha-123",
+        "abel_edge_commit": "edge-sha-456",
+    }
+    monkeypatch.setenv("ABEL_EXPERIMENT_PROTOCOL_ID", expected_experiment["protocol_id"])
+    monkeypatch.setenv("ABEL_EXPERIMENT_MODE", expected_experiment["experiment_mode"])
+    monkeypatch.setenv("ABEL_EXPERIMENT_ROUND_BUDGET", expected_experiment["round_budget"])
+    monkeypatch.setenv("ABEL_SKILLS_COMMIT", expected_experiment["abel_skills_commit"])
+    monkeypatch.setenv("ABEL_EDGE_COMMIT", expected_experiment["abel_edge_commit"])
 
     ni.run_branch_round(
         Namespace(
@@ -232,6 +244,10 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     )
 
     ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+    context = json.loads((branch / "outputs" / "round-001-alpha-context.json").read_text(encoding="utf-8"))
+    assert context["experiment"] == expected_experiment
+    assert ledger["experiment"] == expected_experiment
+    assert ledger["rows"][-1]["experiment"] == expected_experiment
     assert ledger["rows"][-1]["evidence_label"] == "candidate_causal_evidence"
     assert "candidate_causal_evidence" in (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
 

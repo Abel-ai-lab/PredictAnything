@@ -1681,6 +1681,83 @@ def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_pat
     assert not any(term in frontier_text for term in forbidden)
 
 
+def test_prepare_branch_inputs_passes_csv_adapter_and_path(tmp_path, monkeypatch) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1-csv", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "baseline-v1")
+
+    csv_path = tmp_path / "bars.csv"
+    csv_path.write_text(
+        "timestamp,symbol,close\n"
+        "2020-01-01T00:00:00Z,TSLA,100\n"
+        "2020-01-02T00:00:00Z,TSLA,101\n",
+        encoding="utf-8",
+    )
+
+    spec = ni.load_branch_spec(branch)
+    spec["target_asset"] = "TSLA"
+    spec["target_node"] = "TSLA.price"
+    spec["requested_start"] = "2020-01-01"
+    spec["selected_inputs"] = []
+    spec["source_type"] = "baseline"
+    spec["method_family"] = "rule"
+    spec["data_requirements"] = {
+        "timeframe": "1d",
+        "adapter": "csv",
+        "path": str(csv_path),
+    }
+    ni.write_branch_spec(branch, spec)
+
+    calls = []
+
+    def fake_subprocess_run(command, cwd=None, capture_output=None, text=None, env=None):
+        calls.append(list(command))
+        output_path = Path(command[command.index("--output-json") + 1])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "adapter": "csv",
+                    "path": str(csv_path),
+                    "timeframe": "1d",
+                    "profile": "daily",
+                    "results": [
+                        {
+                            "symbol": "TSLA",
+                            "ok": True,
+                            "row_count": 150,
+                            "available_range": {"start": "2020-01-01", "end": "2020-12-31"},
+                        }
+                    ],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(ni.subprocess, "run", fake_subprocess_run)
+
+    result = ni.prepare_branch_inputs(
+        Namespace(
+            branch=str(branch),
+            python_bin=sys.executable,
+            cache_limit=400,
+        )
+    )
+
+    assert result == 0
+    assert calls and "warm-cache" in calls[0]
+    assert "--adapter" in calls[0]
+    assert calls[0][calls[0].index("--adapter") + 1] == "csv"
+    assert "--path" in calls[0]
+    assert calls[0][calls[0].index("--path") + 1] == str(csv_path)
+
+    data_manifest = json.loads(ni.data_manifest_path(branch).read_text(encoding="utf-8"))
+    assert data_manifest["feeds"][0]["adapter"] == "csv"
+    assert data_manifest["feeds"][0]["path"] == str(csv_path)
+
+
 def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v2", tmp_path / "research")
     discovery = _sample_discovery()
@@ -1710,3 +1787,98 @@ def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
     assert context["_feeds"]["AAPL"]["symbol"] == "AAPL"
     assert context["data_manifest"]["selected_inputs"] == ["AAPL", "MSFT"]
     assert context["branch_declaration"]["evidence_intent"] == "draft"
+
+
+def test_build_branch_context_preserves_csv_feed_path(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v2-csv", tmp_path / "research")
+    discovery = _sample_discovery()
+    readiness = _sample_readiness()
+    ni.write_discovery(session, discovery)
+    ni.write_readiness(session, readiness)
+    branch = ni.init_branch_dir(session, "graph-v1")
+
+    spec = ni.load_branch_spec(branch)
+    spec["target"] = "TSLA"
+    spec["selected_inputs"] = []
+    ni.write_branch_spec(branch, spec)
+    _write_runtime_files(branch)
+
+    csv_path = str(tmp_path / "bars.csv")
+    dependencies = json.loads(ni.dependencies_path(branch).read_text(encoding="utf-8"))
+    dependencies["cache"]["adapter"] = "csv"
+    dependencies["cache"]["path"] = csv_path
+    ni.dependencies_path(branch).write_text(json.dumps(dependencies), encoding="utf-8")
+
+    data_manifest = json.loads(ni.data_manifest_path(branch).read_text(encoding="utf-8"))
+    data_manifest["feeds"] = [
+        {
+            **data_manifest["feeds"][0],
+            "adapter": "csv",
+            "path": csv_path,
+        }
+    ]
+    ni.data_manifest_path(branch).write_text(json.dumps(data_manifest), encoding="utf-8")
+
+    context = ni.build_branch_context(
+        branch=branch,
+        session=session,
+        discovery=discovery,
+        readiness=readiness,
+        round_id="round-001",
+        backtest_start="2020-01-01",
+    )
+
+    assert context["_feeds"]["primary"]["adapter"] == "csv"
+    assert context["_feeds"]["primary"]["path"] == csv_path
+
+
+def test_build_branch_context_includes_experiment_metadata(tmp_path, monkeypatch) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v4-context", tmp_path / "research")
+    discovery = _sample_discovery()
+    readiness = _sample_readiness()
+    ni.write_discovery(session, discovery)
+    ni.write_readiness(session, readiness)
+    branch = ni.init_branch_dir(session, "graph-v1")
+
+    spec = ni.load_branch_spec(branch)
+    spec["target"] = "TSLA"
+    spec["requested_start"] = "2020-01-01"
+    spec["selected_inputs"] = ["AAPL", "MSFT"]
+    ni.write_branch_spec(branch, spec)
+    _write_runtime_files(branch)
+
+    monkeypatch.setenv("ABEL_EXPERIMENT_PROTOCOL_ID", "alpha-exec-sandbox-v1")
+    monkeypatch.setenv("ABEL_EXPERIMENT_MODE", "baseline")
+    monkeypatch.setenv("ABEL_EXPERIMENT_ROUND_BUDGET", "10")
+    monkeypatch.setenv("ABEL_SKILLS_COMMIT", "skills-sha-123")
+    monkeypatch.setenv("ABEL_EDGE_COMMIT", "edge-sha-456")
+
+    context = ni.build_branch_context(
+        branch=branch,
+        session=session,
+        discovery=discovery,
+        readiness=readiness,
+        round_id="round-001",
+        backtest_start="2020-01-01",
+    )
+
+    assert context["experiment"] == {
+        "protocol_id": "alpha-exec-sandbox-v1",
+        "experiment_mode": "baseline",
+        "round_budget": "10",
+        "abel_skills_commit": "skills-sha-123",
+        "abel_edge_commit": "edge-sha-456",
+    }
+
+
+def test_round_experiment_metadata_returns_blank_shape_when_context_is_missing(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v5-context-shape", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "graph-v1")
+
+    assert ni.round_experiment_metadata(branch, "round-001") == {
+        "protocol_id": "",
+        "experiment_mode": "",
+        "round_budget": "",
+        "abel_skills_commit": "",
+        "abel_edge_commit": "",
+    }

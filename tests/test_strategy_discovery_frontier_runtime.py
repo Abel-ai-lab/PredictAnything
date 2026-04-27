@@ -72,3 +72,22 @@ def test_failed_live_discovery_attempt_surfaces_as_auth_or_runtime_error(
         assert "auth missing for test" in str(exc)
     else:
         raise AssertionError("live discovery failure should remain visible")
+
+
+def test_unexpected_live_discovery_exception_stays_visible(tmp_path: Path, monkeypatch) -> None:
+    def _raise_discovery(*_args, **_kwargs):
+        raise Exception("404 Client Error: Not Found for url: https://cap.abel.ai/api/cap")
+
+    monkeypatch.setattr(ni, "fetch_live_discovery", _raise_discovery)
+
+    try:
+        ni.init_session_dir(
+            "NFLX",
+            "frontier-v3f",
+            tmp_path / "research",
+            discover=True,
+        )
+    except Exception as exc:
+        assert "404 Client Error" in str(exc)
+    else:
+        raise AssertionError("unexpected live discovery failure should remain visible")
