@@ -50,7 +50,7 @@ In the current branch workflow, the right burden split is:
 - `Abel-alpha` makes the branch declaration and branch world explicit
 - `causal-edge` owns temporal/runtime legality
 - the evidence ledger classifies evidence labels from declaration plus runtime facts
-- agent memory preserves the agent's own grounded research state between turns
+- `research_journal.md` preserves the agent's own grounded research state between turns
 - the strategy owns mechanism design inside that visible world
 
 That is why the branch-default path is now:
@@ -60,8 +60,8 @@ That is why the branch-default path is now:
 - write `compute_decisions(self, ctx)`
 - use semantic preflight before a recorded run
 - inspect `evidence_ledger.json` and `frontier.md` after the run
-- record agent-authored memory only when it helps the next research turn resume
-  or compound
+- update `research_journal.md` when the result changes what the next research
+  turn should remember or compound
 
 not:
 

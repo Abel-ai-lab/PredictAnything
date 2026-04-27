@@ -42,10 +42,10 @@ the evidence label from explicit declaration fields plus actual edge runtime
 facts. The generated `frontier.md` and `frontier.json` report coverage facts;
 they are not a strategy advisor.
 
-`agent_context.md` is the compact resume surface for the next agent turn. It
-combines frontier facts, recent evidence rows, and agent-authored memory. Use
-`add-memory` for your own insights, open questions, and directions; do not wait
-for generated strategy guidance.
+`agent_context.md` is the compact factual resume surface for the next agent
+turn. It combines frontier facts, recent evidence rows, and journal status.
+Use `research_journal.md` for your own insights, open questions, and directions;
+do not wait for generated strategy guidance.
 
 ## Exploration Protocol
 
@@ -70,17 +70,15 @@ same family.
 The default priority is graph/input first, strategy variants second, and
 parameters last. Multiple target-only branch families can be useful controls,
 but they do not cover graph/input breadth when live graph candidates exist.
+Multiple branches on the same driver set can also remain graph/input narrow.
 
-At session start, make at least two agent-chosen hypothesis families explicit
-before deep local refinement. The protocol exits for a narrow start are factual:
-multiple recorded branch families or an agent-authored
-`--single-branch-rationale`.
+After repeated same-neighborhood validation failures, use the frontier facts and
+`research_journal.md` to decide whether you are continuing the neighborhood,
+pivoting graph/input, changing strategy family, adding control/ablation, or
+stopping. The framework should expose the shape of the search; it should not
+choose the route.
 
-After repeated same-neighborhood validation failures, use
-`--continuation-rationale` if continuing the branch still reflects your own
-research judgment.
-
-## Driver/Input Breadth And Memory
+## Driver/Input Breadth And Journal
 
 Driver/input breadth is about candidate input hypotheses. Target-only controls
 are useful contrast evidence, but they do not cover graph-supported candidate
@@ -88,9 +86,9 @@ driver sets. `mixed` and `supplement` rows can be useful supplemental evidence,
 but they do not close graph-first candidate coverage unless the branch declares
 `input_claim: graph_supported` and actually reads discovered drivers.
 
-Use `agent_memory.jsonl` as agent resume state. When frontier or warning facts
-show enough evidence has accumulated, write your own `add-memory` insight with
-`ledger:*` or `frontier:*` references before continuing deep refinement.
+Use `research_journal.md` as agent-owned research state. Write freely, but when
+an insight should survive as a research conclusion, cite `ledger:*`,
+`frontier.md`, or a raw artifact path before continuing deep refinement.
 
 ## What `prepare-branch` Produces
 
@@ -114,7 +112,7 @@ should inspect them before changing strategy logic.
 - write `engine.py`
 - read semantic preflight before recording a round
 - inspect `evidence_ledger.json` and `frontier.md` after a recorded round
-- record agent-owned memory when a result changes your research state
+- update `research_journal.md` when a result changes your research state
 - interpret the result as evidence, protocol gap, runtime invalidity, or
   workflow blocker before choosing your own next research move
 
@@ -160,7 +158,7 @@ around the contract.
    are ready enough for the evidence label you want.
 8. Read `evidence_ledger.json` and `frontier.md`; do not look for a generated
    next-strategy recommendation.
-9. Record only your own grounded follow-up state with `add-memory`, using
+9. Update `research_journal.md` with your own grounded follow-up state, using
    evidence references when the statement is meant as a research conclusion.
 
 ## Readiness

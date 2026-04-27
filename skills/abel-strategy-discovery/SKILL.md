@@ -22,17 +22,18 @@ Operating rules:
 6. Treat `branch.yaml` as a research declaration, not evidence truth.
 7. Treat `evidence_ledger.json` and `frontier.md` as factual evidence surfaces,
    not generated strategy advice.
-8. Treat `agent_context.md` and `agent_memory.jsonl` as agent-owned resume
-   state; do not expect the system to generate next strategy directions.
+8. Treat `agent_context.md` as the compact factual resume surface and
+   `research_journal.md` as agent-owned research state; do not expect the system
+   to generate next strategy directions.
 9. New sessions are graph-first: use live causal graph discovery as the opening
    search prior, then explore strategy variants, then tune parameters.
-10. Make at least two agent-chosen hypothesis families explicit before deep
-    local refinement, or record an agent-authored single-branch rationale.
+10. Do not treat branch count as proof of breadth: graph/input concentration,
+    strategy-variant coverage, and local refinement pressure are separate facts.
 11. Do not call parameter, sizing, threshold, filter, or window tweaks broad
-    exploration. Use changed-dimension and continuation-rationale fields to keep
-    local refinement accountable.
-12. When evidence accumulates, write agent-owned memory with ledger or frontier
-    references before continuing deep refinement.
+    exploration.
+12. When evidence accumulates or a pivot checkpoint is due, update
+    `research_journal.md` with agent-owned reflection and evidence references
+    before continuing deep local refinement.
 
 Read `references/workspace-bootstrap.md` before bootstrapping a new workspace.
 Read `references/branch-authoring.md` before creating or revising a branch.

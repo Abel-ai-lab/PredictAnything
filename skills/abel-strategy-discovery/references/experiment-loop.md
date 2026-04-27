@@ -19,11 +19,12 @@ abel-alpha init-session --ticker <TICKER> --exp-id <exp-id>
 abel-alpha init-branch --session research/<ticker>/<exp_id> --branch-id <family-a-branch>
 abel-alpha init-branch --session research/<ticker>/<exp_id> --branch-id <family-b-branch>
 
-# first make each branch declaration explicit
+# make each branch declaration explicit
 edit research/<ticker>/<exp_id>/branches/<family-a-branch>/branch.yaml
 edit research/<ticker>/<exp_id>/branches/<family-b-branch>/branch.yaml
+edit research/<ticker>/<exp_id>/research_journal.md
 
-# then implement, prepare, debug, and record the agent-chosen branch round
+# implement, prepare, debug, and record the agent-chosen branch round
 edit research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py
 abel-alpha prepare-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 abel-alpha debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
@@ -41,19 +42,20 @@ Each branch should stay a hypothesis family. If a new round changes drivers,
 mechanism, model family, or complexity class, record that dimension explicitly
 or use a new branch when the thesis has materially changed.
 New sessions run live graph discovery by default. Treat graph/input coverage as
-the opening priority, then make at least two agent-chosen hypothesis families
-explicit before deep local refinement. If intentionally starting narrow, record
-the reason with `--single-branch-rationale` on the recorded round.
+the opening priority, then let strategy variants and parameters follow from the
+agent's research judgment. Multiple branches on one driver set can still be
+narrow; use frontier facts to see whether graph/input breadth has actually
+expanded.
 
 After each render, treat `evidence_ledger.json` as the evidence record and
 `frontier.md` / `frontier.json` as factual coverage reports. They should show
 what happened, not tell you which branch, proxy, threshold, or mechanism to try
 next.
 
-Use `agent_context.md` to resume the session. When you learn something worth
-carrying forward, write it yourself with `add-memory` and cite `ledger:*`,
-`frontier:*`, or raw artifact references when the statement is a research
-conclusion.
+Use `agent_context.md` to resume the session and `research_journal.md` to carry
+your own research state forward. Journal freely, but cite `ledger:*`,
+`frontier.md`, or raw artifact references when a statement should count as a
+durable research conclusion.
 
 ## What Each Layer Owns
 
@@ -96,17 +98,15 @@ declare:
 `debug-branch` is the place to test whether the branch can see the world it
 thinks it can see.
 
-When recording a round, use these protocol fields when they apply:
+When recording a round, use changed dimensions when they clarify what changed:
 
 ```bash
 abel-alpha run-branch --branch ... -d "..." \
-  --changed-dimension sizing \
-  --continuation-rationale "agent-authored reason for continuing this neighborhood" \
-  --single-branch-rationale "agent-authored reason for a narrow start"
+  --changed-dimension sizing
 ```
 
-Use only the rationale fields that are true for the current round. They are
-agent-authored research state, not system-written strategy advice.
+Keep continuation and pivot reasoning in `research_journal.md`, where it can be
+read as agent-owned research state instead of a per-round protocol form.
 
 ## Evidence Admission Rule
 
@@ -134,10 +134,10 @@ runs as lead candidates.
 
 Use branch history, the ledger, and the frontier to understand what has already
 been covered. The framework records broad exploration, local refinement,
-controls, ablations, diagnostics, model-family coverage, and continuation
-rationale facts. If multiple exploit variants die the same death, record that
-fact and choose the next research move yourself rather than following generated
-route guidance.
+controls, ablations, diagnostics, model-family coverage, and pivot checkpoint
+facts. If multiple exploit variants die the same death, write the reflection in
+`research_journal.md` and choose the next research move yourself rather than
+following generated route guidance.
 
 ## Failure Interpretation
 
@@ -159,7 +159,8 @@ Serial execution preserves learning. Static grids can hide it.
 
 - if a round reveals a stronger mechanism, compound from that mechanism
 - if a round only reveals a local implementation defect, fix the defect before changing the thesis
-- if repeated exploit variants keep failing the same way, mark the concentration in the frontier before continuing
+- if repeated exploit variants keep failing the same way, use the frontier and
+  journal to make that concentration explicit before continuing
 - if the failure signature changes after a branch edit, that change is itself evidence about the mechanism
 
 ## Honest Stop
