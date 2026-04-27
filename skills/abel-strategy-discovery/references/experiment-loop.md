@@ -92,7 +92,7 @@ declare:
 - `mechanism_family`
 - `invalidation_condition`
 - `requested_start`
-- `selected_inputs` or legacy `selected_drivers`
+- `selected_inputs`
 
 `run-branch` is not the place to decide the branch universe implicitly.
 `debug-branch` is the place to test whether the branch can see the world it

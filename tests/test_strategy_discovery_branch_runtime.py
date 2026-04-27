@@ -105,7 +105,7 @@ def _write_runtime_files(branch: Path) -> None:
             {
                 "version": 1,
                 "target": "TSLA",
-                "selected_drivers": ["AAPL", "MSFT"],
+                "selected_inputs": ["AAPL", "MSFT"],
                 "feeds": [
                     {
                         "name": "primary",
@@ -233,8 +233,6 @@ def _record_synthetic_round(
     decision: str = "keep",
     mode: str = "explore",
     changed_dimensions: list[str] | None = None,
-    continuation_rationale: str = "",
-    single_branch_rationale: str = "",
     result_path_override: str | None = None,
 ) -> None:
     ni.write_branch_spec(branch, spec)
@@ -268,8 +266,6 @@ def _record_synthetic_round(
             trigger="test",
             change_summary="test",
             changed_dimensions=changed_dimensions or [],
-            continuation_rationale=continuation_rationale,
-            single_branch_rationale=single_branch_rationale,
             time_spent_min="1",
             summary="",
             next_step="",
@@ -312,13 +308,13 @@ def _record_synthetic_round(
 def _complete_candidate_spec(
     branch: Path,
     *,
-    selected_drivers: list[str] | None = None,
+    selected_inputs: list[str] | None = None,
     mechanism_family: str = "driver_momentum",
     model_family: str = "rule_signal",
     complexity_class: str = "simple_signal",
     exploration_role: str = "candidate",
 ) -> dict:
-    selected = selected_drivers or ["AAPL"]
+    selected = selected_inputs or ["AAPL"]
     spec = ni.load_branch_spec(branch)
     spec.update(
         {
@@ -332,7 +328,6 @@ def _complete_candidate_spec(
             "invalidation_condition": "Driver reads disappear or validation fails repeatedly.",
             "requested_start": "2020-01-01",
             "selected_inputs": selected,
-            "selected_drivers": selected,
         }
     )
     return spec
@@ -377,7 +372,7 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
     spec = ni.load_branch_spec(branch)
     spec["target"] = "TSLA"
     spec["requested_start"] = "2020-01-01"
-    spec["selected_drivers"] = ["AAPL", "MSFT", "AAPL", "msft"]
+    spec["selected_inputs"] = ["AAPL", "MSFT", "AAPL", "msft"]
     spec["position_bounds"] = [-1.0, 1.0]
     ni.write_branch_spec(branch, spec)
 
@@ -442,11 +437,11 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
 
     assert runtime_profile["target"] == "TSLA"
     assert branch_spec["selected_inputs"] == ["AAPL", "MSFT"]
-    assert branch_spec["selected_drivers"] == ["AAPL", "MSFT"]
     assert dependencies["selected_inputs"] == ["AAPL", "MSFT"]
-    assert dependencies["selected_drivers"] == ["AAPL", "MSFT"]
     assert data_manifest["selected_inputs"] == ["AAPL", "MSFT"]
-    assert data_manifest["selected_drivers"] == ["AAPL", "MSFT"]
+    assert "selected_drivers" not in branch_spec
+    assert "selected_drivers" not in dependencies
+    assert "selected_drivers" not in data_manifest
     assert [feed["name"] for feed in data_manifest["feeds"]] == ["primary", "AAPL", "MSFT"]
     assert probe_samples["target"] == "TSLA"
     assert len(probe_samples["sample_decision_dates"]) >= 2
@@ -471,7 +466,7 @@ def test_default_branch_spec_starts_as_graph_first_draft_declaration(tmp_path) -
     assert spec["exploration_role"] == "candidate"
     assert spec["overlap_mode"] == "target_only"
     assert spec["selected_inputs"] == ["AAPL", "MSFT"]
-    assert spec["selected_drivers"] == ["AAPL", "MSFT"]
+    assert "selected_drivers" not in spec
     assert status["protocol_complete"] is False
     assert "hypothesis" in status["protocol_gaps"]
     assert "evidence_intent:draft" in status["protocol_gaps"]
@@ -488,7 +483,7 @@ def test_default_branch_spec_stays_target_only_when_discovery_is_pending(tmp_pat
     assert "source_type" not in spec
     assert "method_family" not in spec
     assert spec["selected_inputs"] == []
-    assert spec["selected_drivers"] == []
+    assert spec["selected_inputs"] == []
 
 
 def test_init_session_cli_runs_live_discovery_by_default(
@@ -571,7 +566,7 @@ def test_init_session_cli_no_discover_is_explicit_pending_fallback(
     assert "discovery_source: pending (live discovery not run)" in out
 
 
-def test_complete_branch_declaration_accepts_legacy_selected_drivers(tmp_path) -> None:
+def test_complete_branch_declaration_requires_selected_inputs(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-decl-complete", tmp_path / "research")
     ni.write_discovery(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
@@ -584,7 +579,7 @@ def test_complete_branch_declaration_accepts_legacy_selected_drivers(tmp_path) -
             "input_claim": "graph_supported",
             "mechanism_family": "driver_momentum",
             "invalidation_condition": "No non-primary driver reads or negative out-of-sample IC.",
-            "selected_drivers": ["AAPL", "MSFT"],
+            "selected_inputs": ["AAPL", "MSFT"],
         }
     )
 
@@ -594,14 +589,14 @@ def test_complete_branch_declaration_accepts_legacy_selected_drivers(tmp_path) -
     assert status["selected_inputs"] == ["AAPL", "MSFT"]
 
 
-def test_legacy_source_type_and_method_family_do_not_complete_declaration() -> None:
+def test_removed_source_type_and_method_family_do_not_complete_declaration() -> None:
     spec = {
         "source_type": "causal",
         "method_family": "graph",
         "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
         "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
         "requested_start": "2020-01-01",
-        "selected_drivers": ["AAPL"],
+        "selected_inputs": ["AAPL"],
     }
 
     status = ni.branch_declaration_status(spec)
@@ -626,7 +621,7 @@ def test_evidence_ledger_marks_missing_hypothesis_as_protocol_incomplete(tmp_pat
             "evidence_intent": "candidate",
             "input_claim": "graph_supported",
             "mechanism_family": "driver_momentum",
-            "selected_drivers": ["AAPL", "MSFT"],
+            "selected_inputs": ["AAPL", "MSFT"],
         }
     )
     _record_synthetic_round(session, branch, spec=spec, result=_edge_result())
@@ -710,7 +705,7 @@ def test_run_branch_round_records_network_failure_as_workflow_blocker(tmp_path, 
             "input_claim": "graph_supported",
             "mechanism_family": "driver_momentum",
             "invalidation_condition": "No AAPL reads or negative holdout IC.",
-            "selected_drivers": ["AAPL"],
+            "selected_inputs": ["AAPL"],
         }
     )
     ni.write_branch_spec(branch, spec)
@@ -765,7 +760,7 @@ def test_starter_scaffold_round_is_diagnostic_only_not_candidate(tmp_path, monke
             "input_claim": "graph_supported",
             "mechanism_family": "driver_momentum",
             "invalidation_condition": "No AAPL reads or negative holdout IC.",
-            "selected_drivers": ["AAPL"],
+            "selected_inputs": ["AAPL"],
         }
     )
     ni.write_branch_spec(branch, spec)
@@ -822,7 +817,7 @@ def test_frontier_reports_coverage_without_route_recommendation(tmp_path) -> Non
             "input_claim": "graph_supported",
             "mechanism_family": "driver_momentum",
             "invalidation_condition": "No non-primary driver reads or negative out-of-sample IC.",
-            "selected_drivers": ["AAPL", "MSFT"],
+            "selected_inputs": ["AAPL", "MSFT"],
         }
     )
     _record_synthetic_round(session, branch, spec=spec, result=_edge_result(traced_inputs=["AAPL"]))
@@ -855,7 +850,7 @@ def test_frontier_surfaces_candidate_failures_and_resume_facts(tmp_path) -> None
             "mechanism_family": "driver_momentum",
             "invalidation_condition": "Driver reads vanish or validation stays negative.",
             "requested_start": "2020-01-01",
-            "selected_drivers": ["AAPL", "MSFT", "AAPL"],
+            "selected_inputs": ["AAPL", "MSFT", "AAPL"],
         }
     )
     metric_failure = {
@@ -899,10 +894,9 @@ def test_frontier_surfaces_candidate_failures_and_resume_facts(tmp_path) -> None
     assert concentration["dominant_mechanism_family"] == "driver_momentum"
     assert concentration["dominant_driver_set"] == "AAPL,MSFT"
     assert concentration["target_control_evidence"] == 0
-    assert concentration["agent_memory_records"] == 0
     assert "candidate_causal_evidence.FAIL: `6`" in frontier_text
-    assert "## Resume State Facts" in context_text
     assert "## Research Journal" in context_text
+    assert "## Pivot Checkpoint" in context_text
     forbidden = ["try next", "recommend", "open a sibling", "switch mechanism"]
     assert not any(term in frontier_text.lower() for term in forbidden)
     assert not any(term in context_text.lower() for term in forbidden)
@@ -936,7 +930,7 @@ def test_agent_context_reads_evidence_linked_research_journal(tmp_path) -> None:
             "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
             "requested_start": "2020-01-01",
             "selected_inputs": ["AAPL"],
-            "selected_drivers": ["AAPL"],
+            "selected_inputs": ["AAPL"],
         }
     )
     _record_synthetic_round(
@@ -997,7 +991,7 @@ def test_pivot_checkpoint_catches_same_driver_set_concentration(tmp_path) -> Non
             "exploration_role": "candidate",
             "invalidation_condition": "Driver reads disappear or validation fails repeatedly.",
             "requested_start": "2020-01-01",
-            "selected_drivers": ["AAPL", "MSFT"],
+            "selected_inputs": ["AAPL", "MSFT"],
         }
     )
     spec_b = ni.load_branch_spec(branch_b)
@@ -1012,7 +1006,7 @@ def test_pivot_checkpoint_catches_same_driver_set_concentration(tmp_path) -> Non
             "exploration_role": "candidate",
             "invalidation_condition": "Driver reads disappear or validation fails repeatedly.",
             "requested_start": "2020-01-01",
-            "selected_drivers": ["AAPL", "MSFT"],
+            "selected_inputs": ["AAPL", "MSFT"],
         }
     )
 
@@ -1091,7 +1085,7 @@ def test_exploration_breadth_marks_single_branch_local_refinement(tmp_path) -> N
             "exploration_role": "candidate",
             "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
             "requested_start": "2020-01-01",
-            "selected_drivers": ["AAPL"],
+            "selected_inputs": ["AAPL"],
         }
     )
     for index in range(6):
@@ -1111,16 +1105,10 @@ def test_exploration_breadth_marks_single_branch_local_refinement(tmp_path) -> N
     exploration = frontier["exploration_breadth"]
 
     assert exploration["branch_family_count"] == 1
-    assert exploration["initial_breadth_incomplete"] is True
     assert exploration["same_branch_max_rounds"] == 6
     assert exploration["exploration_class_counts"]["broad_explore"] == 1
     assert exploration["exploration_class_counts"]["local_refinement"] == 5
-    assert exploration["continuation_rationale_required_count"] == 1
-    assert exploration["continuation_rationale_missing_count"] == 1
-    assert ledger["rows"][-1]["continuation_rationale_required"] is True
     assert ledger["rows"][-1]["same_neighborhood_failed_rows"] == 5
-    assert "initial_breadth_incomplete" not in context_text
-    assert "continuation_rationale_missing_count" not in context_text
     assert "pivot_checkpoint_due: `true`" in context_text
 
 
@@ -1140,7 +1128,7 @@ def test_distinct_driver_sets_avoid_same_driver_pivot_reason(tmp_path) -> None:
             "complexity_class": "simple_signal",
             "invalidation_condition": "AAPL reads disappear or validation fails repeatedly.",
             "requested_start": "2020-01-01",
-            "selected_drivers": ["AAPL"],
+            "selected_inputs": ["AAPL"],
         }
     )
     second = ni.init_branch_dir(session, "model-v1")
@@ -1156,7 +1144,7 @@ def test_distinct_driver_sets_avoid_same_driver_pivot_reason(tmp_path) -> None:
             "invalidation_condition": "MSFT reads disappear or validation fails repeatedly.",
             "requested_start": "2020-01-01",
             "selected_inputs": ["MSFT"],
-            "selected_drivers": ["MSFT"],
+            "selected_inputs": ["MSFT"],
         }
     )
     for index in range(4):
@@ -1192,15 +1180,15 @@ def test_input_breadth_reports_candidate_driver_set_coverage(tmp_path) -> None:
     ni.write_discovery(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
     graph_branch = ni.init_branch_dir(session, "graph-aapl")
-    graph_spec = _complete_candidate_spec(graph_branch, selected_drivers=["AAPL"])
+    graph_spec = _complete_candidate_spec(graph_branch, selected_inputs=["AAPL"])
     target_branch = ni.init_branch_dir(session, "target-control")
     target_spec = _complete_candidate_spec(
         target_branch,
-        selected_drivers=[],
+        selected_inputs=[],
         mechanism_family="target_momentum",
     )
     target_spec["input_claim"] = "target_only"
-    target_spec["selected_drivers"] = []
+    target_spec["selected_inputs"] = []
     target_spec["selected_inputs"] = []
 
     for index in range(2):
@@ -1248,11 +1236,11 @@ def test_input_breadth_warning_marks_thin_candidate_driver_coverage(tmp_path) ->
     ni.write_discovery(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
     graph_branch = ni.init_branch_dir(session, "graph-aapl")
-    graph_spec = _complete_candidate_spec(graph_branch, selected_drivers=["AAPL"])
+    graph_spec = _complete_candidate_spec(graph_branch, selected_inputs=["AAPL"])
     target_branch = ni.init_branch_dir(session, "target-control")
-    target_spec = _complete_candidate_spec(target_branch, selected_drivers=[])
+    target_spec = _complete_candidate_spec(target_branch, selected_inputs=[])
     target_spec["input_claim"] = "target_only"
-    target_spec["selected_drivers"] = []
+    target_spec["selected_inputs"] = []
     target_spec["selected_inputs"] = []
 
     for index in range(4):
@@ -1288,29 +1276,8 @@ def test_input_breadth_warning_marks_thin_candidate_driver_coverage(tmp_path) ->
         "graph_supported_candidate_round_count=4"
     ]
 
-    ni.record_agent_memory(
-        Namespace(
-            session=str(session),
-            branch="",
-            scope="session",
-            type="insight",
-            text="AAPL-only graph candidate coverage remains thin.",
-            confidence="medium",
-            status="active",
-            round_id="",
-            evidence_ref=["frontier:input_breadth"],
-        )
-    )
-    assert ni.input_breadth_warning_lines(session) == [
-        "input_breadth_thin=true "
-        "candidate_driver_set_count=1 "
-        "discovered_driver_coverage=1/2 "
-        "target_only_recorded_round_count=4 "
-        "graph_supported_candidate_round_count=4"
-    ]
-
     msft_branch = ni.init_branch_dir(session, "graph-msft")
-    msft_spec = _complete_candidate_spec(msft_branch, selected_drivers=["MSFT"])
+    msft_spec = _complete_candidate_spec(msft_branch, selected_inputs=["MSFT"])
     _record_synthetic_round(
         session,
         msft_branch,
@@ -1333,9 +1300,9 @@ def test_graph_priority_warns_when_graph_candidates_are_uncovered(tmp_path) -> N
     ni.write_discovery(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
     target_branch = ni.init_branch_dir(session, "target-control")
-    target_spec = _complete_candidate_spec(target_branch, selected_drivers=[])
+    target_spec = _complete_candidate_spec(target_branch, selected_inputs=[])
     target_spec["input_claim"] = "target_only"
-    target_spec["selected_drivers"] = []
+    target_spec["selected_inputs"] = []
     target_spec["selected_inputs"] = []
 
     for index in range(3):
@@ -1366,7 +1333,7 @@ def test_mixed_graph_reads_remain_supplemental_for_graph_priority(tmp_path) -> N
     ni.write_discovery(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
     branch = ni.init_branch_dir(session, "mixed-aapl")
-    spec = _complete_candidate_spec(branch, selected_drivers=["AAPL"])
+    spec = _complete_candidate_spec(branch, selected_inputs=["AAPL"])
     spec["input_claim"] = "mixed"
 
     for index in range(3):
@@ -1390,9 +1357,9 @@ def test_mixed_graph_reads_remain_supplemental_for_graph_priority(tmp_path) -> N
 def test_graph_priority_warns_when_discovery_is_missing_and_target_only_saturates(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-graph-missing", tmp_path / "research")
     target_branch = ni.init_branch_dir(session, "target-control")
-    target_spec = _complete_candidate_spec(target_branch, selected_drivers=[])
+    target_spec = _complete_candidate_spec(target_branch, selected_inputs=[])
     target_spec["input_claim"] = "target_only"
-    target_spec["selected_drivers"] = []
+    target_spec["selected_inputs"] = []
     target_spec["selected_inputs"] = []
 
     for index in range(3):
@@ -1499,7 +1466,7 @@ def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_pat
                 "mechanism_family": "target_ema",
                 "invalidation_condition": "No auxiliary driver reads or no positive holdout IC.",
                 "requested_start": "2020-01-01",
-                "selected_drivers": ["AAPL"],
+                "selected_inputs": ["AAPL"],
             }
         )
         _record_synthetic_round(
@@ -1556,7 +1523,7 @@ def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_pat
             "mechanism_family": "driver_momentum",
             "invalidation_condition": "No AAPL reads or negative holdout IC.",
             "requested_start": "2020-01-01",
-            "selected_drivers": ["AAPL"],
+            "selected_inputs": ["AAPL"],
         }
     )
     _record_synthetic_round(
@@ -1614,7 +1581,7 @@ def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
 
     spec = ni.load_branch_spec(branch)
     spec["target"] = "TSLA"
-    spec["selected_drivers"] = ["AAPL", "MSFT"]
+    spec["selected_inputs"] = ["AAPL", "MSFT"]
     ni.write_branch_spec(branch, spec)
     _write_runtime_files(branch)
 
@@ -1631,5 +1598,5 @@ def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
     assert context["_execution_constraints"]["position_bounds"] == [-0.5, 0.5]
     assert sorted(context["_feeds"].keys()) == ["AAPL", "MSFT", "primary"]
     assert context["_feeds"]["AAPL"]["symbol"] == "AAPL"
-    assert context["data_manifest"]["selected_drivers"] == ["AAPL", "MSFT"]
+    assert context["data_manifest"]["selected_inputs"] == ["AAPL", "MSFT"]
     assert context["branch_declaration"]["evidence_intent"] == "draft"

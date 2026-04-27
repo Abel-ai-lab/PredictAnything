@@ -8,7 +8,7 @@ from pathlib import Path
 from abel_strategy_discovery import narrative_impl as ni
 
 
-def test_render_writes_agent_context_without_legacy_memory_views(tmp_path: Path) -> None:
+def test_render_writes_agent_context_with_journal_view(tmp_path: Path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
     branch = ni.init_branch_dir(session, "graph-v1")
 
@@ -21,95 +21,7 @@ def test_render_writes_agent_context_without_legacy_memory_views(tmp_path: Path)
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
     assert "## Evidence Frontier" in context_text
     assert "## Research Journal" in context_text
-    assert "## Legacy Agent Memory" not in context_text
-
-
-def test_agent_memory_records_preserve_agent_authorship_and_refs(tmp_path: Path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-v2", tmp_path / "research")
-    causal = ni.init_branch_dir(session, "graph-v1")
-    baseline = ni.init_branch_dir(session, "baseline-v1")
-
-    ni.record_agent_memory(
-        Namespace(
-            session="",
-            branch=str(causal),
-            scope="branch",
-            type="insight",
-            text="Driver concentration remained unresolved after the first draft.",
-            confidence="medium",
-            status="active",
-            round_id="",
-            evidence_ref=["frontier:mechanism_family_counts"],
-        )
-    )
-    ni.record_branch_link(
-        Namespace(
-            from_branch=str(causal),
-            to_branch=str(baseline),
-            type="candidate_compare",
-            match_score="",
-            match_basis="agent selected a baseline contrast",
-            status="candidate",
-            note="Compare only after both branches have comparable evidence.",
-        )
-    )
-
-    records = ni.load_agent_memory_records(session)
-    assert len(records) == 2
-    assert all(row["origin"] == "agent" for row in records)
-    assert records[0]["evidence_refs"] == ["frontier:mechanism_family_counts"]
-    assert records[1]["type"] == "branch_relation"
-
-    ni.render_session(session)
-    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
-    assert "## Legacy Agent Memory" in context_text
-    assert "evidence_status=`referenced`" in context_text
-    assert "relation=`candidate_compare`" in context_text
-    assert "strategy recommendation" not in context_text.lower()
-
-
-def test_agent_memory_without_refs_is_note_not_research_conclusion(tmp_path: Path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-v2b", tmp_path / "research")
-    branch = ni.init_branch_dir(session, "graph-v1")
-
-    ni.record_agent_memory(
-        Namespace(
-            session="",
-            branch=str(branch),
-            scope="branch",
-            type="open_direction",
-            text="Revisit drawdown-aware driver gating later.",
-            confidence="low",
-            status="active",
-            round_id="",
-            evidence_ref=[],
-        )
-    )
-
-    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
-    assert "evidence_status=`note_without_evidence`" in context_text
-
-
-def test_agent_memory_reference_validation_marks_unresolved_refs(tmp_path: Path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-v2c", tmp_path / "research")
-    branch = ni.init_branch_dir(session, "graph-v1")
-
-    ni.record_agent_memory(
-        Namespace(
-            session="",
-            branch=str(branch),
-            scope="branch",
-            type="insight",
-            text="This claimed conclusion points at a missing row.",
-            confidence="medium",
-            status="active",
-            round_id="",
-            evidence_ref=["ledger:graph-v1:round-999"],
-        )
-    )
-
-    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
-    assert "evidence_status=`unresolved_reference`" in context_text
+    assert "## Pivot Checkpoint" in context_text
 
 
 def test_run_branch_round_updates_ledger_and_agent_context(
@@ -128,7 +40,7 @@ def test_run_branch_round_updates_ledger_and_agent_context(
             "input_claim": "graph_supported",
             "mechanism_family": "driver_momentum",
             "invalidation_condition": "No AAPL reads or negative holdout IC.",
-            "selected_drivers": ["AAPL"],
+            "selected_inputs": ["AAPL"],
         }
     )
     ni.write_branch_spec(branch, spec)
@@ -145,7 +57,7 @@ def test_run_branch_round_updates_ledger_and_agent_context(
         "version": 1,
         "branch_id": branch.name,
         "target": "TSLA",
-        "selected_drivers": ["AAPL"],
+        "selected_inputs": ["AAPL"],
         "requested_start": "2020-01-01",
         "cache": {
             "adapter": "abel",
@@ -172,7 +84,7 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     execution_constraints = ni.build_execution_constraints_payload(ni.load_branch_spec(branch))
     data_manifest = ni.build_data_manifest_payload(
         target="TSLA",
-        selected_drivers=["AAPL"],
+        selected_inputs=["AAPL"],
         cache_payload=dependencies["cache"],
         readiness={},
     )

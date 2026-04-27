@@ -31,7 +31,7 @@ to count as protocol-complete candidate evidence:
 - `mechanism_family`
 - `invalidation_condition`
 - `requested_start`
-- `selected_inputs` or legacy `selected_drivers`
+- `selected_inputs`
 - `model_family`
 - `complexity_class`
 - `exploration_role`

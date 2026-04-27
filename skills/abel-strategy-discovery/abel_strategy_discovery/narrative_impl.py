@@ -72,7 +72,6 @@ EXECUTION_CONSTRAINTS_FILENAME = "execution_constraints.json"
 DATA_MANIFEST_FILENAME = "data_manifest.json"
 CONTEXT_GUIDE_FILENAME = "context_guide.md"
 PROBE_SAMPLES_FILENAME = "probe_samples.json"
-AGENT_MEMORY_FILENAME = "agent_memory.jsonl"
 AGENT_CONTEXT_FILENAME = "agent_context.md"
 RESEARCH_JOURNAL_FILENAME = "research_journal.md"
 EVIDENCE_LEDGER_FILENAME = "evidence_ledger.json"
@@ -91,14 +90,6 @@ DECLARATION_REQUIRED_FIELDS = [
     "invalidation_condition",
     "requested_start",
 ]
-AGENT_MEMORY_TYPES = {
-    "insight",
-    "open_question",
-    "open_direction",
-    "closed_direction",
-    "branch_relation",
-    "note",
-}
 MODEL_FAMILIES = {
     "rule_signal",
     "linear_model",
@@ -139,13 +130,9 @@ CHANGED_DIMENSIONS = {
 }
 BROAD_CHANGED_DIMENSIONS = {"drivers", "mechanism", "model_family", "complexity"}
 LOCAL_CHANGED_DIMENSIONS = {"sizing", "thresholds", "filters", "window", "implementation"}
-INITIAL_BREADTH_ROUND_THRESHOLD = 3
-INITIAL_BRANCH_FAMILY_MINIMUM = 2
 INPUT_BREADTH_ROUND_THRESHOLD = 8
-MEMORY_CHECKPOINT_ROUND_THRESHOLD = 6
 GRAPH_PRIORITY_ROUND_MINIMUM = 3
 SAME_NEIGHBORHOOD_FAIL_THRESHOLD = 5
-SAME_BRANCH_ROUND_THRESHOLD = 8
 JOURNAL_REFERENCE_RE = re.compile(
     r"(ledger:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+|"
     r"frontier:[A-Za-z0-9_.-]+|"
@@ -189,7 +176,7 @@ Use branch.yaml to make the critical research choices explicit:
   - invalidation_condition
   - target
   - requested_start
-  - selected_inputs or selected_drivers
+  - selected_inputs
   - overlap_mode
 Write against DecisionContext instead of raw research helpers:
   - ctx.decision_index()
@@ -411,71 +398,6 @@ def main() -> int:
     set_hypothesis.add_argument("--branch", required=True)
     set_hypothesis.add_argument("--text", required=True)
 
-    add_memory = sub.add_parser(
-        "add-memory",
-        help=argparse.SUPPRESS,
-        description="Legacy: record agent-authored working memory with optional evidence references",
-    )
-    add_memory.set_defaults(_legacy_hidden=True)
-    add_memory.add_argument("--session", default="")
-    add_memory.add_argument("--branch", default="")
-    add_memory.add_argument(
-        "--scope",
-        default="branch",
-        choices=["branch", "asset_scope", "cross_asset"],
-    )
-    add_memory.add_argument(
-        "--type",
-        required=True,
-        choices=sorted(AGENT_MEMORY_TYPES - {"branch_relation"}),
-    )
-    add_memory.add_argument("--text", required=True)
-    add_memory.add_argument(
-        "--confidence",
-        default="medium",
-        choices=["low", "medium", "high"],
-    )
-    add_memory.add_argument(
-        "--status",
-        default="active",
-        choices=["active", "closed", "superseded"],
-    )
-    add_memory.add_argument("--round-id", default="")
-    add_memory.add_argument(
-        "--evidence-ref",
-        action="append",
-        default=[],
-        help="Evidence reference such as ledger:<branch_id>:<round_id> or frontier:<field>",
-    )
-
-    link_branches = sub.add_parser(
-        "link-branches",
-        help=argparse.SUPPRESS,
-        description="Legacy: record a manual relation between two branches",
-    )
-    link_branches.set_defaults(_legacy_hidden=True)
-    link_branches.add_argument("--from-branch", required=True)
-    link_branches.add_argument("--to-branch", required=True)
-    link_branches.add_argument(
-        "--type",
-        required=True,
-        choices=[
-            "derived_from",
-            "alternative_to",
-            "inspired_by",
-            "candidate_compare",
-            "final_compare",
-        ],
-    )
-    link_branches.add_argument("--match-score", default="")
-    link_branches.add_argument("--match-basis", default="")
-    link_branches.add_argument(
-        "--status",
-        default="candidate",
-        choices=["candidate", "selected", "rejected", "archived"],
-    )
-    link_branches.add_argument("--note", default="")
-
     init_branch = sub.add_parser("init-branch", help="Create a branch under a session")
     init_branch.add_argument("--session", required=True)
     init_branch.add_argument("--branch-id", required=True)
@@ -519,8 +441,6 @@ def main() -> int:
         choices=sorted(CHANGED_DIMENSIONS),
         help="Factual dimension changed in this round; repeat for multiple dimensions",
     )
-    run_branch.add_argument("--continuation-rationale", default="", help=argparse.SUPPRESS)
-    run_branch.add_argument("--single-branch-rationale", default="", help=argparse.SUPPRESS)
     run_branch.add_argument(
         "--python-bin",
         default=None,
@@ -665,10 +585,6 @@ def main() -> int:
         print(f"  abel-strategy-discovery debug-branch --branch {branch}")
         print(f"  abel-strategy-discovery run-branch --branch {branch} -d \"baseline\"")
         return 0
-    if args.command == "add-memory":
-        return record_agent_memory(args)
-    if args.command == "link-branches":
-        return record_branch_link(args)
     if args.command == "init-branch":
         session = resolve_workspace_arg_path(args.session)
         discovery = load_discovery(session)
@@ -1259,123 +1175,6 @@ def init_branch_dir(session: Path, branch_id: str) -> Path:
     return branch
 
 
-def record_agent_memory(args: argparse.Namespace) -> int:
-    branch_text = str(args.branch or "").strip()
-    session_text = str(getattr(args, "session", "") or "").strip()
-    branch = resolve_workspace_arg_path(branch_text).resolve() if branch_text else None
-    if branch is None and not session_text:
-        raise RuntimeError("add-memory requires --branch or --session")
-    session = branch.parent.parent if branch is not None else resolve_workspace_arg_path(session_text).resolve()
-    round_id = str(args.round_id or "").strip()
-    if branch is not None and not round_id:
-        branches = load_branches(session)
-        branch_rows = next(
-            (item["rows"] for item in branches if item["branch_id"] == branch.name),
-            [],
-        )
-        if branch_rows:
-            round_id = branch_rows[-1].get("round_id", "")
-    record_type = str(args.type or "").strip()
-    if record_type not in AGENT_MEMORY_TYPES:
-        raise RuntimeError(f"Unsupported memory type: {record_type}")
-    evidence_refs = normalize_evidence_refs(args.evidence_ref or [])
-    with SessionLock(session):
-        records = load_agent_memory_records(session)
-        record = {
-            "memory_id": next_agent_memory_id(records, prefix="mem"),
-            "created_at": _now(),
-            "type": record_type,
-            "origin": "agent",
-            "scope": args.scope,
-            "branch_id": branch.name if branch is not None else "",
-            "round_id": round_id,
-            "statement": str(args.text or "").strip(),
-            "confidence": args.confidence,
-            "status": args.status,
-            "evidence_refs": evidence_refs,
-        }
-        append_agent_memory_record(session, record)
-        append_tsv_row(
-            session / "events.tsv",
-            EVENTS_HEADER,
-            {
-                "timestamp": _now(),
-                "event": "agent_memory_added",
-                "branch_id": record["branch_id"],
-                "round_id": round_id,
-                "mode": "",
-                "verdict": "",
-                "decision": "",
-                "description": record["statement"],
-                "artifact_path": AGENT_MEMORY_FILENAME,
-            },
-        )
-        render_session(session)
-    print(f"Recorded agent memory: {record_type}")
-    print(f"  branch_id: {record['branch_id'] or 'session'}")
-    print(f"  round_id: {round_id or 'not linked'}")
-    print(f"  evidence_refs: {', '.join(evidence_refs) or 'none'}")
-    return 0
-
-
-def record_branch_link(args: argparse.Namespace) -> int:
-    from_branch = resolve_workspace_arg_path(args.from_branch).resolve()
-    to_branch = resolve_workspace_arg_path(args.to_branch).resolve()
-    from_session = from_branch.parent.parent
-    to_session = to_branch.parent.parent
-    if from_session != to_session:
-        raise RuntimeError("Branch links must stay within the same session.")
-    session = from_session
-    with SessionLock(session):
-        records = load_agent_memory_records(session)
-        record = {
-            "memory_id": next_agent_memory_id(records, prefix="mem"),
-            "created_at": _now(),
-            "type": "branch_relation",
-            "origin": "agent",
-            "scope": "branch",
-            "branch_id": from_branch.name,
-            "round_id": "",
-            "statement": str(args.note or "").strip(),
-            "confidence": "medium",
-            "status": args.status,
-            "evidence_refs": [],
-            "relation_type": args.type,
-            "from_branch_id": from_branch.name,
-            "to_branch_id": to_branch.name,
-            "match_score": str(args.match_score or "").strip(),
-            "match_basis": str(args.match_basis or "").strip(),
-        }
-        append_agent_memory_record(session, record)
-        append_tsv_row(
-            session / "events.tsv",
-            EVENTS_HEADER,
-            {
-                "timestamp": _now(),
-                "event": "agent_memory_relation_added",
-                "branch_id": from_branch.name,
-                "round_id": "",
-                "mode": "",
-                "verdict": "",
-                "decision": "",
-                "description": (
-                    f"{args.type} -> {to_branch.name}"
-                    + (
-                        f" ({str(args.match_basis or '').strip()})"
-                        if str(args.match_basis or "").strip()
-                        else ""
-                    )
-                ),
-                "artifact_path": AGENT_MEMORY_FILENAME,
-            },
-        )
-        render_session(session)
-    print(f"Recorded branch link: {from_branch.name} -> {to_branch.name}")
-    print(f"  type: {args.type}")
-    print(f"  status: {args.status}")
-    return 0
-
-
 def prepare_branch_inputs(args: argparse.Namespace) -> int:
     branch = resolve_workspace_arg_path(args.branch).resolve()
     session = branch.parent.parent
@@ -1389,9 +1188,9 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     target = str(branch_spec.get("target") or discovery.get("ticker") or "").strip().upper()
     if not target:
         raise RuntimeError("Branch spec is missing a target ticker.")
-    selected_drivers = branch_selected_inputs(branch_spec)
+    selected_inputs = branch_selected_inputs(branch_spec)
     symbols = [target]
-    for ticker in selected_drivers:
+    for ticker in selected_inputs:
         if ticker not in symbols:
             symbols.append(ticker)
 
@@ -1407,7 +1206,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
         branch=branch,
         branch_spec=branch_spec,
         target=target,
-        selected_drivers=selected_drivers,
+        selected_inputs=selected_inputs,
         requested_start=requested_start,
     )
 
@@ -1467,7 +1266,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     execution_constraints = build_execution_constraints_payload(branch_spec)
     data_manifest = build_data_manifest_payload(
         target=target,
-        selected_drivers=selected_drivers,
+        selected_inputs=selected_inputs,
         cache_payload=cache_payload,
         readiness=readiness,
     )
@@ -1537,7 +1336,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     print(f"  context_guide: {context_guide_path(branch).relative_to(session)}")
     print(f"  probe_samples: {probe_samples_path(branch).relative_to(session)}")
     print(f"  target: {target}")
-    print(f"  selected_drivers: {len(selected_drivers)}")
+    print(f"  selected_inputs: {len(selected_inputs)}")
     print(f"  symbols: {', '.join(symbols)}")
     print(f"  cache_results: ok={len(warm_ok)} fail={len(warm_fail)}")
     for line in advisory_lines:
@@ -1824,8 +1623,6 @@ def run_branch_round(args: argparse.Namespace) -> int:
             trigger=args.trigger,
             change_summary=args.change_summary,
             changed_dimensions=getattr(args, "changed_dimension", []),
-            continuation_rationale=getattr(args, "continuation_rationale", ""),
-            single_branch_rationale=getattr(args, "single_branch_rationale", ""),
             time_spent_min=args.time_spent_min,
             summary=args.summary,
             next_step=args.next_step,
@@ -1985,8 +1782,6 @@ def record_workflow_blocker_round(
             trigger=args.trigger,
             change_summary=args.change_summary,
             changed_dimensions=getattr(args, "changed_dimension", []),
-            continuation_rationale=getattr(args, "continuation_rationale", ""),
-            single_branch_rationale=getattr(args, "single_branch_rationale", ""),
             time_spent_min=args.time_spent_min,
             summary="Workflow blocker recorded before edge evaluation completed.",
             next_step="",
@@ -2244,7 +2039,6 @@ def print_status(session: Path) -> None:
     discovery = load_discovery(session)
     readiness = load_readiness(session)
     branches = load_branches(session)
-    agent_memory = load_agent_memory_records(session)
     ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
     frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
     journal_status = build_research_journal_status(session, ledger=ledger, frontier=frontier)
@@ -2257,8 +2051,6 @@ def print_status(session: Path) -> None:
         "Research journal: "
         f"{journal_status.get('resolved_evidence_reference_count', 0)} evidence-linked refs"
     )
-    if agent_memory:
-        print(f"Legacy agent memory: {len(agent_memory)} records")
     readiness_summary = format_data_readiness_summary(readiness)
     if readiness_summary:
         print(f"Discovery readiness: {readiness_summary}")
@@ -2707,7 +2499,7 @@ def build_promotion_bundle_readme(
     branch_spec: dict,
     latest: dict[str, str],
 ) -> str:
-    selected = format_simple_nodes(branch_spec.get("selected_drivers") or [], limit=12)
+    selected = format_simple_nodes(branch_selected_inputs(branch_spec), limit=12)
     return f"""# {branch.name} Promotion Bundle
 
 generated by Abel strategy discovery narrative layer
@@ -2718,7 +2510,7 @@ generated by Abel strategy discovery narrative layer
 - target: `{branch_spec.get("target", "unknown")}`
 - requested_start: `{branch_spec.get("requested_start", "unknown")}`
 - overlap_mode: `{branch_spec.get("overlap_mode", "target_only")}`
-- selected_drivers: `{selected}`
+- selected_inputs: `{selected}`
 - latest_round: `{latest.get("round_id", "none")}`
 - latest_decision: `{latest.get("decision", "n/a")}`
 - latest_verdict: `{latest.get("verdict", "n/a")}`
@@ -2750,7 +2542,7 @@ def build_thesis(branch: dict, discovery: dict, readiness: dict) -> str:
     blanket = format_discovery_nodes(discovery.get("blanket_new", []), limit=5)
     usable = format_simple_nodes(readiness_usable_tickers(readiness), limit=8)
     start_covered = format_simple_nodes(readiness_start_covered_tickers(readiness), limit=8)
-    selected = format_simple_nodes(branch_spec.get("selected_drivers") or [], limit=8)
+    selected = format_simple_nodes(branch_selected_inputs(branch_spec), limit=8)
     return f"""# {branch["branch_id"]} Thesis
 
 generated by Abel strategy discovery narrative layer
@@ -2772,7 +2564,7 @@ Latest decision is `{latest.get("decision", "pending")}` with verdict `{latest.g
 - discovery_source: `{discovery.get("source", "unknown")}`
 - direct_parents: `{parents}`
 - blanket_candidates: `{blanket}`
-- selected_drivers: `{selected}`
+- selected_inputs: `{selected}`
 - usable_tickers: `{usable}`
 - start_covered_tickers: `{start_covered}`
 
@@ -2807,12 +2599,9 @@ def build_evidence_ledger(session: Path, discovery: dict, branches: list[dict]) 
 
 
 def write_frontier(session: Path, ledger: dict) -> dict:
-    records = load_agent_memory_records(session)
     journal_status = build_research_journal_status(session, ledger=ledger, frontier={})
     frontier = build_frontier(
         ledger,
-        agent_memory_count=len(records),
-        memory_reference_gap_count=memory_reference_gap_count(records, ledger=ledger),
         journal_status=journal_status,
     )
     write_json_file(session / FRONTIER_JSON_FILENAME, frontier)
@@ -2826,8 +2615,6 @@ def write_frontier(session: Path, ledger: dict) -> dict:
 def build_frontier(
     ledger: dict,
     *,
-    agent_memory_count: int = 0,
-    memory_reference_gap_count: int = 0,
     journal_status: dict[str, object] | None = None,
 ) -> dict:
     rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
@@ -2931,23 +2718,6 @@ def build_frontier(
     same_branch_max_rounds = max(recorded_branch_counts.values(), default=0)
     recorded_round_count = sum(recorded_branch_counts.values())
     diagnostic_row_count = sum(1 for row in rows if row.get("run_type") != "round")
-    single_branch_rationale_present = any(
-        bool(row.get("single_branch_rationale"))
-        for row in rows
-        if row.get("run_type") == "round"
-    )
-    initial_breadth_incomplete = (
-        same_branch_max_rounds > INITIAL_BREADTH_ROUND_THRESHOLD
-        and len(branch_family_counts) < INITIAL_BRANCH_FAMILY_MINIMUM
-        and not single_branch_rationale_present
-    )
-    continuation_required_count = sum(1 for row in rows if row.get("continuation_rationale_required"))
-    continuation_missing_count = sum(
-        1
-        for row in rows
-        if row.get("continuation_rationale_required")
-        and not row.get("continuation_rationale_present")
-    )
     input_breadth_thin = (
         len(discovered_drivers) >= 2
         and recorded_round_count >= INPUT_BREADTH_ROUND_THRESHOLD
@@ -2996,16 +2766,6 @@ def build_frontier(
     if base_pivot_due and not compact_journal.get("has_evidence_linked_update"):
         pivot_reasons.append("missing_evidence_linked_journal")
     pivot_checkpoint_due = bool(pivot_reasons)
-    memory_checkpoint_reason = "none"
-    if agent_memory_count == 0 and recorded_round_count >= MEMORY_CHECKPOINT_ROUND_THRESHOLD:
-        memory_checkpoint_reason = "recorded_round_minimum"
-    if (
-        agent_memory_count == 0
-        and continuation_missing_count > 0
-        and recorded_round_count >= MEMORY_CHECKPOINT_ROUND_THRESHOLD
-    ):
-        memory_checkpoint_reason = "continuation_rationale_missing"
-    memory_checkpoint_due = memory_checkpoint_reason != "none"
     return {
         "schema_version": 1,
         "exp_id": ledger.get("exp_id", ""),
@@ -3081,13 +2841,6 @@ def build_frontier(
                 compact_journal.get("evidence_reference_count") or 0
             ),
         },
-        "memory_checkpoint": {
-            "agent_memory_records": int(agent_memory_count),
-            "memory_checkpoint_due": memory_checkpoint_due,
-            "memory_checkpoint_reason": memory_checkpoint_reason,
-            "memory_reference_gap_count": int(memory_reference_gap_count),
-            "memory_checkpoint_round_minimum": MEMORY_CHECKPOINT_ROUND_THRESHOLD,
-        },
         "coverage_concentration": {
             "branch_count": len(branch_counts),
             "max_rounds_in_one_branch": same_branch_max_rounds,
@@ -3103,15 +2856,12 @@ def build_frontier(
             "dominant_driver_set_share": fraction_pair(dominant_driver_set_count, len(rows)),
             "target_control_evidence": control_evidence_count,
             "comparable_controls": comparable_controls,
-            "agent_memory_records": int(agent_memory_count),
         },
         "exploration_breadth": {
             "branch_count": len(branch_counts),
             "recorded_round_count": recorded_round_count,
             "diagnostic_row_count": diagnostic_row_count,
             "branch_family_count": len(branch_family_counts),
-            "initial_breadth_incomplete": initial_breadth_incomplete,
-            "single_branch_rationale_present": single_branch_rationale_present,
             "same_branch_max_rounds": same_branch_max_rounds,
             "dominant_neighborhood": dominant_recorded_neighborhood,
             "dominant_neighborhood_rows": dominant_recorded_neighborhood_count,
@@ -3129,8 +2879,6 @@ def build_frontier(
             "ablation_evidence_count": ablation_evidence_count,
             "expansion_probe_count": expansion_probe_count,
             "local_refinement_count": local_refinement_count,
-            "continuation_rationale_required_count": continuation_required_count,
-            "continuation_rationale_missing_count": continuation_missing_count,
         },
     }
 
@@ -3415,9 +3163,8 @@ def render_session_frontier_summary(frontier: dict) -> str:
 
 
 def render_agent_context(*, session: Path, ledger: dict, frontier: dict) -> None:
-    records = load_agent_memory_records(session)
     (session / AGENT_CONTEXT_FILENAME).write_text(
-        build_agent_context(session=session, ledger=ledger, frontier=frontier, records=records),
+        build_agent_context(session=session, ledger=ledger, frontier=frontier),
         encoding="utf-8",
     )
 
@@ -3427,28 +3174,10 @@ def build_agent_context(
     session: Path,
     ledger: dict,
     frontier: dict,
-    records: list[dict[str, object]],
 ) -> str:
     rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
     recent_rows = rows[-8:]
-    active_records = [
-        row
-        for row in records
-        if str(row.get("status") or "active") not in {"closed", "superseded"}
-    ]
-    closed_records = [
-        row
-        for row in records
-        if str(row.get("status") or "") in {"closed", "superseded"}
-    ]
     journal_status = build_research_journal_status(session, ledger=ledger, frontier=frontier)
-    legacy_memory_section = render_legacy_agent_memory_section(
-        active_records=active_records,
-        closed_records=closed_records,
-        session=session,
-        ledger=ledger,
-        frontier=frontier,
-    )
     return f"""# Agent Context Pack
 
 generated by Abel strategy discovery narrative layer
@@ -3456,10 +3185,6 @@ generated by Abel strategy discovery narrative layer
 ## Evidence Frontier
 
 {render_session_frontier_summary(frontier)}
-
-## Resume State Facts
-
-{render_resume_state_facts(records, session=session, ledger=ledger, frontier=frontier)}
 
 ## Research Journal
 
@@ -3485,8 +3210,6 @@ generated by Abel strategy discovery narrative layer
 
 {render_agent_context_evidence_rows(recent_rows)}
 
-{legacy_memory_section}
-
 ## Evidence Sources
 
 - ledger: `{EVIDENCE_LEDGER_FILENAME}`
@@ -3494,30 +3217,6 @@ generated by Abel strategy discovery narrative layer
 - journal: `{RESEARCH_JOURNAL_FILENAME}`
 - raw artifacts: branch `outputs/`
 - session: `{session.name}`
-"""
-
-
-def render_legacy_agent_memory_section(
-    *,
-    active_records: list[dict[str, object]],
-    closed_records: list[dict[str, object]],
-    session: Path,
-    ledger: dict,
-    frontier: dict,
-) -> str:
-    if not active_records and not closed_records:
-        return ""
-    return f"""## Legacy Agent Memory
-
-This is legacy resume input. Use `{RESEARCH_JOURNAL_FILENAME}` for new research insight.
-
-### Active
-
-{render_agent_memory_records(active_records, session=session, ledger=ledger, frontier=frontier)}
-
-### Closed
-
-{render_agent_memory_records(closed_records, session=session, ledger=ledger, frontier=frontier)}
 """
 
 
@@ -3611,41 +3310,6 @@ def render_agent_context_graph_priority(frontier: dict) -> str:
     )
 
 
-def render_resume_state_facts(
-    records: list[dict[str, object]],
-    *,
-    session: Path,
-    ledger: dict,
-    frontier: dict,
-) -> str:
-    unresolved = sum(
-        1
-        for record in records
-        if memory_reference_status(record, session=session, ledger=ledger, frontier=frontier)
-        == "unresolved_reference"
-    )
-    closed_directions = sum(
-        1
-        for record in records
-        if record.get("type") in {"open_direction", "closed_direction"}
-        and str(record.get("status") or "") in {"closed", "superseded"}
-    )
-    open_questions = sum(
-        1
-        for record in records
-        if record.get("type") == "open_question"
-        and str(record.get("status") or "active") not in {"closed", "superseded"}
-    )
-    return "\n".join(
-        [
-            f"- legacy_agent_memory_records: `{len(records)}`",
-            f"- unresolved_legacy_memory_references: `{unresolved}`",
-            f"- legacy_closed_directions: `{closed_directions}`",
-            f"- legacy_open_questions: `{open_questions}`",
-        ]
-    )
-
-
 def render_agent_context_evidence_rows(rows: list[dict]) -> str:
     if not rows:
         return "- none"
@@ -3663,38 +3327,6 @@ def render_agent_context_evidence_rows(rows: list[dict]) -> str:
             f"workflow=`{row.get('workflow_status', 'unknown')}`"
         )
     return "\n".join(lines)
-
-
-def render_agent_memory_records(
-    records: list[dict[str, object]],
-    *,
-    session: Path,
-    ledger: dict,
-    frontier: dict,
-) -> str:
-    if not records:
-        return "- none"
-    lines = []
-    for record in records[-12:]:
-        refs = record.get("evidence_refs")
-        ref_text = ", ".join(str(item) for item in refs) if isinstance(refs, list) else ""
-        relation = ""
-        if record.get("type") == "branch_relation":
-            relation = (
-                f" relation=`{record.get('relation_type', '')}` "
-                f"{record.get('from_branch_id', '')}->{record.get('to_branch_id', '')}"
-            )
-        lines.append(
-            "- "
-            f"`{record.get('memory_id', '')}` "
-            f"type=`{record.get('type', 'note')}` "
-            f"status=`{record.get('status', 'active')}` "
-            f"evidence_status=`{memory_reference_status(record, session=session, ledger=ledger, frontier=frontier)}`"
-            f"{relation}: {record.get('statement', '') or 'not recorded'}"
-            + (f" refs=`{ref_text}`" if ref_text else "")
-        )
-    return "\n".join(lines)
-
 
 def build_evidence_rows_for_branch(session: Path, branch: dict) -> list[dict[str, object]]:
     branch_dir = branch["branch_dir"]
@@ -3792,8 +3424,6 @@ def build_evidence_row(
         "declared_exploration_role": declaration["exploration_role"],
         "declared_selected_inputs": list(declaration["selected_inputs"]),
         "changed_dimensions": changed_dimensions,
-        "continuation_rationale": normalize_optional_note(note.get("continuation_rationale", "")),
-        "single_branch_rationale": normalize_optional_note(note.get("single_branch_rationale", "")),
         "engine_scaffold_status": engine_scaffold_status or "unknown",
         "actual_auxiliary_reads": runtime["auxiliary_reads"],
         "actual_read_count": runtime["read_count"],
@@ -3875,33 +3505,17 @@ def annotate_exploration_protocol(rows: list[dict[str, object]]) -> None:
         for row in round_rows
         if branch_family_key(row)
     }
-    branch_totals: dict[str, int] = {}
     branch_seen: dict[str, int] = {}
     neighborhood_fail_seen: dict[str, int] = {}
-    single_branch_rationale_present = any(
-        bool(row.get("single_branch_rationale")) for row in round_rows
-    )
-    for row in round_rows:
-        increment_count(branch_totals, str(row.get("branch_id") or "unknown"))
-    max_branch_rounds = max(branch_totals.values(), default=0)
-    initial_breadth_incomplete = (
-        max_branch_rounds > INITIAL_BREADTH_ROUND_THRESHOLD
-        and len(family_keys) < INITIAL_BRANCH_FAMILY_MINIMUM
-        and not single_branch_rationale_present
-    )
 
     for row in rows:
         neighborhood = exploration_neighborhood_key(row)
         row["exploration_neighborhood_key"] = neighborhood
         row["branch_family_key"] = branch_family_key(row)
         row["branch_family_count"] = len(family_keys)
-        row["single_branch_rationale_present"] = bool(row.get("single_branch_rationale"))
-        row["initial_breadth_incomplete"] = initial_breadth_incomplete
         if row.get("run_type") != "round":
             row["same_branch_round_index"] = 0
             row["same_neighborhood_failed_rows"] = 0
-            row["continuation_rationale_required"] = False
-            row["continuation_rationale_present"] = bool(row.get("continuation_rationale"))
             continue
         branch_id = str(row.get("branch_id") or "unknown")
         branch_seen[branch_id] = branch_seen.get(branch_id, 0) + 1
@@ -3913,14 +3527,8 @@ def annotate_exploration_protocol(rows: list[dict[str, object]]) -> None:
             and not row.get("changed_dimensions")
         ):
             row["derived_exploration_class"] = "local_refinement"
-        required = (
-            failed_before >= SAME_NEIGHBORHOOD_FAIL_THRESHOLD
-            or same_branch_rounds > SAME_BRANCH_ROUND_THRESHOLD
-        )
         row["same_branch_round_index"] = same_branch_rounds
         row["same_neighborhood_failed_rows"] = failed_before
-        row["continuation_rationale_required"] = bool(required)
-        row["continuation_rationale_present"] = bool(row.get("continuation_rationale"))
         if row.get("comparable") and row.get("verdict") == "FAIL":
             neighborhood_fail_seen[neighborhood] = failed_before + 1
 
@@ -4351,10 +3959,10 @@ def branch_runtime_advisory_lines(
     return lines
 
 
-def _branch_driver_list(branch_spec: dict) -> list[str]:
+def _branch_input_list(branch_spec: dict) -> list[str]:
     return [
         str(item).strip().upper()
-        for item in (branch_spec.get("selected_drivers") or [])
+        for item in (branch_spec.get("selected_inputs") or [])
         if str(item).strip()
     ]
 
@@ -4377,14 +3985,14 @@ def branch_context_summary_lines(
     ).strip()
     session_start = _get_backtest_start(discovery)
     coverage_hints = (readiness or {}).get("coverage_hints") or {}
-    drivers = _branch_driver_list(branch_spec)
-    drivers_text = ", ".join(drivers) if drivers else "none"
+    selected_inputs = _branch_input_list(branch_spec)
+    inputs_text = ", ".join(selected_inputs) if selected_inputs else "none"
     starter_scaffold = branch_uses_default_scaffold(branch, discovery, readiness, session)
     inputs_prepared = branch_inputs_ready(branch)
 
     lines = [
         f"target={target}",
-        f"selected_drivers={len(drivers)} ({drivers_text})",
+        f"selected_inputs={len(selected_inputs)} ({inputs_text})",
         f"requested_start={requested_start}",
     ]
     if requested_start == session_start:
@@ -4606,7 +4214,7 @@ def build_branch_context(
         )
     data_manifest = build_data_manifest_payload(
         target=str(runtime_profile.get("target") or discovery.get("ticker") or "").strip().upper(),
-        selected_drivers=branch_selected_inputs(branch_spec),
+        selected_inputs=branch_selected_inputs(branch_spec),
         cache_payload=(dependencies.get("cache") or {}) if isinstance(dependencies, dict) else {},
         readiness=readiness,
     )
@@ -4868,8 +4476,6 @@ def normalize_exploration_role(branch_spec: dict) -> str:
 
 def branch_selected_inputs(branch_spec: dict) -> list[str]:
     raw = branch_spec.get("selected_inputs")
-    if raw is None or raw == []:
-        raw = branch_spec.get("selected_drivers")
     if not isinstance(raw, list):
         return []
     return ordered_unique_upper(raw)
@@ -4891,9 +4497,9 @@ def ordered_unique_strings(values) -> list[str]:
 def canonicalize_branch_spec_inputs(payload: dict) -> dict:
     branch_spec = dict(payload)
     selected = branch_selected_inputs(branch_spec)
-    if selected or "selected_inputs" in branch_spec or "selected_drivers" in branch_spec:
+    if selected or "selected_inputs" in branch_spec:
         branch_spec["selected_inputs"] = selected
-        branch_spec["selected_drivers"] = selected
+    branch_spec.pop("selected_drivers", None)
     return branch_spec
 
 
@@ -5004,7 +4610,6 @@ def build_default_branch_spec(*, branch: Path, discovery: dict, readiness: dict)
         "resolved_start_policy": "requested",
         "overlap_mode": "target_only",
         "selected_inputs": selected,
-        "selected_drivers": selected,
         "suggested_drivers": suggested,
         "data_requirements": {
             "timeframe": "1d",
@@ -5018,16 +4623,15 @@ def branch_dependencies_payload(
     branch: Path,
     branch_spec: dict,
     target: str,
-    selected_drivers: list[str],
+    selected_inputs: list[str],
     requested_start: str,
 ) -> dict:
-    selected_drivers = ordered_unique_upper(selected_drivers)
+    selected_inputs = ordered_unique_upper(selected_inputs)
     return {
         "version": 1,
         "branch_id": branch.name,
         "target": target,
-        "selected_inputs": selected_drivers,
-        "selected_drivers": selected_drivers,
+        "selected_inputs": selected_inputs,
         "requested_start": requested_start,
         "overlap_mode": branch_spec.get("overlap_mode") or "target_only",
         "data_requirements": branch_spec.get("data_requirements") or {"timeframe": "1d"},
@@ -5038,12 +4642,10 @@ def branch_dependencies_payload(
 def canonicalize_dependencies_payload(payload: dict) -> dict:
     dependencies = dict(payload)
     raw = dependencies.get("selected_inputs")
-    if raw is None or raw == []:
-        raw = dependencies.get("selected_drivers") or []
     selected = ordered_unique_upper(raw if isinstance(raw, list) else [])
-    if selected or "selected_inputs" in dependencies or "selected_drivers" in dependencies:
+    if selected or "selected_inputs" in dependencies:
         dependencies["selected_inputs"] = selected
-        dependencies["selected_drivers"] = selected
+    dependencies.pop("selected_drivers", None)
     return dependencies
 
 
@@ -5068,11 +4670,11 @@ def build_execution_constraints_payload(branch_spec: dict) -> dict:
 def build_data_manifest_payload(
     *,
     target: str,
-    selected_drivers: list[str],
+    selected_inputs: list[str],
     cache_payload: dict,
     readiness: dict,
 ) -> dict:
-    selected_drivers = ordered_unique_upper(selected_drivers)
+    selected_inputs = ordered_unique_upper(selected_inputs)
     cache_results = {
         str(item.get("symbol") or "").strip().upper(): item
         for item in (cache_payload.get("results") or [])
@@ -5084,7 +4686,7 @@ def build_data_manifest_payload(
         if isinstance(item, dict) and str(item.get("ticker") or "").strip()
     }
     feeds: list[dict[str, object]] = []
-    ordered_symbols = [target] + [ticker for ticker in selected_drivers if ticker != target]
+    ordered_symbols = [target] + [ticker for ticker in selected_inputs if ticker != target]
     adapter = str(cache_payload.get("adapter") or "abel")
     timeframe = str(cache_payload.get("timeframe") or "1d")
     profile = str(cache_payload.get("profile") or "daily")
@@ -5111,8 +4713,7 @@ def build_data_manifest_payload(
     return {
         "version": 1,
         "target": target,
-        "selected_inputs": selected_drivers,
-        "selected_drivers": selected_drivers,
+        "selected_inputs": selected_inputs,
         "feeds": feeds,
     }
 
@@ -5120,8 +4721,6 @@ def build_data_manifest_payload(
 def canonicalize_data_manifest_payload(payload: dict) -> dict:
     manifest = dict(payload)
     raw_selected = manifest.get("selected_inputs")
-    if raw_selected is None or raw_selected == []:
-        raw_selected = manifest.get("selected_drivers") or []
     selected = ordered_unique_upper(raw_selected if isinstance(raw_selected, list) else [])
     feeds: list[dict[str, object]] = []
     seen_feeds: set[str] = set()
@@ -5141,7 +4740,7 @@ def canonicalize_data_manifest_payload(payload: dict) -> dict:
         feeds.append(feed)
         seen_feeds.add(key)
     manifest["selected_inputs"] = selected
-    manifest["selected_drivers"] = selected
+    manifest.pop("selected_drivers", None)
     manifest["feeds"] = feeds
     return manifest
 
@@ -5558,8 +5157,6 @@ def read_round_note(branch_dir: Path, round_id: str) -> dict[str, str]:
             "expected_signal",
             "change_summary",
             "changed_dimensions",
-            "continuation_rationale",
-            "single_branch_rationale",
             "time_spent_min",
             "failures",
             "failure_signature",
@@ -5621,11 +5218,9 @@ def render_round_note(**kwargs) -> str:
 
 {action_lines}
 
-## Exploration Protocol
+## Exploration Facts
 
 - changed_dimensions: `{", ".join(changed_dimensions) or "none"}`
-- continuation_rationale: `{kwargs.get("continuation_rationale") or "not recorded"}`
-- single_branch_rationale: `{kwargs.get("single_branch_rationale") or "not recorded"}`
 
 ## Key Results
 
@@ -5758,15 +5353,6 @@ def read_tsv_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle, delimiter="\t"))
 
 
-def normalize_evidence_refs(values: list[str]) -> list[str]:
-    refs: list[str] = []
-    for raw in values:
-        value = str(raw or "").strip()
-        if value and value not in refs:
-            refs.append(value)
-    return refs
-
-
 def ensure_research_journal(session: Path) -> Path:
     path = session / RESEARCH_JOURNAL_FILENAME
     if not path.exists():
@@ -5878,8 +5464,8 @@ def resolve_journal_reference(
     if ref == EVIDENCE_LEDGER_FILENAME:
         return (session / EVIDENCE_LEDGER_FILENAME).exists()
     if ref.startswith("branches/"):
-        return resolve_memory_reference(f"artifact:{ref}", session=session, ledger=ledger, frontier=frontier)
-    return resolve_memory_reference(ref, session=session, ledger=ledger, frontier=frontier)
+        return resolve_evidence_reference(f"artifact:{ref}", session=session, ledger=ledger, frontier=frontier)
+    return resolve_evidence_reference(ref, session=session, ledger=ledger, frontier=frontier)
 
 
 def recent_journal_excerpt(lines: list[str]) -> str:
@@ -5895,84 +5481,7 @@ def journal_note_line_items(lines: list[str]) -> list[tuple[int, str]]:
     return [(index + 1, line) for index, line in enumerate(lines[note_start:], start=note_start)]
 
 
-def load_agent_memory_records(session: Path) -> list[dict[str, object]]:
-    path = session / AGENT_MEMORY_FILENAME
-    if not path.exists():
-        return []
-    records: list[dict[str, object]] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        text = raw.strip()
-        if not text:
-            continue
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            records.append(payload)
-    return records
-
-
-def append_agent_memory_record(session: Path, record: dict[str, object]) -> None:
-    path = session / AGENT_MEMORY_FILENAME
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
-
-
-def next_agent_memory_id(records: list[dict[str, object]], *, prefix: str) -> str:
-    next_index = 1
-    marker = f"{prefix}-"
-    for row in records:
-        value = str(row.get("memory_id", "") or "")
-        if not value.startswith(marker):
-            continue
-        suffix = value[len(marker) :]
-        if suffix.isdigit():
-            next_index = max(next_index, int(suffix) + 1)
-    return f"{prefix}-{next_index:03d}"
-
-
-def memory_reference_gap_count(records: list[dict[str, object]], *, ledger: dict) -> int:
-    gaps = 0
-    for record in records:
-        refs = record.get("evidence_refs")
-        values = [str(item or "").strip() for item in refs] if isinstance(refs, list) else []
-        values = [item for item in values if item]
-        if values:
-            for value in values:
-                if value.startswith("ledger:") and not resolve_memory_reference(
-                    value,
-                    session=Path("."),
-                    ledger=ledger,
-                    frontier={},
-                ):
-                    gaps += 1
-            continue
-        if record.get("type") in {"insight", "open_direction", "closed_direction"}:
-            gaps += 1
-    return gaps
-
-
-def memory_reference_status(
-    record: dict[str, object],
-    *,
-    session: Path,
-    ledger: dict,
-    frontier: dict,
-) -> str:
-    refs = record.get("evidence_refs")
-    values = [str(item or "").strip() for item in refs] if isinstance(refs, list) else []
-    values = [item for item in values if item]
-    if values:
-        if all(resolve_memory_reference(item, session=session, ledger=ledger, frontier=frontier) for item in values):
-            return "referenced"
-        return "unresolved_reference"
-    if record.get("type") in {"insight", "open_direction", "closed_direction"}:
-        return "note_without_evidence"
-    return "not_required"
-
-
-def resolve_memory_reference(
+def resolve_evidence_reference(
     value: str,
     *,
     session: Path,
