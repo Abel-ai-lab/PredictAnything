@@ -846,3 +846,157 @@ def test_run_branch_round_updates_memory_and_status(
     assert "Memory:" in status_output
 
     assert ni.check_session(session, strict=False) == 0
+
+
+def test_run_branch_round_prompts_dashboard_upload_for_candidate_evidence(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-dashboard-upload", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = ni.load_branch_spec(branch)
+    spec["selected_inputs"] = _sample_selected_inputs()
+    ni.write_branch_spec(branch, spec)
+    deps_path = ni.dependencies_path(branch)
+    deps_path.parent.mkdir(parents=True, exist_ok=True)
+    deps_path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "branch_id": branch.name,
+                "target_asset": "TSLA",
+                "target_node": "TSLA.price",
+                "selected_inputs": _sample_selected_inputs(),
+                "requested_start": "2020-01-01",
+            }
+        ),
+        encoding="utf-8",
+    )
+    ni.runtime_profile_path(branch).write_text("{}", encoding="utf-8")
+    ni.execution_constraints_path(branch).write_text("{}", encoding="utf-8")
+    ni.data_manifest_path(branch).write_text("{}", encoding="utf-8")
+    ni.window_availability_path(branch).write_text("{}", encoding="utf-8")
+    ni.context_guide_path(branch).write_text("", encoding="utf-8")
+    ni.probe_samples_path(branch).write_text("{}", encoding="utf-8")
+    ni.persist_prepared_branch_contract(branch, ni.load_discovery(session))
+
+    def fake_run(*args, **kwargs):
+        command = args[0]
+        result_path = Path(command[command.index("--output-json") + 1])
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result_path.write_text(
+            json.dumps(_semantic_result(traced_inputs=["AAPL.price"])),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert ni.run_branch_round(
+        Namespace(
+            branch=str(branch),
+            mode="explore",
+            description="causal driver vote",
+            input_note="AAPL.price selected",
+            hypothesis="AAPL price leads TSLA",
+            expected_signal="positive cross-asset lead",
+            invalidation_condition="AAPL lead fails",
+            trigger="graph discovery seed",
+            change_summary="first causal pass",
+            time_spent_min="15",
+            summary="candidate evidence round",
+            next_step="upload dashboard memory",
+            action=[],
+            python_bin=None,
+            allow_untouched_template=True,
+        )
+    ) == 0
+
+    output = capsys.readouterr().out
+    assert "Dashboard upload:" in output
+    assert "abel-strategy-discovery upload-dashboard-bundle --branch" in output
+
+
+def test_build_skill_dashboard_bundle_uses_branch_evidence_only(tmp_path: Path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-dashboard", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "graph-v1")
+    ni.write_branch_state(branch, {"created_at": "2026-04-24T01:00:00+00:00"})
+    spec = ni.load_branch_spec(branch)
+    spec["selected_inputs"] = _sample_selected_inputs()
+    ni.write_branch_spec(branch, spec)
+    _record_round(
+        branch,
+        round_id="round-001",
+        decision="keep",
+        evidence_type="candidate_evidence",
+        description="graph-supported candidate pass",
+    )
+    ni.record_manual_insight(
+        Namespace(
+            branch=str(branch),
+            scope="branch",
+            kind="pattern",
+            text="Driver concentration matters more than raw parent count.",
+            rule="Prefer a tighter driver set before opening a sibling branch.",
+            confidence="high",
+            round_id="round-001",
+        )
+    )
+
+    bundle = ni.build_skill_dashboard_bundle(
+        branch,
+        uploaded_at="2026-04-24T01:30:00+00:00",
+    )
+
+    assert bundle["sessionId"] == "tsla-dashboard"
+    assert bundle["branchId"] == "graph-v1"
+    assert bundle["startAt"] == "2026-04-24T01:00:00+00:00"
+    assert bundle["endAt"] == "2026-04-24T01:30:00+00:00"
+    assert set(bundle["payload"]) == {
+        "session",
+        "branch",
+        "rounds",
+        "branchInsights",
+        "episodes",
+    }
+    assert bundle["payload"]["branch"]["selectedInputs"] == ["AAPL.price"]
+    assert bundle["payload"]["rounds"][0]["roundId"] == "round-001"
+    assert any(
+        item["summary"] == "Driver concentration matters more than raw parent count."
+        for item in bundle["payload"]["branchInsights"]
+    )
+    assert "replaySnapshot" not in bundle["payload"]
+    assert "promotion" not in bundle["payload"]
+
+
+def test_post_skill_dashboard_bundle_sends_api_key_header() -> None:
+    calls = []
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"code": 200, "data": {"bundleId": "bundle-1"}}'
+
+    def fake_opener(request, timeout):
+        calls.append((request, timeout))
+        return _Response()
+
+    result = ni.post_skill_dashboard_bundle(
+        base_url="https://router.example",
+        api_key="secret-key",
+        bundle={"sessionId": "s1", "branchId": "b1", "payload": {"branch": {}}},
+        opener=fake_opener,
+    )
+
+    request, timeout = calls[0]
+    assert result["data"]["bundleId"] == "bundle-1"
+    assert request.full_url == "https://router.example/web/skill-dashboard/bundles"
+    assert request.get_header("Api-key") == "secret-key"
+    assert request.get_header("Content-type") == "application/json"
+    assert timeout == 60

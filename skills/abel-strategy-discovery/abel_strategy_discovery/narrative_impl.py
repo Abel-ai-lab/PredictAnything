@@ -17,6 +17,8 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 import pandas as pd
 import yaml
@@ -55,6 +57,7 @@ from abel_strategy_discovery.workspace import (
     resolve_workspace_paths,
     scaffold_workspace,
 )
+from abel_common.cap.auth import read_env_file_values
 
 EVENTS_HEADER = [
     "timestamp",
@@ -591,6 +594,32 @@ def main() -> int:
         help="Optional destination directory (defaults to <session>/promotions/<branch-id>)",
     )
 
+    upload_dashboard = sub.add_parser(
+        "upload-dashboard-bundle",
+        help="Upload branch evidence to the Abel router skill dashboard",
+    )
+    upload_dashboard.add_argument("--branch", required=True)
+    upload_dashboard.add_argument(
+        "--base-url",
+        default="",
+        help="Abel router base URL. Defaults to ABEL_ROUTER_BASE_URL or CAP_ROUTER_BASE_URL.",
+    )
+    upload_dashboard.add_argument(
+        "--api-key",
+        default="",
+        help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
+    )
+    upload_dashboard.add_argument(
+        "--output-json",
+        default=None,
+        help="Optional path to write the upload payload before sending.",
+    )
+    upload_dashboard.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Build and print the payload without sending it.",
+    )
+
     debug_branch = sub.add_parser(
         "debug-branch",
         help="Run edge debug-evaluate without recording a narrative round",
@@ -824,6 +853,8 @@ def main() -> int:
         return run_branch_round(args)
     if args.command == "promote-branch":
         return promote_branch_bundle(args)
+    if args.command == "upload-dashboard-bundle":
+        return upload_skill_dashboard_bundle(args)
     if args.command == "debug-branch":
         return debug_branch_run(args)
     if args.command == "render":
@@ -2370,6 +2401,220 @@ def branch_requested_start(branch: Path, discovery: dict) -> str:
     return _get_backtest_start(discovery)
 
 
+def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None) -> dict:
+    branch = resolve_workspace_arg_path(branch).resolve()
+    session = branch.parent.parent
+    discovery = load_discovery(session)
+    frontier = load_frontier_state(session)
+    branch_spec = load_branch_spec(branch)
+    branch_state = load_branch_state(branch)
+    rows = read_tsv_rows(branch / "results.tsv")
+    insights = read_tsv_rows(session / MEMORY_INSIGHTS_FILENAME)
+    events = read_tsv_rows(session / "events.tsv")
+
+    created_at = str(branch_state.get("created_at") or "").strip() or _first_branch_event_time(
+        events,
+        branch_id=branch.name,
+    )
+    start_at = _require_timezone_aware_iso(created_at or _now(), field_name="startAt")
+    end_at = _require_timezone_aware_iso(uploaded_at or _now(), field_name="endAt")
+    if datetime.fromisoformat(end_at) <= datetime.fromisoformat(start_at):
+        raise RuntimeError("skill dashboard upload requires endAt after startAt")
+
+    selected_inputs = [
+        str(item.get("node_id") or item.get("id") or "").strip()
+        for item in branch_spec.get("selected_inputs") or []
+        if str(item.get("node_id") or item.get("id") or "").strip()
+    ]
+    latest = rows[-1] if rows else {}
+    branch_payload = {
+        "id": branch.name,
+        "targetAsset": branch_target_asset(branch_spec, discovery),
+        "targetNode": branch_target_node(branch_spec, discovery),
+        "requestedStart": branch_requested_start(branch, discovery),
+        "selectedInputs": selected_inputs,
+        "sourceType": str(branch_spec.get("source_type") or "causal"),
+        "methodFamily": str(branch_spec.get("method_family") or "").strip(),
+        "status": str(latest.get("decision") or branch_spec.get("status") or "exploratory"),
+        "thesis": str(branch_state.get("hypothesis") or "").strip(),
+    }
+
+    return {
+        "sessionId": session.name,
+        "branchId": branch.name,
+        "startAt": start_at,
+        "endAt": end_at,
+        "payload": {
+            "session": {
+                "id": session.name,
+                "ticker": discovery.get("ticker", session.parent.name.upper()),
+                "targetNode": branch_target_node(branch_spec, discovery),
+                "frontierMode": frontier_mode(frontier, discovery=discovery),
+                "nodeCount": len(frontier.get("nodes") or []),
+            },
+            "branch": branch_payload,
+            "rounds": _skill_dashboard_rounds(branch, rows),
+            "branchInsights": _skill_dashboard_branch_insights(insights, branch_id=branch.name),
+            "episodes": _skill_dashboard_episodes(events, branch_id=branch.name),
+        },
+    }
+
+
+def post_skill_dashboard_bundle(
+    *,
+    base_url: str,
+    api_key: str,
+    bundle: dict,
+    opener=urlopen,
+    timeout: int = 60,
+) -> dict:
+    normalized_base_url = str(base_url or "").strip().rstrip("/")
+    if not normalized_base_url:
+        raise RuntimeError("Missing Abel router base URL")
+    normalized_api_key = str(api_key or "").strip()
+    if not normalized_api_key:
+        raise RuntimeError("Missing Abel API key")
+    body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+    request = Request(
+        f"{normalized_base_url}/web/skill-dashboard/bundles",
+        data=body,
+        headers={"Content-Type": "application/json", "api-key": normalized_api_key},
+        method="POST",
+    )
+    try:
+        with opener(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Skill dashboard upload failed: HTTP {exc.code}: {detail}") from exc
+    return json.loads(raw)
+
+
+def upload_skill_dashboard_bundle(args: argparse.Namespace) -> int:
+    branch = resolve_workspace_arg_path(args.branch).resolve()
+    bundle = build_skill_dashboard_bundle(branch)
+    if args.output_json:
+        output_path = resolve_workspace_arg_path(args.output_json).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+    if args.dry_run:
+        print(json.dumps(bundle, indent=2, ensure_ascii=False))
+        return 0
+
+    workspace_root = find_workspace_root(branch)
+    base_url = resolve_skill_dashboard_base_url(args.base_url)
+    api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
+    result = post_skill_dashboard_bundle(base_url=base_url, api_key=api_key, bundle=bundle)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+def resolve_skill_dashboard_base_url(value: str | None) -> str:
+    base_url = (
+        str(value or "").strip()
+        or os.getenv("ABEL_ROUTER_BASE_URL", "").strip()
+        or os.getenv("CAP_ROUTER_BASE_URL", "").strip()
+    )
+    if not base_url:
+        raise RuntimeError("Set --base-url or ABEL_ROUTER_BASE_URL before uploading dashboard bundles")
+    return base_url
+
+
+def resolve_skill_dashboard_api_key(value: str | None, *, workspace_root: Path | None) -> str:
+    explicit = str(value or "").strip()
+    if explicit:
+        return explicit
+    env_token = (os.getenv("ABEL_API_KEY") or os.getenv("CAP_API_KEY") or "").strip()
+    if env_token:
+        return env_token
+    if workspace_root is not None:
+        auth_env_file = resolve_runtime_auth_env_file(workspace_root)
+        if auth_env_file is not None:
+            env_values = read_env_file_values(auth_env_file)
+            token = (env_values.get("ABEL_API_KEY") or env_values.get("CAP_API_KEY") or "").strip()
+            if token:
+                return token
+    raise RuntimeError("Set --api-key or run abel-auth before uploading dashboard bundles")
+
+
+def _skill_dashboard_rounds(branch: Path, rows: list[dict[str, str]]) -> list[dict]:
+    rounds = []
+    for row in rows:
+        round_id = str(row.get("round_id") or "").strip()
+        note = read_round_note(branch, round_id)
+        rounds.append(
+            {
+                "roundId": round_id,
+                "mode": row.get("mode", ""),
+                "decision": row.get("decision", ""),
+                "verdict": row.get("verdict", ""),
+                "score": row.get("score", ""),
+                "description": row.get("description", ""),
+                "summary": note.get("summary", ""),
+                "hypothesis": note.get("hypothesis", ""),
+                "expectedSignal": note.get("expected_signal", ""),
+                "invalidationCondition": note.get("invalidation_condition", ""),
+                "changeSummary": note.get("change_summary", ""),
+                "nextStep": note.get("next_step", ""),
+                "evidenceType": note.get("evidence_type", ""),
+                "tracedInputs": note.get("traced_inputs", ""),
+            }
+        )
+    return rounds
+
+
+def _skill_dashboard_branch_insights(
+    rows: list[dict[str, str]],
+    *,
+    branch_id: str,
+) -> list[dict]:
+    return [
+        {
+            "id": row.get("insight_id", ""),
+            "roundId": row.get("round_id", ""),
+            "kind": row.get("kind", ""),
+            "summary": row.get("statement", ""),
+            "reusableRule": row.get("reusable_rule", ""),
+            "confidence": row.get("confidence", ""),
+            "origin": row.get("origin", ""),
+        }
+        for row in rows
+        if row.get("branch_id") == branch_id
+    ]
+
+
+def _skill_dashboard_episodes(rows: list[dict[str, str]], *, branch_id: str) -> list[dict]:
+    return [
+        {
+            "timestamp": row.get("timestamp", ""),
+            "event": row.get("event", ""),
+            "roundId": row.get("round_id", ""),
+            "mode": row.get("mode", ""),
+            "verdict": row.get("verdict", ""),
+            "decision": row.get("decision", ""),
+            "summary": row.get("description", ""),
+            "artifactPath": row.get("artifact_path", ""),
+        }
+        for row in rows
+        if row.get("branch_id") == branch_id
+    ]
+
+
+def _first_branch_event_time(rows: list[dict[str, str]], *, branch_id: str) -> str:
+    for row in rows:
+        if row.get("branch_id") == branch_id and row.get("timestamp"):
+            return str(row["timestamp"])
+    return ""
+
+
+def _require_timezone_aware_iso(value: str, *, field_name: str) -> str:
+    normalized = str(value or "").strip()
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise RuntimeError(f"{field_name} must include timezone")
+    return parsed.isoformat()
+
+
 def promote_branch_bundle(args: argparse.Namespace) -> int:
     branch = resolve_workspace_arg_path(args.branch).resolve()
     session = branch.parent.parent
@@ -2721,6 +2966,14 @@ def run_branch_round(args: argparse.Namespace) -> int:
             frame_text,
         ],
     )
+    if decision == "keep" and evidence.get("evidence_type") == "candidate_evidence":
+        print("")
+        print("Dashboard upload:")
+        print(
+            "  "
+            f"abel-strategy-discovery upload-dashboard-bundle --branch {branch} "
+            "--base-url <router-base-url>"
+        )
     return 0
 
 

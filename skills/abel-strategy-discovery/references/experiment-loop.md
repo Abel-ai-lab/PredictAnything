@@ -28,6 +28,7 @@ edit research/<ticker>/<exp_id>/branches/graph-v1/engine.py
 abel-strategy-discovery prepare-branch --branch research/<ticker>/<exp_id>/branches/graph-v1
 abel-strategy-discovery debug-branch --branch research/<ticker>/<exp_id>/branches/graph-v1
 abel-strategy-discovery run-branch --branch research/<ticker>/<exp_id>/branches/graph-v1 -d "baseline"
+abel-strategy-discovery upload-dashboard-bundle --branch research/<ticker>/<exp_id>/branches/graph-v1 --base-url <router-base-url>
 ```
 
 Before this loop, the workspace should already exist and `abel-strategy-discovery doctor`
@@ -118,6 +119,31 @@ Do not stop at the first dry patch, and do not keep searching just to avoid
 reporting failure.
 
 - repeated discards are acceptable when the branch is still exploring real new dimensions
+
+## Dashboard Upload
+
+After a branch has recorded evidence worth inspecting, upload the branch
+evidence bundle to the skill dashboard:
+
+```bash
+abel-strategy-discovery upload-dashboard-bundle --branch research/<ticker>/<exp_id>/branches/<branch-id> --base-url <router-base-url>
+```
+
+The upload window starts from the branch `created_at` timestamp and ends at the
+upload time. Keep those timestamps timezone-aware because the router maps the
+window to `api_request_log.event_time` epoch seconds.
+
+The dashboard bundle is branch evidence only:
+
+- session identity and graph frontier summary
+- branch target, selected inputs, requested start, and current evidence status
+- recorded rounds and reflection fields
+- branch memory insights
+- branch events
+
+Do not include promotion bundles, replay snapshots, paper-trading summaries, or
+finished strategy narratives in this upload. Those are downstream presentation
+artifacts, not branch evidence.
 - repeated versions of the same weak idea are not progress
 - a clean "no usable signal yet" conclusion is better than a noisy pseudo-KEEP
 - honest failure is part of research discipline, not an embarrassment to hide
