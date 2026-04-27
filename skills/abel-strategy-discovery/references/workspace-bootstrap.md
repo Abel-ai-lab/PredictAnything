@@ -1,8 +1,56 @@
 # Workspace Bootstrap
 
-`abel-strategy-discovery` is workspace-first.
+`abel-strategy-discovery` is workspace-first. Do not start strategy research
+until you know which workspace root owns the run.
 
-- Install should prepare the default workspace base.
-- Runtime should reuse an existing workspace root before creating a new one.
-- The strategy runtime owns the order of branch preparation and legality checks.
-- Auth should reuse existing Abel auth first and fall back to `abel-auth` only when needed.
+## Preflight
+
+From the user's current directory:
+
+1. If `alpha.workspace.yaml` exists here, this directory is the workspace root.
+2. Else if `abel-strategy-discovery-workspace/alpha.workspace.yaml` exists here,
+   reuse that child workspace.
+3. Else run:
+
+```bash
+abel-strategy-discovery workspace bootstrap --path abel-strategy-discovery-workspace
+```
+
+4. Then run:
+
+```bash
+abel-strategy-discovery doctor --path <workspace-root>
+```
+
+Only move into session or branch work when doctor reports `Status: ready`.
+
+## Auth
+
+Reuse existing Abel auth first. If doctor reports `auth_missing`, do not start
+live discovery yet. Use `abel-auth` or the handoff command shown by doctor, then
+rerun doctor.
+
+If the user explicitly asks for offline inspection, you may inspect existing
+artifacts without auth, but mark live discovery/evaluation as blocked until
+doctor is ready.
+
+## Workspace Rules
+
+- Keep research under the workspace `research/` directory.
+- Do not create a nested workspace when `alpha.workspace.yaml` already exists.
+- Do not create a standalone `causal-edge init` sidecar for this flow.
+- Use `workspace status` and `doctor` to inspect setup instead of guessing from
+  directory names.
+- Bootstrap creates the workspace and runtime base; branch-specific market data
+  is resolved later by `prepare-branch`.
+
+## Common Commands
+
+```bash
+abel-strategy-discovery workspace status --path <workspace-root>
+abel-strategy-discovery doctor --path <workspace-root>
+abel-strategy-discovery env init
+```
+
+Use `env init` only when doctor reports an environment or edge-runtime setup
+problem.

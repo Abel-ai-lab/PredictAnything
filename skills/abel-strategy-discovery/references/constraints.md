@@ -1,18 +1,18 @@
 # Runtime Legality And Safety
 
-The branch-default safety story is no longer "remember every possible
-`.shift(1)` rule by hand".
+Use this reference when writing `engine.py`, reading semantic preflight, or
+debugging runtime validity.
 
-The safety story is:
+The branch-default safety story is:
 
 - the system materializes the runtime world in `inputs/`
-- strategy code reads market data only through `DecisionContext`
-- strategy code emits next-position intent, not already-effective exposure
-- semantic preflight explains visibility or timing violations before a recorded round
+- strategy code reads market data through `DecisionContext`
+- strategy code emits next-position intent
+- semantic preflight explains visibility and timing violations before a
+  recorded round
 
 Any strategy that uses information it could not have seen at decision time is
-still invalid. What changes is where we place the burden: on the runtime
-contract first, not on a giant folklore checklist.
+invalid.
 
 ## Authoring Contract
 
@@ -33,8 +33,24 @@ Treat these files as runtime facts supplied by the system:
 - `inputs/context_guide.md`
 - `inputs/probe_samples.json`
 
-The strategy should not try to rediscover or override them in code. Inspect
-them, then write against the world they describe.
+The strategy should inspect them, then write against the world they describe.
+Do not rediscover or override them in `engine.py`.
+
+## Feedback Loop
+
+```bash
+abel-strategy-discovery prepare-branch --branch ...
+abel-strategy-discovery debug-branch --branch ...
+```
+
+After `prepare-branch`, inspect:
+
+- `inputs/context_guide.md`
+- `inputs/data_manifest.json`
+- `inputs/probe_samples.json`
+
+After `debug-branch`, read the semantic verdict, warnings, and sampled traces.
+Only then decide whether `run-branch` is warranted.
 
 ## What Not To Do
 
@@ -45,38 +61,16 @@ them, then write against the world they describe.
 - do not treat a suspiciously good backtest as valid before semantic preflight
   and execution semantics agree
 
-## Why This Replaces The Old Rule Folklore
-
-Sometimes the safe transformation really is a lag. Sometimes it is:
-
-- an as-of read onto the target calendar
-- a bounded point-in-time history window
-- a native feed interval between two timestamps
-- a walk-forward train/infer split
-
-The framework should help the agent express those legal reads directly instead
-of collapsing every situation into "add `.shift(1)` everywhere".
-
-## How To Use The Feedback Loop
-
-1. Run `abel-alpha prepare-branch --branch ...`.
-2. Inspect `context_guide.md`, `data_manifest.json`, and `probe_samples.json`.
-3. Edit `engine.py` against `DecisionContext`.
-4. Run `abel-alpha debug-branch --branch ...`.
-5. Read the semantic verdict, warnings, and sampled traces.
-6. Only then decide whether `run-branch` is warranted.
-
-## Static Checks
-
-Static and regex-style look-ahead checks may still exist as diagnostics, but
-they are not the main contract. Their job is to provide extra warning signals,
-not to define strategy legality by themselves.
-
 ## Common Failure Meanings
 
 - raw-helper error: the strategy tried to bypass `DecisionContext`
-- shape mismatch: `ctx.decisions(next_position)` received the wrong length or type
-- semantic blocker: the strategy assumptions about feed visibility or execution
+- shape mismatch: `ctx.decisions(next_position)` received the wrong length or
+  type
+- semantic blocker: strategy assumptions about feed visibility or execution
   timing do not match the runtime
 - clipped output: the strategy asked for positions outside declared execution
   constraints
+
+Static and regex-style look-ahead checks may exist as diagnostics, but they are
+not the main contract. Their job is to provide extra warning signals, not to
+define legality by themselves.
