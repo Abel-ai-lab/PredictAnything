@@ -1179,7 +1179,7 @@ def init_session_dir(
     if discover:
         try:
             discovery_data = fetch_live_discovery(ticker, limit=discover_limit)
-        except RuntimeError as exc:
+        except Exception as exc:
             discovery_error = str(exc)
         else:
             discovery_data["backtest"] = {"start": backtest_start}

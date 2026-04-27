@@ -189,6 +189,28 @@ def test_failed_live_discovery_attempt_stays_visible(tmp_path: Path, monkeypatch
     assert "discovery_error: auth missing for test" in output
 
 
+def test_unexpected_live_discovery_exception_stays_visible(tmp_path: Path, monkeypatch) -> None:
+    def _raise_discovery(*_args, **_kwargs):
+        raise Exception("404 Client Error: Not Found for url: https://cap.abel.ai/api/cap")
+
+    monkeypatch.setattr(ni, "fetch_live_discovery", _raise_discovery)
+
+    session = ni.init_session_dir(
+        "NFLX",
+        "frontier-v3f",
+        tmp_path / "research",
+        discover=True,
+    )
+
+    discovery_state = ni.load_discovery_state(session)
+    readme = (session / "README.md").read_text(encoding="utf-8")
+
+    assert discovery_state["status"] == "failed"
+    assert discovery_state["frontier_mode"] == "seed_only"
+    assert "404 Client Error" in discovery_state["error"]
+    assert "discovery_status: `failed`" in readme
+
+
 def test_probe_nodes_command_updates_frontier_availability(tmp_path: Path, monkeypatch) -> None:
     session = ni.init_session_dir("TSLA", "frontier-v4", tmp_path / "research")
     ni.write_discovery(session, _seed_discovery())
