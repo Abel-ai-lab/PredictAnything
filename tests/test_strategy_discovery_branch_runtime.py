@@ -1065,6 +1065,77 @@ def test_input_breadth_warning_marks_thin_candidate_driver_coverage(tmp_path) ->
     assert ni.input_breadth_warning_lines(session) == []
 
 
+def test_memory_checkpoint_requires_agent_authored_memory_after_evidence(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-memory-checkpoint", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    first_branch: Path | None = None
+    for index in range(6):
+        branch = ni.init_branch_dir(session, f"graph-{index + 1}")
+        first_branch = first_branch or branch
+        spec = _complete_candidate_spec(branch, selected_drivers=["AAPL"])
+        _record_synthetic_round(
+            session,
+            branch,
+            spec=spec,
+            result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+            round_id="round-001",
+            decision="discard",
+        )
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+
+    assert frontier["memory_checkpoint"]["memory_checkpoint_due"] is True
+    assert frontier["memory_checkpoint"]["memory_checkpoint_reason"] == "recorded_round_minimum"
+    assert "memory_checkpoint_due: `true`" in context_text
+    assert ni.memory_checkpoint_warning_lines(session) == [
+        "memory_checkpoint_due=true "
+        "agent_memory_records=0 "
+        "reason=recorded_round_minimum "
+        "required_action=agent_authored_memory_with_evidence_ref"
+    ]
+
+    assert first_branch is not None
+    ni.record_agent_memory(
+        Namespace(
+            session="",
+            branch=str(first_branch),
+            scope="session",
+            type="insight",
+            text="AAPL-only graph attempts have not produced a passing candidate yet.",
+            confidence="medium",
+            status="active",
+            round_id="round-001",
+            evidence_ref=["ledger:graph-1:round-001"],
+        )
+    )
+
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    assert frontier["memory_checkpoint"]["agent_memory_records"] == 1
+    assert frontier["memory_checkpoint"]["memory_checkpoint_due"] is False
+    assert frontier["memory_checkpoint"]["memory_reference_gap_count"] == 0
+    assert ni.memory_checkpoint_warning_lines(session) == []
+
+    ni.record_agent_memory(
+        Namespace(
+            session="",
+            branch=str(first_branch),
+            scope="session",
+            type="insight",
+            text="This note intentionally lacks a supporting evidence reference.",
+            confidence="low",
+            status="active",
+            round_id="",
+            evidence_ref=[],
+        )
+    )
+
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    assert frontier["memory_checkpoint"]["memory_reference_gap_count"] == 1
+
+
 def test_debug_rows_do_not_cross_initial_breadth_threshold(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-breadth-debug", tmp_path / "research")
     ni.write_discovery(session, _sample_discovery())
