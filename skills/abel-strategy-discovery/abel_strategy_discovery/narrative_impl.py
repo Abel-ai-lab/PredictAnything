@@ -1293,11 +1293,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     target = str(branch_spec.get("target") or discovery.get("ticker") or "").strip().upper()
     if not target:
         raise RuntimeError("Branch spec is missing a target ticker.")
-    selected_drivers = [
-        str(item).strip().upper()
-        for item in (branch_spec.get("selected_drivers") or [])
-        if str(item).strip()
-    ]
+    selected_drivers = branch_selected_inputs(branch_spec)
     symbols = [target]
     for ticker in selected_drivers:
         if ticker not in symbols:
@@ -2697,7 +2693,10 @@ def build_evidence_ledger(session: Path, discovery: dict, branches: list[dict]) 
 
 
 def write_frontier(session: Path, ledger: dict) -> dict:
-    frontier = build_frontier(ledger)
+    frontier = build_frontier(
+        ledger,
+        agent_memory_count=len(load_agent_memory_records(session)),
+    )
     write_json_file(session / FRONTIER_JSON_FILENAME, frontier)
     (session / FRONTIER_MARKDOWN_FILENAME).write_text(
         render_frontier_markdown(frontier),
@@ -2706,36 +2705,63 @@ def write_frontier(session: Path, ledger: dict) -> dict:
     return frontier
 
 
-def build_frontier(ledger: dict) -> dict:
+def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
     rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
     label_counts: dict[str, int] = {}
+    label_verdict_counts: dict[str, dict[str, int]] = {}
+    label_decision_counts: dict[str, dict[str, int]] = {}
     mechanism_counts: dict[str, int] = {}
     intent_counts: dict[str, int] = {}
     input_claim_counts: dict[str, int] = {}
     window_counts: dict[str, int] = {}
+    metric_failure_counts: dict[str, int] = {}
+    branch_counts: dict[str, int] = {}
+    driver_set_counts: dict[str, int] = {}
     driver_reads: set[str] = set()
     protocol_complete = 0
     comparable_candidates = 0
     comparable_controls = 0
+    candidate_pass = 0
+    candidate_fail = 0
+    candidate_other = 0
     for row in rows:
-        increment_count(label_counts, str(row.get("evidence_label") or "unknown"))
+        label = str(row.get("evidence_label") or "unknown")
+        verdict = str(row.get("verdict") or "unknown").upper()
+        decision = str(row.get("decision") or "unknown").lower()
+        increment_count(label_counts, label)
+        increment_nested_count(label_verdict_counts, label, verdict)
+        increment_nested_count(label_decision_counts, label, decision)
         increment_count(mechanism_counts, str(row.get("declared_mechanism_family") or "unknown"))
         increment_count(intent_counts, str(row.get("declared_evidence_intent") or "unknown"))
         increment_count(input_claim_counts, str(row.get("declared_input_claim") or "unknown"))
+        increment_count(branch_counts, str(row.get("branch_id") or "unknown"))
+        driver_set = canonical_driver_set_label(row)
+        increment_count(driver_set_counts, driver_set)
         if row.get("declaration_protocol_complete"):
             protocol_complete += 1
         for item in row.get("actual_auxiliary_reads") or []:
             value = str(item or "").strip().upper()
             if value:
                 driver_reads.add(value)
-        label = str(row.get("evidence_label") or "")
         if row.get("comparable") and label == "candidate_causal_evidence":
             comparable_candidates += 1
+            if verdict == "PASS":
+                candidate_pass += 1
+            elif verdict == "FAIL":
+                candidate_fail += 1
+            else:
+                candidate_other += 1
         if row.get("comparable") and label == "target_control_evidence":
             comparable_controls += 1
+        for metric in row.get("metric_failure_metrics") or []:
+            increment_count(metric_failure_counts, str(metric or "unknown"))
         result_ref = str(row.get("result_ref") or "").strip()
         if result_ref:
             increment_count(window_counts, str(row.get("runtime_stage") or "unknown"))
+    dominant_branch, dominant_branch_count = dominant_count(branch_counts)
+    dominant_mechanism, dominant_mechanism_count = dominant_count(mechanism_counts)
+    dominant_input, dominant_input_count = dominant_count(input_claim_counts)
+    dominant_driver_set, dominant_driver_set_count = dominant_count(driver_set_counts)
     return {
         "schema_version": 1,
         "exp_id": ledger.get("exp_id", ""),
@@ -2743,6 +2769,8 @@ def build_frontier(ledger: dict) -> dict:
         "generated_at": _now(),
         "row_count": len(rows),
         "evidence_label_counts": dict(sorted(label_counts.items())),
+        "evidence_label_verdict_counts": sort_nested_counts(label_verdict_counts),
+        "evidence_label_decision_counts": sort_nested_counts(label_decision_counts),
         "hypothesis_coverage": {
             "protocol_complete": protocol_complete,
             "protocol_incomplete": len(rows) - protocol_complete,
@@ -2750,6 +2778,13 @@ def build_frontier(ledger: dict) -> dict:
         "mechanism_family_counts": dict(sorted(mechanism_counts.items())),
         "evidence_intent_counts": dict(sorted(intent_counts.items())),
         "input_claim_counts": dict(sorted(input_claim_counts.items())),
+        "metric_failure_counts": dict(sorted(metric_failure_counts.items())),
+        "candidate_causal_summary": {
+            "rows": label_counts.get("candidate_causal_evidence", 0),
+            "validation_pass": candidate_pass,
+            "validation_fail": candidate_fail,
+            "validation_other": candidate_other,
+        },
         "driver_read_count": len(driver_reads),
         "driver_reads": sorted(driver_reads),
         "workflow_blockers": label_counts.get("workflow_blocker", 0),
@@ -2759,6 +2794,23 @@ def build_frontier(ledger: dict) -> dict:
             "candidate_causal_evidence": comparable_candidates,
             "target_control_evidence": comparable_controls,
         },
+        "coverage_concentration": {
+            "branch_count": len(branch_counts),
+            "max_rounds_in_one_branch": dominant_branch_count,
+            "dominant_branch": dominant_branch,
+            "dominant_mechanism_family": dominant_mechanism,
+            "dominant_mechanism_family_count": dominant_mechanism_count,
+            "dominant_mechanism_family_share": fraction_pair(dominant_mechanism_count, len(rows)),
+            "dominant_input_claim": dominant_input,
+            "dominant_input_claim_count": dominant_input_count,
+            "dominant_input_claim_share": fraction_pair(dominant_input_count, len(rows)),
+            "dominant_driver_set": dominant_driver_set,
+            "dominant_driver_set_count": dominant_driver_set_count,
+            "dominant_driver_set_share": fraction_pair(dominant_driver_set_count, len(rows)),
+            "target_control_evidence": label_counts.get("target_control_evidence", 0),
+            "comparable_controls": comparable_controls,
+            "agent_memory_records": int(agent_memory_count),
+        },
     }
 
 
@@ -2767,13 +2819,53 @@ def increment_count(counter: dict[str, int], key: str) -> None:
     counter[normalized] = counter.get(normalized, 0) + 1
 
 
+def increment_nested_count(counter: dict[str, dict[str, int]], outer: str, inner: str) -> None:
+    outer_key = outer.strip() or "unknown"
+    inner_key = inner.strip() or "unknown"
+    bucket = counter.setdefault(outer_key, {})
+    bucket[inner_key] = bucket.get(inner_key, 0) + 1
+
+
+def sort_nested_counts(counter: dict[str, dict[str, int]]) -> dict[str, dict[str, int]]:
+    return {
+        key: dict(sorted(value.items()))
+        for key, value in sorted(counter.items())
+    }
+
+
+def dominant_count(counter: dict[str, int]) -> tuple[str, int]:
+    if not counter:
+        return "none", 0
+    key, value = max(sorted(counter.items()), key=lambda item: item[1])
+    return key, value
+
+
+def fraction_pair(count: int, total: int) -> str:
+    return f"{count}/{total}" if total else "0/0"
+
+
+def canonical_driver_set_label(row: dict) -> str:
+    values = row.get("declared_selected_inputs") or row.get("actual_auxiliary_reads") or []
+    selected = ordered_unique_upper(values if isinstance(values, list) else [])
+    if selected:
+        return ",".join(selected)
+    if str(row.get("declared_input_claim") or "") == "target_only":
+        return "target_only"
+    return "none"
+
+
 def render_frontier_markdown(frontier: dict) -> str:
     labels = render_count_lines(frontier.get("evidence_label_counts") or {})
+    label_verdicts = render_nested_count_lines(frontier.get("evidence_label_verdict_counts") or {})
+    label_decisions = render_nested_count_lines(frontier.get("evidence_label_decision_counts") or {})
     mechanisms = render_count_lines(frontier.get("mechanism_family_counts") or {})
     input_claims = render_count_lines(frontier.get("input_claim_counts") or {})
+    metric_failures = render_count_lines(frontier.get("metric_failure_counts") or {})
     runtime_stages = render_count_lines(frontier.get("runtime_stage_counts") or {})
     comparable = frontier.get("comparable_availability") or {}
     hypothesis = frontier.get("hypothesis_coverage") or {}
+    candidate = frontier.get("candidate_causal_summary") or {}
+    concentration = frontier.get("coverage_concentration") or {}
     return f"""# Evidence Frontier
 
 generated by Abel strategy discovery narrative layer
@@ -2788,6 +2880,21 @@ generated by Abel strategy discovery narrative layer
 
 {labels}
 
+## Verdict Cross Sections
+
+{label_verdicts}
+
+## Decision Cross Sections
+
+{label_decisions}
+
+## Candidate Causal Summary
+
+- rows: `{candidate.get("rows", 0)}`
+- validation_pass: `{candidate.get("validation_pass", 0)}`
+- validation_fail: `{candidate.get("validation_fail", 0)}`
+- validation_other: `{candidate.get("validation_other", 0)}`
+
 ## Declaration Coverage
 
 - protocol_complete: `{hypothesis.get("protocol_complete", 0)}`
@@ -2800,6 +2907,22 @@ generated by Abel strategy discovery narrative layer
 ## Input Claims
 
 {input_claims}
+
+## Metric Failure Facts
+
+{metric_failures}
+
+## Coverage Concentration
+
+- branch_count: `{concentration.get("branch_count", 0)}`
+- max_rounds_in_one_branch: `{concentration.get("max_rounds_in_one_branch", 0)}`
+- dominant_branch: `{concentration.get("dominant_branch", "none")}`
+- dominant_mechanism_family: `{concentration.get("dominant_mechanism_family", "none")}` (`{concentration.get("dominant_mechanism_family_share", "0/0")}`)
+- dominant_input_claim: `{concentration.get("dominant_input_claim", "none")}` (`{concentration.get("dominant_input_claim_share", "0/0")}`)
+- dominant_driver_set: `{concentration.get("dominant_driver_set", "none")}` (`{concentration.get("dominant_driver_set_share", "0/0")}`)
+- target_control_evidence: `{concentration.get("target_control_evidence", 0)}`
+- comparable_controls: `{concentration.get("comparable_controls", 0)}`
+- agent_memory_records: `{concentration.get("agent_memory_records", 0)}`
 
 ## Runtime Reads
 
@@ -2823,22 +2946,42 @@ def render_count_lines(counts: dict) -> str:
     return "\n".join(f"- {key}: `{value}`" for key, value in sorted(counts.items()))
 
 
+def render_nested_count_lines(counts: dict) -> str:
+    if not counts:
+        return "- none"
+    lines = []
+    for outer, inner_counts in sorted(counts.items()):
+        if not isinstance(inner_counts, dict) or not inner_counts:
+            lines.append(f"- {outer}: `0`")
+            continue
+        for inner, value in sorted(inner_counts.items()):
+            lines.append(f"- {outer}.{inner}: `{value}`")
+    return "\n".join(lines)
+
+
 def render_session_frontier_summary(frontier: dict) -> str:
     if not frontier:
         return "- evidence_frontier: `not generated`"
     labels = frontier.get("evidence_label_counts") or {}
     comparable = frontier.get("comparable_availability") or {}
     hypothesis = frontier.get("hypothesis_coverage") or {}
+    candidate = frontier.get("candidate_causal_summary") or {}
+    concentration = frontier.get("coverage_concentration") or {}
     return "\n".join(
         [
             f"- evidence_rows: `{frontier.get('row_count', 0)}`",
             f"- protocol_complete: `{hypothesis.get('protocol_complete', 0)}`",
             f"- protocol_incomplete: `{hypothesis.get('protocol_incomplete', 0)}`",
             f"- candidate_causal_evidence: `{labels.get('candidate_causal_evidence', 0)}`",
+            f"- candidate_causal_pass: `{candidate.get('validation_pass', 0)}`",
+            f"- candidate_causal_fail: `{candidate.get('validation_fail', 0)}`",
             f"- target_control_evidence: `{labels.get('target_control_evidence', 0)}`",
             f"- workflow_blockers: `{frontier.get('workflow_blockers', 0)}`",
             f"- comparable_candidates: `{comparable.get('candidate_causal_evidence', 0)}`",
             f"- comparable_controls: `{comparable.get('target_control_evidence', 0)}`",
+            f"- dominant_mechanism_family: `{concentration.get('dominant_mechanism_family', 'none')}` (`{concentration.get('dominant_mechanism_family_share', '0/0')}`)",
+            f"- dominant_driver_set: `{concentration.get('dominant_driver_set', 'none')}` (`{concentration.get('dominant_driver_set_share', '0/0')}`)",
+            f"- agent_memory_records: `{concentration.get('agent_memory_records', 0)}`",
         ]
     )
 
@@ -2878,6 +3021,10 @@ generated by Abel strategy discovery narrative layer
 
 {render_session_frontier_summary(frontier)}
 
+## Resume State Facts
+
+{render_resume_state_facts(records, session=session, ledger=ledger, frontier=frontier)}
+
 ## Recent Evidence Rows
 
 {render_agent_context_evidence_rows(recent_rows)}
@@ -2899,6 +3046,41 @@ generated by Abel strategy discovery narrative layer
 """
 
 
+def render_resume_state_facts(
+    records: list[dict[str, object]],
+    *,
+    session: Path,
+    ledger: dict,
+    frontier: dict,
+) -> str:
+    unresolved = sum(
+        1
+        for record in records
+        if memory_reference_status(record, session=session, ledger=ledger, frontier=frontier)
+        == "unresolved_reference"
+    )
+    closed_directions = sum(
+        1
+        for record in records
+        if record.get("type") in {"open_direction", "closed_direction"}
+        and str(record.get("status") or "") in {"closed", "superseded"}
+    )
+    open_questions = sum(
+        1
+        for record in records
+        if record.get("type") == "open_question"
+        and str(record.get("status") or "active") not in {"closed", "superseded"}
+    )
+    return "\n".join(
+        [
+            f"- agent_memory_records: `{len(records)}`",
+            f"- unresolved_memory_references: `{unresolved}`",
+            f"- closed_directions: `{closed_directions}`",
+            f"- open_questions: `{open_questions}`",
+        ]
+    )
+
+
 def render_agent_context_evidence_rows(rows: list[dict]) -> str:
     if not rows:
         return "- none"
@@ -2908,6 +3090,8 @@ def render_agent_context_evidence_rows(rows: list[dict]) -> str:
             "- "
             f"`ledger:{row.get('branch_id', '')}:{row.get('round_id') or row.get('run_id', '')}` "
             f"label=`{row.get('evidence_label', 'unknown')}` "
+            f"verdict=`{row.get('verdict', 'unknown')}` "
+            f"decision=`{row.get('decision', 'unknown')}` "
             f"intent=`{row.get('declared_evidence_intent', 'unknown')}` "
             f"input=`{row.get('declared_input_claim', 'unknown')}` "
             f"workflow=`{row.get('workflow_status', 'unknown')}`"
@@ -3022,6 +3206,8 @@ def build_evidence_row(
         "run_id": run_id,
         "run_type": run_type,
         "round_id": run_id if run_type == "round" else "",
+        "declared_mode": row.get("mode", run_type),
+        "decision": row.get("decision", ""),
         "declaration_protocol_complete": bool(declaration["protocol_complete"]),
         "declaration_gaps": list(declaration["protocol_gaps"]),
         "declared_evidence_intent": declaration["evidence_intent"],
@@ -3031,11 +3217,15 @@ def build_evidence_row(
         "engine_scaffold_status": engine_scaffold_status or "unknown",
         "actual_auxiliary_reads": runtime["auxiliary_reads"],
         "actual_read_count": runtime["read_count"],
+        "prepared_selected_inputs": runtime["prepared_selected_inputs"],
+        "prepared_traced_inputs": runtime["prepared_traced_inputs"],
         "runtime_stage": runtime["runtime_stage"],
         "workflow_status": workflow_status,
         "validation_status": "completed" if validation_completed else "not_completed",
         "verdict": runtime["verdict"],
         "semantic_verdict": runtime["semantic_verdict"],
+        "metric_failure_metrics": runtime["metric_failure_metrics"],
+        "metric_failures": runtime["metric_failures"],
         "evidence_label": label,
         "comparable": comparable,
         "comparable_reason": comparable_reason,
@@ -3081,19 +3271,35 @@ def evidence_runtime_facts(result: dict) -> dict[str, object]:
         else {}
     )
     if runtime_facts:
+        auxiliary_reads = sorted(
+            {
+                str(item).strip().upper()
+                for item in (read_summary.get("auxiliary_reads") or prepared_summary.get("traced_inputs") or [])
+                if str(item).strip()
+            }
+        )
+        prepared_selected = ordered_unique_upper(prepared_summary.get("selected_inputs") or [])
+        prepared_traced = ordered_unique_upper(prepared_summary.get("traced_inputs") or auxiliary_reads)
+        metric_failures = [
+            item
+            for item in (runtime_facts.get("metric_failures") or [])
+            if isinstance(item, dict)
+        ]
         return {
             "verdict": str(runtime_facts.get("verdict") or "missing").upper(),
-        "semantic_verdict": str(runtime_facts.get("semantic_verdict") or "missing").upper(),
-        "runtime_stage": str(runtime_facts.get("runtime_stage") or "missing"),
-        "workflow_status": str(runtime_facts.get("workflow_status") or "not_completed"),
-        "failure_signature": str(runtime_facts.get("failure_signature") or "missing"),
+            "semantic_verdict": str(runtime_facts.get("semantic_verdict") or "missing").upper(),
+            "runtime_stage": str(runtime_facts.get("runtime_stage") or "missing"),
+            "workflow_status": str(runtime_facts.get("workflow_status") or "not_completed"),
+            "failure_signature": str(runtime_facts.get("failure_signature") or "missing"),
             "read_count": int(read_summary.get("read_count") or 0),
-            "auxiliary_reads": sorted(
-                {
-                    str(item).strip().upper()
-                    for item in (read_summary.get("auxiliary_reads") or prepared_summary.get("traced_inputs") or [])
-                    if str(item).strip()
-                }
+            "auxiliary_reads": auxiliary_reads,
+            "prepared_selected_inputs": prepared_selected,
+            "prepared_traced_inputs": prepared_traced,
+            "metric_failures": metric_failures,
+            "metric_failure_metrics": ordered_unique_strings(
+                str(item.get("metric") or "").strip()
+                for item in metric_failures
+                if str(item.get("metric") or "").strip()
             ),
             "prepared_issue_kinds": [
                 str(item).strip()
@@ -3118,6 +3324,11 @@ def evidence_runtime_facts(result: dict) -> dict[str, object]:
     verdict = str(result.get("verdict") or "missing").upper()
     runtime_stage = str(diagnostics.get("runtime_stage") or "missing")
     validation_completed = runtime_stage == "validation" and verdict in {"PASS", "FAIL"}
+    metric_failures = [
+        item
+        for item in (result.get("metric_failures") or diagnostics.get("metric_failures") or [])
+        if isinstance(item, dict)
+    ]
     return {
         "verdict": verdict,
         "semantic_verdict": str(semantic.get("verdict") or "missing").upper(),
@@ -3126,6 +3337,14 @@ def evidence_runtime_facts(result: dict) -> dict[str, object]:
         "failure_signature": str(diagnostics.get("failure_signature") or "missing"),
         "read_count": int(semantic.get("read_count") or 0),
         "auxiliary_reads": sorted(set(auxiliary_reads)),
+        "prepared_selected_inputs": ordered_unique_upper(prepared.get("selected_inputs") or []),
+        "prepared_traced_inputs": ordered_unique_upper(prepared.get("traced_inputs") or auxiliary_reads),
+        "metric_failures": metric_failures,
+        "metric_failure_metrics": ordered_unique_strings(
+            str(item.get("metric") or "").strip()
+            for item in metric_failures
+            if str(item.get("metric") or "").strip()
+        ),
         "prepared_issue_kinds": [
             str(item.get("kind") or "").strip()
             for item in issues
@@ -3693,6 +3912,8 @@ def build_branch_context(
     dependencies = {}
     if dependencies_path(branch).exists():
         dependencies = json.loads(dependencies_path(branch).read_text(encoding="utf-8"))
+    if isinstance(dependencies, dict):
+        dependencies = canonicalize_dependencies_payload(dependencies)
     runtime_profile = build_runtime_profile_payload(
         target=str(branch_spec.get("target") or discovery.get("ticker") or "").strip().upper()
     )
@@ -3705,16 +3926,13 @@ def build_branch_context(
         )
     data_manifest = build_data_manifest_payload(
         target=str(runtime_profile.get("target") or discovery.get("ticker") or "").strip().upper(),
-        selected_drivers=[
-            str(item).strip().upper()
-            for item in (branch_spec.get("selected_drivers") or [])
-            if str(item).strip()
-        ],
+        selected_drivers=branch_selected_inputs(branch_spec),
         cache_payload=(dependencies.get("cache") or {}) if isinstance(dependencies, dict) else {},
         readiness=readiness,
     )
     if data_manifest_path(branch).exists():
         data_manifest = json.loads(data_manifest_path(branch).read_text(encoding="utf-8"))
+    data_manifest = canonicalize_data_manifest_payload(data_manifest)
     cache = dependencies.get("cache") if isinstance(dependencies, dict) else {}
     primary_feed = {
         "name": "primary",
@@ -3954,12 +4172,29 @@ def branch_selected_inputs(branch_spec: dict) -> list[str]:
         raw = branch_spec.get("selected_drivers")
     if not isinstance(raw, list):
         return []
+    return ordered_unique_upper(raw)
+
+
+def ordered_unique_upper(values) -> list[str]:
+    return ordered_unique_strings(str(item or "").strip().upper() for item in values)
+
+
+def ordered_unique_strings(values) -> list[str]:
     selected: list[str] = []
-    for item in raw:
-        value = str(item or "").strip().upper()
+    for item in values:
+        value = str(item or "").strip()
         if value and value not in selected:
             selected.append(value)
     return selected
+
+
+def canonicalize_branch_spec_inputs(payload: dict) -> dict:
+    branch_spec = dict(payload)
+    selected = branch_selected_inputs(branch_spec)
+    if selected or "selected_inputs" in branch_spec or "selected_drivers" in branch_spec:
+        branch_spec["selected_inputs"] = selected
+        branch_spec["selected_drivers"] = selected
+    return branch_spec
 
 
 def branch_declaration_status(branch_spec: dict) -> dict[str, object]:
@@ -4015,10 +4250,11 @@ def load_branch_spec(branch: Path) -> dict:
     if not path.exists():
         return {}
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return payload if isinstance(payload, dict) else {}
+    return canonicalize_branch_spec_inputs(payload) if isinstance(payload, dict) else {}
 
 
 def write_branch_spec(branch: Path, payload: dict) -> None:
+    payload = canonicalize_branch_spec_inputs(payload)
     branch_spec_path(branch).write_text(
         yaml.safe_dump(payload, sort_keys=False, allow_unicode=False),
         encoding="utf-8",
@@ -4083,16 +4319,30 @@ def branch_dependencies_payload(
     selected_drivers: list[str],
     requested_start: str,
 ) -> dict:
+    selected_drivers = ordered_unique_upper(selected_drivers)
     return {
         "version": 1,
         "branch_id": branch.name,
         "target": target,
+        "selected_inputs": selected_drivers,
         "selected_drivers": selected_drivers,
         "requested_start": requested_start,
         "overlap_mode": branch_spec.get("overlap_mode") or "target_only",
         "data_requirements": branch_spec.get("data_requirements") or {"timeframe": "1d"},
         "prepared_at": _now(),
     }
+
+
+def canonicalize_dependencies_payload(payload: dict) -> dict:
+    dependencies = dict(payload)
+    raw = dependencies.get("selected_inputs")
+    if raw is None or raw == []:
+        raw = dependencies.get("selected_drivers") or []
+    selected = ordered_unique_upper(raw if isinstance(raw, list) else [])
+    if selected or "selected_inputs" in dependencies or "selected_drivers" in dependencies:
+        dependencies["selected_inputs"] = selected
+        dependencies["selected_drivers"] = selected
+    return dependencies
 
 
 def build_runtime_profile_payload(*, target: str) -> dict:
@@ -4120,6 +4370,7 @@ def build_data_manifest_payload(
     cache_payload: dict,
     readiness: dict,
 ) -> dict:
+    selected_drivers = ordered_unique_upper(selected_drivers)
     cache_results = {
         str(item.get("symbol") or "").strip().upper(): item
         for item in (cache_payload.get("results") or [])
@@ -4158,9 +4409,39 @@ def build_data_manifest_payload(
     return {
         "version": 1,
         "target": target,
+        "selected_inputs": selected_drivers,
         "selected_drivers": selected_drivers,
         "feeds": feeds,
     }
+
+
+def canonicalize_data_manifest_payload(payload: dict) -> dict:
+    manifest = dict(payload)
+    raw_selected = manifest.get("selected_inputs")
+    if raw_selected is None or raw_selected == []:
+        raw_selected = manifest.get("selected_drivers") or []
+    selected = ordered_unique_upper(raw_selected if isinstance(raw_selected, list) else [])
+    feeds: list[dict[str, object]] = []
+    seen_feeds: set[str] = set()
+    for item in manifest.get("feeds") or []:
+        if not isinstance(item, dict):
+            continue
+        feed = dict(item)
+        symbol = str(feed.get("symbol") or "").strip().upper()
+        name = str(feed.get("name") or symbol or "").strip()
+        key = name or symbol
+        if not key or key in seen_feeds:
+            continue
+        if symbol:
+            feed["symbol"] = symbol
+        if name:
+            feed["name"] = name
+        feeds.append(feed)
+        seen_feeds.add(key)
+    manifest["selected_inputs"] = selected
+    manifest["selected_drivers"] = selected
+    manifest["feeds"] = feeds
+    return manifest
 
 
 def build_probe_samples_payload(

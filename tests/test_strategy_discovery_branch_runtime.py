@@ -161,11 +161,12 @@ def _edge_result(
     traced_inputs: list[str] | None = None,
     verdict: str = "PASS",
     sharpe: float = 1.2,
+    metric_failures: list[dict] | None = None,
 ) -> dict:
     return {
         "verdict": verdict,
         "score": "7/7" if verdict == "PASS" else "3/7",
-        "failures": [],
+        "failures": [item.get("message", "") for item in (metric_failures or []) if item.get("message")],
         "warnings": [],
         "profile": "equity_daily",
         "K": 1,
@@ -184,6 +185,28 @@ def _edge_result(
             "runtime_stage": "validation",
             "signal": {"active_days": 120, "total_days": 252},
             "hints": [],
+            "metric_failures": metric_failures or [],
+        },
+        "runtime_facts": {
+            "contract": "causal-edge.runtime-facts/v1",
+            "verdict": verdict,
+            "semantic_verdict": "PASS",
+            "runtime_stage": "validation",
+            "workflow_status": "evaluation_completed",
+            "read_summary": {
+                "target_reads": ["primary"],
+                "auxiliary_reads": traced_inputs or [],
+                "read_count": 3,
+                "decision_count": 120,
+            },
+            "metric_failures": metric_failures or [],
+            "prepared_inputs": {
+                "selected_inputs": ["AAPL", "MSFT"],
+                "traced_inputs": traced_inputs or [],
+                "effective_window": {"start": "2020-01-01", "end": "2020-12-31"},
+                "issues": [],
+            },
+            "temporal_visibility": {"issue_kinds": [], "has_error": False},
         },
         "semantic": {
             "verdict": "PASS",
@@ -204,13 +227,14 @@ def _record_synthetic_round(
     *,
     spec: dict,
     result: dict,
+    round_id: str = "round-001",
+    decision: str = "keep",
     result_path_override: str | None = None,
 ) -> None:
     ni.write_branch_spec(branch, spec)
     metrics = result.get("metrics", {})
     outputs = branch / "outputs"
     outputs.mkdir(exist_ok=True)
-    round_id = "round-001"
     result_path = outputs / f"{round_id}-edge-result.json"
     report_path = outputs / f"{round_id}-edge-validation.md"
     handoff_path = outputs / f"{round_id}-edge-handoff.json"
@@ -228,7 +252,7 @@ def _record_synthetic_round(
             branch_id=branch.name,
             round_id=round_id,
             mode="explore",
-            decision="keep",
+            decision=decision,
             description="synthetic evidence run",
             result=result,
             backtest_start="2020-01-01",
@@ -256,8 +280,8 @@ def _record_synthetic_round(
             "exp_id": session.name,
             "ticker": "TSLA",
             "branch_id": branch.name,
-            "round_id": round_id,
-            "decision": "keep",
+                "round_id": round_id,
+                "decision": decision,
             "lo_adj": "1.500",
             "ic": "0.0200",
             "omega": "1.300",
@@ -315,7 +339,7 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
     spec = ni.load_branch_spec(branch)
     spec["target"] = "TSLA"
     spec["requested_start"] = "2020-01-01"
-    spec["selected_drivers"] = ["AAPL", "MSFT"]
+    spec["selected_drivers"] = ["AAPL", "MSFT", "AAPL", "msft"]
     spec["position_bounds"] = [-1.0, 1.0]
     ni.write_branch_spec(branch, spec)
 
@@ -372,11 +396,19 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
     assert ni.branch_inputs_ready(branch)
 
     runtime_profile = json.loads(ni.runtime_profile_path(branch).read_text(encoding="utf-8"))
+    branch_spec = ni.load_branch_spec(branch)
+    dependencies = json.loads(ni.dependencies_path(branch).read_text(encoding="utf-8"))
     data_manifest = json.loads(ni.data_manifest_path(branch).read_text(encoding="utf-8"))
     probe_samples = json.loads(ni.probe_samples_path(branch).read_text(encoding="utf-8"))
     context_guide = ni.context_guide_path(branch).read_text(encoding="utf-8")
 
     assert runtime_profile["target"] == "TSLA"
+    assert branch_spec["selected_inputs"] == ["AAPL", "MSFT"]
+    assert branch_spec["selected_drivers"] == ["AAPL", "MSFT"]
+    assert dependencies["selected_inputs"] == ["AAPL", "MSFT"]
+    assert dependencies["selected_drivers"] == ["AAPL", "MSFT"]
+    assert data_manifest["selected_inputs"] == ["AAPL", "MSFT"]
+    assert data_manifest["selected_drivers"] == ["AAPL", "MSFT"]
     assert [feed["name"] for feed in data_manifest["feeds"]] == ["primary", "AAPL", "MSFT"]
     assert probe_samples["target"] == "TSLA"
     assert len(probe_samples["sample_decision_dates"]) >= 2
@@ -650,6 +682,73 @@ def test_frontier_reports_coverage_without_route_recommendation(tmp_path) -> Non
     assert not any(term in frontier_text.lower() for term in forbidden)
     assert "## Next Step" not in session_text
     assert "candidate_causal_evidence" in session_text
+
+
+def test_frontier_surfaces_candidate_failures_and_resume_facts(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-frontier-fail-facts", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL and MSFT risk appetite leads TSLA next-day returns.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "Driver reads vanish or validation stays negative.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["AAPL", "MSFT", "AAPL"],
+        }
+    )
+    metric_failure = {
+        "metric": "position_ic_stability",
+        "observed": 0.19,
+        "threshold": 0.55,
+        "comparison": "lt",
+        "profile": "equity_daily",
+        "message": "PositionIC stab 19% < 55%",
+    }
+    for index in range(6):
+        _record_synthetic_round(
+            session,
+            branch,
+            spec=spec,
+            result=_edge_result(
+                traced_inputs=["AAPL", "MSFT"],
+                verdict="FAIL",
+                sharpe=2.3,
+                metric_failures=[metric_failure],
+            ),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+        )
+
+    ni.render_session(session)
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    frontier_text = (session / ni.FRONTIER_MARKDOWN_FILENAME).read_text(encoding="utf-8")
+    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+
+    assert all(row["declared_selected_inputs"] == ["AAPL", "MSFT"] for row in ledger["rows"])
+    assert frontier["evidence_label_counts"]["candidate_causal_evidence"] == 6
+    assert frontier["evidence_label_verdict_counts"]["candidate_causal_evidence"]["FAIL"] == 6
+    assert frontier["evidence_label_decision_counts"]["candidate_causal_evidence"]["discard"] == 6
+    assert frontier["candidate_causal_summary"]["validation_fail"] == 6
+    assert frontier["metric_failure_counts"]["position_ic_stability"] == 6
+    concentration = frontier["coverage_concentration"]
+    assert concentration["branch_count"] == 1
+    assert concentration["max_rounds_in_one_branch"] == 6
+    assert concentration["dominant_mechanism_family"] == "driver_momentum"
+    assert concentration["dominant_driver_set"] == "AAPL,MSFT"
+    assert concentration["target_control_evidence"] == 0
+    assert concentration["agent_memory_records"] == 0
+    assert "candidate_causal_evidence.FAIL: `6`" in frontier_text
+    assert "## Resume State Facts" in context_text
+    assert "- agent_memory_records: `0`" in context_text
+    forbidden = ["try next", "recommend", "open a sibling", "switch mechanism"]
+    assert not any(term in frontier_text.lower() for term in forbidden)
+    assert not any(term in context_text.lower() for term in forbidden)
 
 
 def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_path) -> None:
