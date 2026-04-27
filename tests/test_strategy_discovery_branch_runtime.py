@@ -979,6 +979,100 @@ def test_journal_prose_without_refs_is_not_evidence_linked(tmp_path) -> None:
     assert status["recent_excerpt"] == "This direction feels too narrow."
 
 
+def test_pivot_checkpoint_catches_same_driver_set_concentration(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-pivot-same-driver", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    branch_a = ni.init_branch_dir(session, "momentum-parents")
+    branch_b = ni.init_branch_dir(session, "regime-parents")
+    spec_a = ni.load_branch_spec(branch_a)
+    spec_a.update(
+        {
+            "hypothesis": "AAPL and MSFT driver momentum leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "model_family": "rule_signal",
+            "complexity_class": "simple_signal",
+            "exploration_role": "candidate",
+            "invalidation_condition": "Driver reads disappear or validation fails repeatedly.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["AAPL", "MSFT"],
+        }
+    )
+    spec_b = ni.load_branch_spec(branch_b)
+    spec_b.update(
+        {
+            "hypothesis": "AAPL and MSFT driver regimes lead TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_regime",
+            "model_family": "tree_model",
+            "complexity_class": "regime",
+            "exploration_role": "candidate",
+            "invalidation_condition": "Driver reads disappear or validation fails repeatedly.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": ["AAPL", "MSFT"],
+        }
+    )
+
+    for index in range(5):
+        _record_synthetic_round(
+            session,
+            branch_a,
+            spec=spec_a,
+            result=_edge_result(traced_inputs=["AAPL", "MSFT"], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+            changed_dimensions=[] if index == 0 else ["window"],
+        )
+    _record_synthetic_round(
+        session,
+        branch_b,
+        spec=spec_b,
+        result=_edge_result(traced_inputs=["AAPL", "MSFT"], verdict="FAIL"),
+        decision="discard",
+    )
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+
+    assert frontier["graph_priority"]["graph_first_uncovered"] is False
+    assert frontier["exploration_breadth"]["branch_family_count"] == 2
+    checkpoint = frontier["pivot_checkpoint"]
+    assert checkpoint["pivot_checkpoint_due"] is True
+    assert checkpoint["candidate_driver_set_count"] == 1
+    assert checkpoint["dominant_failed_neighborhood_count"] == 5
+    assert checkpoint["pivot_checkpoint_reasons"] == [
+        "same_driver_set_concentration",
+        "graph_input_breadth_thin",
+        "local_refinement_concentration",
+        "candidate_failure_concentration",
+        "missing_evidence_linked_journal",
+    ]
+    assert "pivot_checkpoint_due: `true`" in context_text
+    assert ni.pivot_checkpoint_warning_lines(session) == [
+        "pivot_checkpoint_due=true "
+        "reasons=same_driver_set_concentration, graph_input_breadth_thin, "
+        "local_refinement_concentration, candidate_failure_concentration, "
+        "missing_evidence_linked_journal "
+        "required_action=update_research_journal_with_evidence_refs"
+    ]
+
+    (session / ni.RESEARCH_JOURNAL_FILENAME).write_text(
+        "# Research Journal\n\n## Notes\n\n"
+        "The parent-set neighborhood has six failed candidates; see "
+        "ledger:momentum-parents:round-005 before continuing local refinement.\n",
+        encoding="utf-8",
+    )
+    ni.render_session(session)
+    updated = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+
+    assert updated["pivot_checkpoint"]["pivot_checkpoint_due"] is True
+    assert "missing_evidence_linked_journal" not in updated["pivot_checkpoint"]["pivot_checkpoint_reasons"]
+    assert updated["pivot_checkpoint"]["journal_has_evidence_linked_update"] is True
+
+
 def test_exploration_breadth_marks_single_branch_local_refinement(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-breadth-local", tmp_path / "research")
     ni.write_discovery(session, _sample_discovery())
