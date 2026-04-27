@@ -574,7 +574,8 @@ def main() -> int:
             print("  discovery_source: pending (live discovery not run)")
         print("")
         print("From here:")
-        print(f"  abel-strategy-discovery init-branch --session {session} --branch-id graph-v1")
+        for line in render_breadth_first_start_lines(session):
+            print(f"  {line}")
         return 0
     if args.command == "set-backtest-start":
         session = resolve_workspace_arg_path(args.session)
@@ -893,7 +894,10 @@ def handle_env_command(args: argparse.Namespace) -> int:
     print("From here:")
     print("  abel-strategy-discovery doctor")
     print(f"  {default_activate_command()}")
-    print("  # once doctor is ready: init-session -> init-branch -> edit branch.yaml -> prepare-branch")
+    print(
+        "  # once doctor is ready: init-session -> create 2+ agent-chosen branch "
+        "families or record single-branch rationale -> prepare-branch"
+    )
     return 0
 
 
@@ -915,6 +919,16 @@ def resolve_session_root(root_arg: str | None) -> Path:
         manifest = load_workspace_manifest(workspace_root)
         return resolve_workspace_paths(workspace_root, manifest)["research_root"]
     return Path("research")
+
+
+def render_breadth_first_start_lines(session: Path) -> list[str]:
+    return [
+        "breadth-first start protocol:",
+        f"abel-strategy-discovery init-branch --session {session} --branch-id <family-a-branch>",
+        f"abel-strategy-discovery init-branch --session {session} --branch-id <family-b-branch>",
+        "edit each branch.yaml with agent-chosen hypothesis-family declarations before deep local refinement",
+        "or continue intentionally narrow by recording --single-branch-rationale on the recorded round",
+    ]
 
 
 def resolve_workspace_arg_path(value: str) -> Path:
@@ -1648,6 +1662,12 @@ def run_branch_round(args: argparse.Namespace) -> int:
         rows,
         args.hypothesis,
     )
+    for line in initial_breadth_pre_run_warning_lines(
+        session=session,
+        branch=branch,
+        pending_single_branch_rationale=getattr(args, "single_branch_rationale", ""),
+    ):
+        print(f"Exploration protocol: {line}", file=sys.stderr)
     result_path = branch / "outputs" / f"{round_id}-edge-result.json"
     report_path = branch / "outputs" / f"{round_id}-edge-validation.md"
     handoff_path = branch / "outputs" / f"{round_id}-edge-handoff.json"
@@ -2386,6 +2406,79 @@ def exploration_protocol_warning_lines(session: Path, branch_id: str, round_id: 
     return lines
 
 
+def initial_breadth_pre_run_warning_lines(
+    *,
+    session: Path,
+    branch: Path,
+    pending_single_branch_rationale: str = "",
+) -> list[str]:
+    state = pending_initial_breadth_state(
+        session=session,
+        branch=branch,
+        pending_single_branch_rationale=pending_single_branch_rationale,
+    )
+    if not state.get("initial_breadth_will_be_incomplete"):
+        return []
+    return [
+        "initial_breadth_will_be_incomplete=true "
+        f"recorded_rounds_in_branch={state.get('recorded_rounds_in_branch', 0)} "
+        f"pending_recorded_round_index={state.get('pending_recorded_round_index', 0)} "
+        f"branch_family_count={state.get('branch_family_count', 0)} "
+        f"single_branch_rationale_present={str(state.get('single_branch_rationale_present', False)).lower()} "
+        "protocol_exits=multiple_recorded_branch_families,single_branch_rationale_recorded"
+    ]
+
+
+def pending_initial_breadth_state(
+    *,
+    session: Path,
+    branch: Path,
+    pending_single_branch_rationale: str = "",
+) -> dict[str, object]:
+    discovery = load_discovery(session)
+    ledger = build_evidence_ledger(session, discovery, load_branches(session))
+    rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
+    round_rows = [row for row in rows if row.get("run_type") == "round"]
+    family_keys = {
+        branch_family_key(row)
+        for row in round_rows
+        if branch_family_key(row)
+    }
+    declaration = branch_declaration_status(load_branch_spec(branch))
+    pending_family = branch_family_key(
+        {
+            "declared_mechanism_family": declaration.get("mechanism_family"),
+            "declared_input_claim": declaration.get("input_claim"),
+            "declared_selected_inputs": declaration.get("selected_inputs"),
+            "declared_model_family": declaration.get("model_family"),
+            "declared_complexity_class": declaration.get("complexity_class"),
+            "declared_exploration_role": declaration.get("exploration_role"),
+        }
+    )
+    if pending_family:
+        family_keys.add(pending_family)
+    branch_id = branch.name
+    recorded_rounds_in_branch = sum(
+        1 for row in round_rows if str(row.get("branch_id") or "") == branch_id
+    )
+    single_branch_rationale_present = any(
+        bool(row.get("single_branch_rationale")) for row in round_rows
+    ) or bool(str(pending_single_branch_rationale or "").strip())
+    pending_recorded_round_index = recorded_rounds_in_branch + 1
+    initial_breadth_will_be_incomplete = (
+        pending_recorded_round_index > INITIAL_BREADTH_ROUND_THRESHOLD
+        and len(family_keys) < INITIAL_BRANCH_FAMILY_MINIMUM
+        and not single_branch_rationale_present
+    )
+    return {
+        "recorded_rounds_in_branch": recorded_rounds_in_branch,
+        "pending_recorded_round_index": pending_recorded_round_index,
+        "branch_family_count": len(family_keys),
+        "single_branch_rationale_present": single_branch_rationale_present,
+        "initial_breadth_will_be_incomplete": initial_breadth_will_be_incomplete,
+    }
+
+
 def select_leader(branches: list[dict]) -> dict | None:
     ranked = ranked_branches(branches)
     return ranked[0] if ranked else None
@@ -2832,9 +2925,11 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
     window_counts: dict[str, int] = {}
     metric_failure_counts: dict[str, int] = {}
     branch_counts: dict[str, int] = {}
+    recorded_branch_counts: dict[str, int] = {}
     driver_set_counts: dict[str, int] = {}
     branch_family_counts: dict[str, int] = {}
     neighborhood_counts: dict[str, int] = {}
+    recorded_neighborhood_counts: dict[str, int] = {}
     exploration_class_counts: dict[str, int] = {}
     model_family_counts: dict[str, int] = {}
     complexity_class_counts: dict[str, int] = {}
@@ -2860,7 +2955,9 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
         driver_set = canonical_driver_set_label(row)
         increment_count(driver_set_counts, driver_set)
         if row.get("run_type") == "round":
+            increment_count(recorded_branch_counts, str(row.get("branch_id") or "unknown"))
             increment_count(branch_family_counts, str(row.get("branch_family_key") or branch_family_key(row)))
+            increment_count(recorded_neighborhood_counts, str(row.get("exploration_neighborhood_key") or exploration_neighborhood_key(row)))
         increment_count(neighborhood_counts, str(row.get("exploration_neighborhood_key") or exploration_neighborhood_key(row)))
         increment_count(exploration_class_counts, str(row.get("derived_exploration_class") or "unknown"))
         increment_count(model_family_counts, str(row.get("declared_model_family") or "unspecified"))
@@ -2892,8 +2989,15 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
     dominant_input, dominant_input_count = dominant_count(input_claim_counts)
     dominant_driver_set, dominant_driver_set_count = dominant_count(driver_set_counts)
     dominant_neighborhood, dominant_neighborhood_count = dominant_count(neighborhood_counts)
-    same_branch_max_rounds = max(branch_counts.values(), default=0)
-    single_branch_rationale_present = any(bool(row.get("single_branch_rationale")) for row in rows)
+    dominant_recorded_neighborhood, dominant_recorded_neighborhood_count = dominant_count(recorded_neighborhood_counts)
+    same_branch_max_rounds = max(recorded_branch_counts.values(), default=0)
+    recorded_round_count = sum(recorded_branch_counts.values())
+    diagnostic_row_count = sum(1 for row in rows if row.get("run_type") != "round")
+    single_branch_rationale_present = any(
+        bool(row.get("single_branch_rationale"))
+        for row in rows
+        if row.get("run_type") == "round"
+    )
     initial_breadth_incomplete = (
         same_branch_max_rounds > INITIAL_BREADTH_ROUND_THRESHOLD
         and len(branch_family_counts) < INITIAL_BRANCH_FAMILY_MINIMUM
@@ -2957,12 +3061,16 @@ def build_frontier(ledger: dict, *, agent_memory_count: int = 0) -> dict:
         },
         "exploration_breadth": {
             "branch_count": len(branch_counts),
+            "recorded_round_count": recorded_round_count,
+            "diagnostic_row_count": diagnostic_row_count,
             "branch_family_count": len(branch_family_counts),
             "initial_breadth_incomplete": initial_breadth_incomplete,
             "single_branch_rationale_present": single_branch_rationale_present,
             "same_branch_max_rounds": same_branch_max_rounds,
-            "dominant_neighborhood": dominant_neighborhood,
-            "dominant_neighborhood_rows": dominant_neighborhood_count,
+            "dominant_neighborhood": dominant_recorded_neighborhood,
+            "dominant_neighborhood_rows": dominant_recorded_neighborhood_count,
+            "dominant_evidence_neighborhood": dominant_neighborhood,
+            "dominant_evidence_neighborhood_rows": dominant_neighborhood_count,
             "dominant_mechanism_family": dominant_mechanism,
             "dominant_mechanism_family_share": fraction_pair(dominant_mechanism_count, len(rows)),
             "dominant_driver_set": dominant_driver_set,
@@ -3095,6 +3203,8 @@ generated by Abel strategy discovery narrative layer
 ## Exploration Breadth
 
 - branch_count: `{exploration.get("branch_count", 0)}`
+- recorded_round_count: `{exploration.get("recorded_round_count", 0)}`
+- diagnostic_row_count: `{exploration.get("diagnostic_row_count", 0)}`
 - branch_family_count: `{exploration.get("branch_family_count", 0)}`
 - initial_breadth_incomplete: `{str(exploration.get("initial_breadth_incomplete", False)).lower()}`
 - single_branch_rationale_present: `{str(exploration.get("single_branch_rationale_present", False)).lower()}`
@@ -3227,6 +3337,10 @@ generated by Abel strategy discovery narrative layer
 
 {render_agent_context_exploration_breadth(frontier)}
 
+## Breadth Protocol State
+
+{render_agent_context_breadth_protocol_state(frontier)}
+
 ## Recent Evidence Rows
 
 {render_agent_context_evidence_rows(recent_rows)}
@@ -3256,6 +3370,7 @@ def render_agent_context_exploration_breadth(frontier: dict) -> str:
         [
             f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
             f"- initial_breadth_incomplete: `{str(exploration.get('initial_breadth_incomplete', False)).lower()}`",
+            f"- recorded_round_count: `{exploration.get('recorded_round_count', 0)}`",
             f"- same_branch_max_rounds: `{exploration.get('same_branch_max_rounds', 0)}`",
             f"- dominant_neighborhood_rows: `{exploration.get('dominant_neighborhood_rows', 0)}`",
             f"- model_family_counts: `{render_inline_counts(exploration.get('model_family_counts') or {})}`",
@@ -3263,6 +3378,20 @@ def render_agent_context_exploration_breadth(frontier: dict) -> str:
             f"- exploration_class_counts: `{render_inline_counts(exploration.get('exploration_class_counts') or {})}`",
             f"- continuation_rationale_required_count: `{exploration.get('continuation_rationale_required_count', 0)}`",
             f"- continuation_rationale_missing_count: `{exploration.get('continuation_rationale_missing_count', 0)}`",
+        ]
+    )
+
+
+def render_agent_context_breadth_protocol_state(frontier: dict) -> str:
+    exploration = frontier.get("exploration_breadth") or {}
+    if not exploration:
+        return "- not generated"
+    return "\n".join(
+        [
+            f"- initial_breadth_incomplete: `{str(exploration.get('initial_breadth_incomplete', False)).lower()}`",
+            f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
+            f"- recorded_rounds_in_dominant_branch: `{exploration.get('same_branch_max_rounds', 0)}`",
+            "- protocol_exits: `multiple_recorded_branch_families, single_branch_rationale_recorded`",
         ]
     )
 

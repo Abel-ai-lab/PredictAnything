@@ -67,11 +67,14 @@ model family, complexity class, or expansion probe. Local refinement means
 parameter, sizing, threshold, filter, window, or implementation work inside the
 same family.
 
-Before spending many rounds in one branch, either make more than one branch
-family visible or record why the single-branch start is intentional with
-`--single-branch-rationale`. After repeated same-neighborhood validation
-failures, use `--continuation-rationale` if continuing the branch still reflects
-your own research judgment.
+At session start, make at least two agent-chosen hypothesis families explicit
+before deep local refinement. The protocol exits for a narrow start are factual:
+multiple recorded branch families or an agent-authored
+`--single-branch-rationale`.
+
+After repeated same-neighborhood validation failures, use
+`--continuation-rationale` if continuing the branch still reflects your own
+research judgment.
 
 ## What `prepare-branch` Produces
 

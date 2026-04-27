@@ -307,6 +307,34 @@ def _record_synthetic_round(
     )
 
 
+def _complete_candidate_spec(
+    branch: Path,
+    *,
+    selected_drivers: list[str] | None = None,
+    mechanism_family: str = "driver_momentum",
+    model_family: str = "rule_signal",
+    complexity_class: str = "simple_signal",
+    exploration_role: str = "candidate",
+) -> dict:
+    selected = selected_drivers or ["AAPL"]
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": f"{', '.join(selected)} driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": mechanism_family,
+            "model_family": model_family,
+            "complexity_class": complexity_class,
+            "exploration_role": exploration_role,
+            "invalidation_condition": "Driver reads disappear or validation fails repeatedly.",
+            "requested_start": "2020-01-01",
+            "selected_drivers": selected,
+        }
+    )
+    return spec
+
+
 def test_evidence_runtime_facts_prefers_edge_contract() -> None:
     result = _edge_result(traced_inputs=[])
     result["runtime_facts"] = {
@@ -916,6 +944,110 @@ def test_second_branch_family_clears_initial_breadth_warning(tmp_path) -> None:
     assert frontier["exploration_breadth"]["branch_family_count"] == 2
     assert frontier["exploration_breadth"]["initial_breadth_incomplete"] is False
     assert frontier["exploration_breadth"]["model_family_counts"]["linear_model"] == 1
+
+
+def test_debug_rows_do_not_cross_initial_breadth_threshold(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-breadth-debug", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = _complete_candidate_spec(branch)
+    ni.write_branch_spec(branch, spec)
+    outputs = branch / "outputs"
+    outputs.mkdir(exist_ok=True)
+    debug_context = outputs / "debug-alpha-context.json"
+    debug_result = outputs / "debug-edge-result.json"
+    debug_context.write_text(json.dumps({"branch_spec": spec}, indent=2), encoding="utf-8")
+    debug_result.write_text(
+        json.dumps(_edge_result(traced_inputs=["AAPL"], verdict="PASS")),
+        encoding="utf-8",
+    )
+    ni.persist_debug_snapshot(
+        branch,
+        {
+            "updated_at": "2026-04-27T00:00:00+00:00",
+            "context_path": str(debug_context.relative_to(session)),
+            "result_path": str(debug_result.relative_to(session)),
+            "report_path": "",
+            "handoff_path": "",
+            "backtest_start": "2020-01-01",
+            "failure_signature": "healthy_signal",
+            "runtime_stage": "semantic_preflight",
+            "signal_activity": "120 / 252",
+            "summary": "debug pass",
+        },
+    )
+    for index in range(3):
+        _record_synthetic_round(
+            session,
+            branch,
+            spec=spec,
+            result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+        )
+
+    ni.render_session(session)
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    exploration = frontier["exploration_breadth"]
+
+    assert frontier["row_count"] == 4
+    assert exploration["recorded_round_count"] == 3
+    assert exploration["diagnostic_row_count"] == 1
+    assert exploration["same_branch_max_rounds"] == 3
+    assert exploration["branch_family_count"] == 1
+    assert exploration["initial_breadth_incomplete"] is False
+    assert exploration["dominant_neighborhood_rows"] == 3
+    assert exploration["dominant_evidence_neighborhood_rows"] == 4
+
+
+def test_pre_run_warning_before_fourth_same_branch_round(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-breadth-pre-run", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    spec = _complete_candidate_spec(branch)
+    ni.write_branch_spec(branch, spec)
+    for index in range(3):
+        _record_synthetic_round(
+            session,
+            branch,
+            spec=spec,
+            result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
+            round_id=f"round-{index + 1:03d}",
+            decision="discard",
+        )
+
+    lines = ni.initial_breadth_pre_run_warning_lines(
+        session=session,
+        branch=branch,
+        pending_single_branch_rationale="",
+    )
+    quiet_lines = ni.initial_breadth_pre_run_warning_lines(
+        session=session,
+        branch=branch,
+        pending_single_branch_rationale="Intentional narrow start for isolated protocol comparison.",
+    )
+
+    assert lines == [
+        "initial_breadth_will_be_incomplete=true "
+        "recorded_rounds_in_branch=3 "
+        "pending_recorded_round_index=4 "
+        "branch_family_count=1 "
+        "single_branch_rationale_present=false "
+        "protocol_exits=multiple_recorded_branch_families,single_branch_rationale_recorded"
+    ]
+    assert quiet_lines == []
+
+
+def test_init_session_output_uses_breadth_first_start_protocol() -> None:
+    lines = ni.render_breadth_first_start_lines(Path("research/tsla/demo"))
+    rendered = "\n".join(lines)
+
+    assert "<family-a-branch>" in rendered
+    assert "<family-b-branch>" in rendered
+    assert "graph-v1" not in rendered
+    assert "breadth-first start protocol" in rendered
 
 
 def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_path) -> None:

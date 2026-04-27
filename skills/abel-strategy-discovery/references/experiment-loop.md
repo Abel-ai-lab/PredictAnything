@@ -16,15 +16,18 @@ Do not decide that "the workspace does not exist" by checking only whether
 
 ```bash
 abel-alpha init-session --ticker <TICKER> --exp-id <exp-id> --discover
-abel-alpha init-branch --session research/<ticker>/<exp_id> --branch-id graph-v1
+abel-alpha init-branch --session research/<ticker>/<exp_id> --branch-id <family-a-branch>
+abel-alpha init-branch --session research/<ticker>/<exp_id> --branch-id <family-b-branch>
 
-# first make the branch explicit
-edit research/<ticker>/<exp_id>/branches/graph-v1/branch.yaml
-edit research/<ticker>/<exp_id>/branches/graph-v1/engine.py
+# first make each branch declaration explicit
+edit research/<ticker>/<exp_id>/branches/<family-a-branch>/branch.yaml
+edit research/<ticker>/<exp_id>/branches/<family-b-branch>/branch.yaml
 
-abel-alpha prepare-branch --branch research/<ticker>/<exp_id>/branches/graph-v1
-abel-alpha debug-branch --branch research/<ticker>/<exp_id>/branches/graph-v1
-abel-alpha run-branch --branch research/<ticker>/<exp_id>/branches/graph-v1 -d "baseline"
+# then implement, prepare, debug, and record the agent-chosen branch round
+edit research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py
+abel-alpha prepare-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
+abel-alpha debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
+abel-alpha run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
 ```
 
 Before this loop, the workspace should already exist and `abel-alpha doctor`
@@ -37,6 +40,10 @@ Each round should answer a question about mechanism, not just consume compute.
 Each branch should stay a hypothesis family. If a new round changes drivers,
 mechanism, model family, or complexity class, record that dimension explicitly
 or use a new branch when the thesis has materially changed.
+New sessions default to breadth-first start: make at least two agent-chosen
+hypothesis families explicit before deep local refinement. If intentionally
+starting narrow, record the reason with `--single-branch-rationale` on the
+recorded round.
 
 After each render, treat `evidence_ledger.json` as the evidence record and
 `frontier.md` / `frontier.json` as factual coverage reports. They should show

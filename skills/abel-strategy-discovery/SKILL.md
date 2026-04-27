@@ -24,9 +24,9 @@ Operating rules:
    not generated strategy advice.
 8. Treat `agent_context.md` and `agent_memory.jsonl` as agent-owned resume
    state; do not expect the system to generate next strategy directions.
-9. Treat a branch as a hypothesis family. Early deepening of one branch should
-   either have multiple branch families visible or an agent-authored
-   single-branch rationale.
+9. New sessions default to a breadth-first start: make at least two
+   agent-chosen hypothesis families explicit before deep local refinement, or
+   record an agent-authored single-branch rationale.
 10. Do not call parameter, sizing, threshold, filter, or window tweaks broad
     exploration. Use changed-dimension and continuation-rationale fields to keep
     local refinement accountable.

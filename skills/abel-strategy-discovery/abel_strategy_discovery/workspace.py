@@ -261,11 +261,14 @@ into branch evidence.
 abel-strategy-discovery doctor
 {default_activate_command()}
 abel-strategy-discovery init-session --ticker TSLA --exp-id tsla-v1 --discover
-abel-strategy-discovery init-branch --session research/tsla/tsla-v1 --branch-id graph-v1
-edit research/tsla/tsla-v1/branches/graph-v1/branch.yaml
-abel-strategy-discovery prepare-branch --branch research/tsla/tsla-v1/branches/graph-v1
-abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/graph-v1
-abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/graph-v1 -d "baseline"
+abel-strategy-discovery init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
+abel-strategy-discovery init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
+edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
+edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
+edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
+abel-strategy-discovery prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 ```
 
 Use that path as orientation, not as a rigid script. The important boundary is:
@@ -273,6 +276,9 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `branch.yaml` makes the branch inputs explicit
 - `prepare-branch` resolves inputs before you treat any round as evidence
 - the starter `engine.py` is only there to verify branch wiring before a branch-specific mechanism exists
+- new sessions default to breadth-first start: make at least two
+  agent-chosen hypothesis families explicit before deep local refinement, or
+  record `--single-branch-rationale` when a narrow start is intentional
 
 ## Re-entry
 
@@ -337,11 +343,14 @@ is the workspace root. Do not create `./abel-strategy-discovery-workspace` insid
 ```bash
 abel-strategy-discovery doctor
 abel-strategy-discovery init-session --ticker TSLA --exp-id tsla-v1 --discover
-abel-strategy-discovery init-branch --session research/tsla/tsla-v1 --branch-id graph-v1
-edit research/tsla/tsla-v1/branches/graph-v1/branch.yaml
-abel-strategy-discovery prepare-branch --branch research/tsla/tsla-v1/branches/graph-v1
-abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/graph-v1
-abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/graph-v1 -d "baseline"
+abel-strategy-discovery init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
+abel-strategy-discovery init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
+edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
+edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
+edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
+abel-strategy-discovery prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 ```
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, move
@@ -353,16 +362,18 @@ real. Treat the generated `engine.py` as a starter path check; once the branch
 path is proven, encode the branch-specific mechanism there. Treat session
 readiness as advisory context; the branch's explicit `requested_start` is the
 runtime start when it is set. Treat this workspace `.venv` as the canonical
-runtime for daily work.
+runtime for daily work. Treat the initial branch set as agent-chosen breadth:
+make at least two hypothesis families explicit before deep local refinement, or
+record `--single-branch-rationale` when a narrow start is intentional.
 This workspace is for alpha-managed branch research, so do not create a
 standalone `causal-edge init` project inside it. Put standalone edge work in a
 separate directory.
 
 ### Run one research round
 ```bash
-abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/graph-v1
-abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/graph-v1 -d "baseline"
-abel-strategy-discovery promote-branch --branch research/tsla/tsla-v1/branches/graph-v1
+abel-strategy-discovery debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+abel-strategy-discovery run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+abel-strategy-discovery promote-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 ```
 
 ### Understand the workspace layout
