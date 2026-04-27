@@ -20,7 +20,8 @@ def test_render_writes_agent_context_without_legacy_memory_views(tmp_path: Path)
 
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
     assert "## Evidence Frontier" in context_text
-    assert "## Active Agent Memory" in context_text
+    assert "## Research Journal" in context_text
+    assert "## Legacy Agent Memory" not in context_text
 
 
 def test_agent_memory_records_preserve_agent_authorship_and_refs(tmp_path: Path) -> None:
@@ -61,6 +62,7 @@ def test_agent_memory_records_preserve_agent_authorship_and_refs(tmp_path: Path)
 
     ni.render_session(session)
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+    assert "## Legacy Agent Memory" in context_text
     assert "evidence_status=`referenced`" in context_text
     assert "relation=`candidate_compare`" in context_text
     assert "strategy recommendation" not in context_text.lower()
@@ -274,5 +276,6 @@ def test_run_branch_round_updates_ledger_and_agent_context(
 
     ni.print_status(session)
     status_output = capsys.readouterr().out
-    assert "Agent memory:" in status_output
+    assert "Research journal:" in status_output
+    assert "Agent memory:" not in status_output
     assert ni.check_session(session, strict=False) == 0

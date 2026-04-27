@@ -413,8 +413,10 @@ def main() -> int:
 
     add_memory = sub.add_parser(
         "add-memory",
-        help="Record agent-authored working memory with optional evidence references",
+        help=argparse.SUPPRESS,
+        description="Legacy: record agent-authored working memory with optional evidence references",
     )
+    add_memory.set_defaults(_legacy_hidden=True)
     add_memory.add_argument("--session", default="")
     add_memory.add_argument("--branch", default="")
     add_memory.add_argument(
@@ -448,8 +450,10 @@ def main() -> int:
 
     link_branches = sub.add_parser(
         "link-branches",
-        help="Record a manual relation between two branches",
+        help=argparse.SUPPRESS,
+        description="Legacy: record a manual relation between two branches",
     )
+    link_branches.set_defaults(_legacy_hidden=True)
     link_branches.add_argument("--from-branch", required=True)
     link_branches.add_argument("--to-branch", required=True)
     link_branches.add_argument(
@@ -515,8 +519,8 @@ def main() -> int:
         choices=sorted(CHANGED_DIMENSIONS),
         help="Factual dimension changed in this round; repeat for multiple dimensions",
     )
-    run_branch.add_argument("--continuation-rationale", default="")
-    run_branch.add_argument("--single-branch-rationale", default="")
+    run_branch.add_argument("--continuation-rationale", default="", help=argparse.SUPPRESS)
+    run_branch.add_argument("--single-branch-rationale", default="", help=argparse.SUPPRESS)
     run_branch.add_argument(
         "--python-bin",
         default=None,
@@ -1687,12 +1691,6 @@ def run_branch_round(args: argparse.Namespace) -> int:
         rows,
         args.hypothesis,
     )
-    for line in initial_breadth_pre_run_warning_lines(
-        session=session,
-        branch=branch,
-        pending_single_branch_rationale=getattr(args, "single_branch_rationale", ""),
-    ):
-        print(f"Exploration protocol: {line}", file=sys.stderr)
     result_path = branch / "outputs" / f"{round_id}-edge-result.json"
     report_path = branch / "outputs" / f"{round_id}-edge-validation.md"
     handoff_path = branch / "outputs" / f"{round_id}-edge-handoff.json"
@@ -1890,15 +1888,11 @@ def run_branch_round(args: argparse.Namespace) -> int:
             },
         )
         render_session(session)
-    for line in exploration_protocol_warning_lines(session, branch.name, round_id):
-        print(f"Exploration protocol: {line}")
     for line in graph_priority_warning_lines(session):
         print(f"Exploration protocol: {line}")
     for line in input_breadth_warning_lines(session):
         print(f"Exploration protocol: {line}")
     for line in pivot_checkpoint_warning_lines(session):
-        print(f"Exploration protocol: {line}")
-    for line in memory_checkpoint_warning_lines(session):
         print(f"Exploration protocol: {line}")
     print(f"Alpha context: {context_path.relative_to(session)}")
     print(f"Edge result: {result_path.relative_to(session)}")
@@ -2251,12 +2245,20 @@ def print_status(session: Path) -> None:
     readiness = load_readiness(session)
     branches = load_branches(session)
     agent_memory = load_agent_memory_records(session)
+    ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
+    frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
+    journal_status = build_research_journal_status(session, ledger=ledger, frontier=frontier)
     print(
         f"Session: {session.name} ({discovery.get('ticker', session.parent.name.upper())})"
     )
     print(f"Branches: {len(branches)}")
     print(f"Total rounds: {sum(len(branch['rows']) for branch in branches)}")
-    print(f"Agent memory: {len(agent_memory)} records")
+    print(
+        "Research journal: "
+        f"{journal_status.get('resolved_evidence_reference_count', 0)} evidence-linked refs"
+    )
+    if agent_memory:
+        print(f"Legacy agent memory: {len(agent_memory)} records")
     readiness_summary = format_data_readiness_summary(readiness)
     if readiness_summary:
         print(f"Discovery readiness: {readiness_summary}")
@@ -2265,7 +2267,6 @@ def print_status(session: Path) -> None:
             print(f"Readiness warning: {warning}")
         for line in readiness_coverage_hint_lines(readiness):
             print(f"Coverage hint: {line}")
-    frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
     if frontier:
         labels = frontier.get("evidence_label_counts") or {}
         graph_priority = frontier.get("graph_priority") or {}
@@ -2393,53 +2394,15 @@ def check_session(session: Path, *, strict: bool) -> int:
 
 def validate_exploration_protocol(session: Path, failures: list[str]) -> None:
     frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
-    exploration = frontier.get("exploration_breadth") if isinstance(frontier.get("exploration_breadth"), dict) else {}
-    if not exploration:
+    checkpoint = frontier.get("pivot_checkpoint") if isinstance(frontier.get("pivot_checkpoint"), dict) else {}
+    if not checkpoint:
         return
-    if exploration.get("initial_breadth_incomplete"):
+    reasons = [str(item) for item in checkpoint.get("pivot_checkpoint_reasons") or []]
+    if checkpoint.get("pivot_checkpoint_due") and "missing_evidence_linked_journal" in reasons:
         failures.append(
-            "initial breadth incomplete: branch_family_count="
-            f"{exploration.get('branch_family_count', 0)} "
-            f"same_branch_max_rounds={exploration.get('same_branch_max_rounds', 0)} "
-            f"single_branch_rationale_present={str(exploration.get('single_branch_rationale_present', False)).lower()}"
+            "pivot checkpoint due without evidence-linked journal reflection: "
+            f"reasons={render_reason_list(reasons)}"
         )
-    missing = int(exploration.get("continuation_rationale_missing_count") or 0)
-    if missing:
-        failures.append(
-            "continuation rationale missing: "
-            f"continuation_rationale_missing_count={missing}"
-        )
-
-
-def exploration_protocol_warning_lines(session: Path, branch_id: str, round_id: str) -> list[str]:
-    ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
-    rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
-    row = next(
-        (
-            item
-            for item in reversed(rows)
-            if item.get("branch_id") == branch_id and item.get("round_id") == round_id
-        ),
-        None,
-    )
-    if not row:
-        return []
-    lines: list[str] = []
-    if row.get("initial_breadth_incomplete"):
-        lines.append(
-            "initial_breadth_incomplete=true "
-            f"branch_family_count={row.get('branch_family_count', 0)} "
-            f"same_branch_rounds={row.get('same_branch_round_index', 0)} "
-            f"single_branch_rationale_present={str(row.get('single_branch_rationale_present', False)).lower()}"
-        )
-    if row.get("continuation_rationale_required"):
-        lines.append(
-            "continuation_rationale_required=true "
-            f"same_neighborhood_failed_rows={row.get('same_neighborhood_failed_rows', 0)} "
-            f"same_branch_rounds={row.get('same_branch_round_index', 0)} "
-            f"continuation_rationale_present={str(row.get('continuation_rationale_present', False)).lower()}"
-        )
-    return lines
 
 
 def input_breadth_warning_lines(session: Path) -> list[str]:
@@ -2488,92 +2451,6 @@ def pivot_checkpoint_warning_lines(session: Path) -> list[str]:
         f"reasons={render_reason_list(checkpoint.get('pivot_checkpoint_reasons') or [])} "
         "required_action=update_research_journal_with_evidence_refs"
     ]
-
-
-def memory_checkpoint_warning_lines(session: Path) -> list[str]:
-    frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
-    checkpoint = frontier.get("memory_checkpoint") if isinstance(frontier.get("memory_checkpoint"), dict) else {}
-    if not checkpoint or not checkpoint.get("memory_checkpoint_due"):
-        return []
-    return [
-        "memory_checkpoint_due=true "
-        f"agent_memory_records={checkpoint.get('agent_memory_records', 0)} "
-        f"reason={checkpoint.get('memory_checkpoint_reason', 'none')} "
-        "required_action=agent_authored_memory_with_evidence_ref"
-    ]
-
-
-def initial_breadth_pre_run_warning_lines(
-    *,
-    session: Path,
-    branch: Path,
-    pending_single_branch_rationale: str = "",
-) -> list[str]:
-    state = pending_initial_breadth_state(
-        session=session,
-        branch=branch,
-        pending_single_branch_rationale=pending_single_branch_rationale,
-    )
-    if not state.get("initial_breadth_will_be_incomplete"):
-        return []
-    return [
-        "initial_breadth_will_be_incomplete=true "
-        f"recorded_rounds_in_branch={state.get('recorded_rounds_in_branch', 0)} "
-        f"pending_recorded_round_index={state.get('pending_recorded_round_index', 0)} "
-        f"branch_family_count={state.get('branch_family_count', 0)} "
-        f"single_branch_rationale_present={str(state.get('single_branch_rationale_present', False)).lower()} "
-        "protocol_exits=multiple_recorded_branch_families,single_branch_rationale_recorded"
-    ]
-
-
-def pending_initial_breadth_state(
-    *,
-    session: Path,
-    branch: Path,
-    pending_single_branch_rationale: str = "",
-) -> dict[str, object]:
-    discovery = load_discovery(session)
-    ledger = build_evidence_ledger(session, discovery, load_branches(session))
-    rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
-    round_rows = [row for row in rows if row.get("run_type") == "round"]
-    family_keys = {
-        branch_family_key(row)
-        for row in round_rows
-        if branch_family_key(row)
-    }
-    declaration = branch_declaration_status(load_branch_spec(branch))
-    pending_family = branch_family_key(
-        {
-            "declared_mechanism_family": declaration.get("mechanism_family"),
-            "declared_input_claim": declaration.get("input_claim"),
-            "declared_selected_inputs": declaration.get("selected_inputs"),
-            "declared_model_family": declaration.get("model_family"),
-            "declared_complexity_class": declaration.get("complexity_class"),
-            "declared_exploration_role": declaration.get("exploration_role"),
-        }
-    )
-    if pending_family:
-        family_keys.add(pending_family)
-    branch_id = branch.name
-    recorded_rounds_in_branch = sum(
-        1 for row in round_rows if str(row.get("branch_id") or "") == branch_id
-    )
-    single_branch_rationale_present = any(
-        bool(row.get("single_branch_rationale")) for row in round_rows
-    ) or bool(str(pending_single_branch_rationale or "").strip())
-    pending_recorded_round_index = recorded_rounds_in_branch + 1
-    initial_breadth_will_be_incomplete = (
-        pending_recorded_round_index > INITIAL_BREADTH_ROUND_THRESHOLD
-        and len(family_keys) < INITIAL_BRANCH_FAMILY_MINIMUM
-        and not single_branch_rationale_present
-    )
-    return {
-        "recorded_rounds_in_branch": recorded_rounds_in_branch,
-        "pending_recorded_round_index": pending_recorded_round_index,
-        "branch_family_count": len(family_keys),
-        "single_branch_rationale_present": single_branch_rationale_present,
-        "initial_breadth_will_be_incomplete": initial_breadth_will_be_incomplete,
-    }
 
 
 def normalize_hypothesis_text(value: str) -> str:
@@ -3105,6 +2982,7 @@ def build_frontier(
         graph_candidates_available
         and graph_discovery_k <= 2
         and candidate_fail >= 4
+        and len(candidate_driver_sets) <= 1
         and expansion_probe_count == 0
         and ablation_evidence_count == 0
         and control_evidence_count == 0
@@ -3337,7 +3215,6 @@ def render_frontier_markdown(frontier: dict) -> str:
     graph_priority = frontier.get("graph_priority") or {}
     pivot_checkpoint = frontier.get("pivot_checkpoint") or {}
     research_journal = frontier.get("research_journal") or {}
-    memory_checkpoint = frontier.get("memory_checkpoint") or {}
     return f"""# Evidence Frontier
 
 generated by Abel strategy discovery narrative layer
@@ -3394,7 +3271,6 @@ generated by Abel strategy discovery narrative layer
 - dominant_driver_set: `{concentration.get("dominant_driver_set", "none")}` (`{concentration.get("dominant_driver_set_share", "0/0")}`)
 - target_control_evidence: `{concentration.get("target_control_evidence", 0)}`
 - comparable_controls: `{concentration.get("comparable_controls", 0)}`
-- agent_memory_records: `{concentration.get("agent_memory_records", 0)}`
 
 ## Exploration Breadth
 
@@ -3402,8 +3278,6 @@ generated by Abel strategy discovery narrative layer
 - recorded_round_count: `{exploration.get("recorded_round_count", 0)}`
 - diagnostic_row_count: `{exploration.get("diagnostic_row_count", 0)}`
 - branch_family_count: `{exploration.get("branch_family_count", 0)}`
-- initial_breadth_incomplete: `{str(exploration.get("initial_breadth_incomplete", False)).lower()}`
-- single_branch_rationale_present: `{str(exploration.get("single_branch_rationale_present", False)).lower()}`
 - same_branch_max_rounds: `{exploration.get("same_branch_max_rounds", 0)}`
 - dominant_neighborhood: `{exploration.get("dominant_neighborhood", "none")}`
 - dominant_neighborhood_rows: `{exploration.get("dominant_neighborhood_rows", 0)}`
@@ -3414,8 +3288,6 @@ generated by Abel strategy discovery narrative layer
 - ablation_evidence_count: `{exploration.get("ablation_evidence_count", 0)}`
 - expansion_probe_count: `{exploration.get("expansion_probe_count", 0)}`
 - local_refinement_count: `{exploration.get("local_refinement_count", 0)}`
-- continuation_rationale_required_count: `{exploration.get("continuation_rationale_required_count", 0)}`
-- continuation_rationale_missing_count: `{exploration.get("continuation_rationale_missing_count", 0)}`
 
 ## Input Breadth
 
@@ -3458,14 +3330,6 @@ generated by Abel strategy discovery narrative layer
 - resolved_evidence_reference_count: `{research_journal.get("resolved_evidence_reference_count", 0)}`
 - has_evidence_linked_update: `{str(research_journal.get("has_evidence_linked_update", False)).lower()}`
 - last_evidence_linked_update_line: `{research_journal.get("last_evidence_linked_update_line", 0)}`
-
-## Memory Checkpoint
-
-- memory_checkpoint_due: `{str(memory_checkpoint.get("memory_checkpoint_due", False)).lower()}`
-- memory_checkpoint_reason: `{memory_checkpoint.get("memory_checkpoint_reason", "none")}`
-- agent_memory_records: `{memory_checkpoint.get("agent_memory_records", 0)}`
-- memory_reference_gap_count: `{memory_checkpoint.get("memory_reference_gap_count", 0)}`
-- memory_checkpoint_round_minimum: `{memory_checkpoint.get("memory_checkpoint_round_minimum", 0)}`
 
 ## Runtime Reads
 
@@ -3525,7 +3389,6 @@ def render_session_frontier_summary(frontier: dict) -> str:
     input_breadth = frontier.get("input_breadth") or {}
     graph_priority = frontier.get("graph_priority") or {}
     pivot_checkpoint = frontier.get("pivot_checkpoint") or {}
-    memory_checkpoint = frontier.get("memory_checkpoint") or {}
     return "\n".join(
         [
             f"- evidence_rows: `{frontier.get('row_count', 0)}`",
@@ -3540,17 +3403,13 @@ def render_session_frontier_summary(frontier: dict) -> str:
             f"- comparable_controls: `{comparable.get('target_control_evidence', 0)}`",
             f"- dominant_mechanism_family: `{concentration.get('dominant_mechanism_family', 'none')}` (`{concentration.get('dominant_mechanism_family_share', '0/0')}`)",
             f"- dominant_driver_set: `{concentration.get('dominant_driver_set', 'none')}` (`{concentration.get('dominant_driver_set_share', '0/0')}`)",
-            f"- agent_memory_records: `{concentration.get('agent_memory_records', 0)}`",
             f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
             f"- candidate_driver_set_count: `{input_breadth.get('candidate_driver_set_count', 0)}`",
             f"- graph_first_uncovered: `{str(graph_priority.get('graph_first_uncovered', False)).lower()}`",
             f"- graph_discovery_missing: `{str(graph_priority.get('graph_discovery_missing', False)).lower()}`",
             f"- pivot_checkpoint_due: `{str(pivot_checkpoint.get('pivot_checkpoint_due', False)).lower()}`",
             f"- pivot_checkpoint_reasons: `{render_reason_list(pivot_checkpoint.get('pivot_checkpoint_reasons') or [])}`",
-            f"- memory_checkpoint_due: `{str(memory_checkpoint.get('memory_checkpoint_due', False)).lower()}`",
-            f"- initial_breadth_incomplete: `{str(exploration.get('initial_breadth_incomplete', False)).lower()}`",
             f"- local_refinement_count: `{exploration.get('local_refinement_count', 0)}`",
-            f"- continuation_rationale_missing_count: `{exploration.get('continuation_rationale_missing_count', 0)}`",
         ]
     )
 
@@ -3583,6 +3442,13 @@ def build_agent_context(
         if str(row.get("status") or "") in {"closed", "superseded"}
     ]
     journal_status = build_research_journal_status(session, ledger=ledger, frontier=frontier)
+    legacy_memory_section = render_legacy_agent_memory_section(
+        active_records=active_records,
+        closed_records=closed_records,
+        session=session,
+        ledger=ledger,
+        frontier=frontier,
+    )
     return f"""# Agent Context Pack
 
 generated by Abel strategy discovery narrative layer
@@ -3615,25 +3481,11 @@ generated by Abel strategy discovery narrative layer
 
 {render_agent_context_graph_priority(frontier)}
 
-## Breadth Protocol State
-
-{render_agent_context_breadth_protocol_state(frontier)}
-
-## Memory Checkpoint
-
-{render_agent_context_memory_checkpoint(frontier)}
-
 ## Recent Evidence Rows
 
 {render_agent_context_evidence_rows(recent_rows)}
 
-## Active Agent Memory
-
-{render_agent_memory_records(active_records, session=session, ledger=ledger, frontier=frontier)}
-
-## Closed Agent Memory
-
-{render_agent_memory_records(closed_records, session=session, ledger=ledger, frontier=frontier)}
+{legacy_memory_section}
 
 ## Evidence Sources
 
@@ -3642,6 +3494,30 @@ generated by Abel strategy discovery narrative layer
 - journal: `{RESEARCH_JOURNAL_FILENAME}`
 - raw artifacts: branch `outputs/`
 - session: `{session.name}`
+"""
+
+
+def render_legacy_agent_memory_section(
+    *,
+    active_records: list[dict[str, object]],
+    closed_records: list[dict[str, object]],
+    session: Path,
+    ledger: dict,
+    frontier: dict,
+) -> str:
+    if not active_records and not closed_records:
+        return ""
+    return f"""## Legacy Agent Memory
+
+This is legacy resume input. Use `{RESEARCH_JOURNAL_FILENAME}` for new research insight.
+
+### Active
+
+{render_agent_memory_records(active_records, session=session, ledger=ledger, frontier=frontier)}
+
+### Closed
+
+{render_agent_memory_records(closed_records, session=session, ledger=ledger, frontier=frontier)}
 """
 
 
@@ -3689,15 +3565,12 @@ def render_agent_context_exploration_breadth(frontier: dict) -> str:
     return "\n".join(
         [
             f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
-            f"- initial_breadth_incomplete: `{str(exploration.get('initial_breadth_incomplete', False)).lower()}`",
             f"- recorded_round_count: `{exploration.get('recorded_round_count', 0)}`",
             f"- same_branch_max_rounds: `{exploration.get('same_branch_max_rounds', 0)}`",
             f"- dominant_neighborhood_rows: `{exploration.get('dominant_neighborhood_rows', 0)}`",
             f"- model_family_counts: `{render_inline_counts(exploration.get('model_family_counts') or {})}`",
             f"- complexity_class_counts: `{render_inline_counts(exploration.get('complexity_class_counts') or {})}`",
             f"- exploration_class_counts: `{render_inline_counts(exploration.get('exploration_class_counts') or {})}`",
-            f"- continuation_rationale_required_count: `{exploration.get('continuation_rationale_required_count', 0)}`",
-            f"- continuation_rationale_missing_count: `{exploration.get('continuation_rationale_missing_count', 0)}`",
         ]
     )
 
@@ -3734,35 +3607,6 @@ def render_agent_context_graph_priority(frontier: dict) -> str:
             f"- graph_discovery_missing: `{str(graph_priority.get('graph_discovery_missing', False)).lower()}`",
             f"- target_only_saturation: `{str(graph_priority.get('target_only_saturation', False)).lower()}`",
             f"- graph_priority_round_minimum: `{graph_priority.get('graph_priority_round_minimum', 0)}`",
-        ]
-    )
-
-
-def render_agent_context_breadth_protocol_state(frontier: dict) -> str:
-    exploration = frontier.get("exploration_breadth") or {}
-    if not exploration:
-        return "- not generated"
-    return "\n".join(
-        [
-            f"- initial_breadth_incomplete: `{str(exploration.get('initial_breadth_incomplete', False)).lower()}`",
-            f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
-            f"- recorded_rounds_in_dominant_branch: `{exploration.get('same_branch_max_rounds', 0)}`",
-            "- protocol_exits: `multiple_recorded_branch_families, single_branch_rationale_recorded`",
-        ]
-    )
-
-
-def render_agent_context_memory_checkpoint(frontier: dict) -> str:
-    memory_checkpoint = frontier.get("memory_checkpoint") or {}
-    if not memory_checkpoint:
-        return "- not generated"
-    return "\n".join(
-        [
-            f"- memory_checkpoint_due: `{str(memory_checkpoint.get('memory_checkpoint_due', False)).lower()}`",
-            f"- memory_checkpoint_reason: `{memory_checkpoint.get('memory_checkpoint_reason', 'none')}`",
-            f"- agent_memory_records: `{memory_checkpoint.get('agent_memory_records', 0)}`",
-            f"- memory_reference_gap_count: `{memory_checkpoint.get('memory_reference_gap_count', 0)}`",
-            f"- memory_checkpoint_round_minimum: `{memory_checkpoint.get('memory_checkpoint_round_minimum', 0)}`",
         ]
     )
 
