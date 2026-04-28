@@ -66,6 +66,7 @@ PACKAGE_JSON_BASE = {
     "type": "module",
     "private": False,
     "openclaw": {
+        "extensions": ["./index.js"],
         "compat": {
             "pluginApi": ">=2026.3.24-beta.2",
         },
@@ -74,6 +75,16 @@ PACKAGE_JSON_BASE = {
         },
     },
 }
+
+OPENCLAW_EXTENSION_ENTRY = """import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+
+export default definePluginEntry({
+  id: "abel",
+  name: "Abel",
+  description: "Plugin-shipped Abel skills bundle.",
+  register(_api) {},
+});
+"""
 
 
 def ignore_copy_patterns(_directory: str, names: list[str]) -> set[str]:
@@ -348,6 +359,7 @@ def build_artifact(
         json.dumps(manifest, indent=2) + "\n",
     )
     write_text(output_dir / "package.json", json.dumps(package_json, indent=2) + "\n")
+    write_text(output_dir / "index.js", OPENCLAW_EXTENSION_ENTRY)
 
     rendered_skill_md = transform_skill_md(skill_text, version_override.strip())
     validate_auth_story({"SKILL.md": rendered_skill_md})

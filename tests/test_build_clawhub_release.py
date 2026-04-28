@@ -47,6 +47,7 @@ def test_build_outputs_openclaw_bundle_with_all_abel_skills(tmp_path: Path) -> N
     assert artifact_dir.name == "abel"
     assert (artifact_dir / "openclaw.plugin.json").exists()
     assert (artifact_dir / "package.json").exists()
+    assert (artifact_dir / "index.js").exists()
     assert not (artifact_dir / ".codex-plugin" / "plugin.json").exists()
     assert not (artifact_dir / "SKILL.md").exists()
     for name in ("abel", "abel-auth", "abel-ask", "abel-invest"):
@@ -69,6 +70,7 @@ def test_build_outputs_openclaw_bundle_with_all_abel_skills(tmp_path: Path) -> N
     assert package["name"] == "abel"
     assert package["version"] == manifest["version"]
     assert package["type"] == "module"
+    assert package["openclaw"]["extensions"] == ["./index.js"]
     assert package["openclaw"]["compat"]["pluginApi"] == ">=2026.3.24-beta.2"
     assert package["openclaw"]["build"]["openclawVersion"] == "2026.4.2"
 

@@ -10,6 +10,7 @@ This project follows a repo-level release log so agents can summarize user-visib
 
 - Added native OpenClaw plugin packaging for Abel, bundling the router, auth, causal-read, investment-discovery, and shared probe skills into one ClawHub package.
 - Added OpenClaw config discovery for Abel auth, including `skills.entries.abel.apiKey` and legacy `skills.entries.causal-abel.apiKey`.
+- Added the required no-op OpenClaw extension entry so ClawHub can publish the skill bundle as a native code plugin.
 
 ### Changed
 
