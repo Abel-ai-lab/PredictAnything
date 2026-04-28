@@ -69,15 +69,15 @@ def run_python_json(
         return {"ok": False, "error": f"invalid JSON output: {exc}", "stdout": payload}
 
 
-def probe_causal_edge_import(python_path: Path | str, cwd: Path) -> dict[str, object]:
-    """Probe whether the workspace runtime can import causal_edge."""
+def probe_abel_edge_import(python_path: Path | str, cwd: Path) -> dict[str, object]:
+    """Probe whether the workspace runtime can import abel_edge."""
     return run_python_json(
         python_path,
         cwd,
         """
 import json
 try:
-    import causal_edge  # noqa: F401
+    import abel_edge  # noqa: F401
 except Exception as exc:
     print(json.dumps({"ok": False, "error": str(exc)}))
 else:
@@ -86,8 +86,8 @@ else:
     )
 
 
-def probe_causal_edge_cli(python_path: Path | str, cwd: Path) -> dict[str, object]:
-    """Probe whether the causal-edge CLI entrypoint works in the runtime."""
+def probe_abel_edge_cli(python_path: Path | str, cwd: Path) -> dict[str, object]:
+    """Probe whether the abel-edge CLI entrypoint works in the runtime."""
     return run_python_json(
         python_path,
         cwd,
@@ -97,7 +97,7 @@ import subprocess
 import sys
 
 completed = subprocess.run(
-    [sys.executable, "-m", "causal_edge.cli", "version"],
+    [sys.executable, "-m", "abel_edge.cli", "version"],
     capture_output=True,
     text=True,
 )
@@ -118,7 +118,7 @@ def probe_edge_discovery_payload(python_path: Path | str, cwd: Path) -> bool | N
             "-c",
             (
                 "import inspect\n"
-                "from causal_edge.plugins.abel.discover import discover_graph_payload\n"
+                "from abel_edge.plugins.abel.discover import discover_graph_payload\n"
                 "print(callable(discover_graph_payload))\n"
             ),
         ],
@@ -140,7 +140,7 @@ def probe_edge_context_json(python_path: Path | str, cwd: Path) -> bool | None:
             "-c",
             (
                 "import inspect\n"
-                "from causal_edge.research.evaluate import run_evaluation\n"
+                "from abel_edge.research.evaluate import run_evaluation\n"
                 "print('context_json' in inspect.signature(run_evaluation).parameters)\n"
             ),
         ],
@@ -166,7 +166,7 @@ def build_workspace_runtime_env(
         env["ABEL_AUTH_ENV_FILE"] = str(auth_env)
     manifest = load_workspace_manifest(workspace_root)
     cache_root = resolve_workspace_paths(workspace_root, manifest)["cache_root"].resolve()
-    env.setdefault("CAUSAL_EDGE_CACHE_ROOT", str(cache_root))
+    env.setdefault("ABEL_EDGE_CACHE_ROOT", str(cache_root))
     return env
 
 
@@ -191,7 +191,7 @@ import json
 import os
 from pathlib import Path
 
-from causal_edge.plugins.abel.credentials import (
+from abel_edge.plugins.abel.credentials import (
     _candidate_shared_auth_files,
     _read_env_file,
     normalize_api_key,

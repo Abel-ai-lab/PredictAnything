@@ -40,7 +40,7 @@ doctor is ready.
 
 - Keep research under the workspace `research/` directory.
 - Do not create a nested workspace when `alpha.workspace.yaml` already exists.
-- Do not create a standalone `causal-edge init` sidecar for this flow.
+- Do not create a standalone `abel-edge init` sidecar for this flow.
 - Use `workspace status` and `doctor` to inspect setup instead of guessing from
   directory names.
 - Bootstrap creates the workspace and runtime base; branch-specific market data

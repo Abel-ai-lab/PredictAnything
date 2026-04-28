@@ -1,7 +1,7 @@
 """Abel strategy discovery research narrative layer.
 
 Organizes exploration sessions, records experimental process, and renders narrative
-summaries on top of raw causal-edge evaluation outputs.
+summaries on top of raw abel-edge evaluation outputs.
 """
 
 from __future__ import annotations
@@ -202,7 +202,7 @@ Coverage hints: {coverage_hints_text}
  
 from __future__ import annotations
 
-from causal_edge.engine.base import StrategyEngine
+from abel_edge.engine.base import StrategyEngine
 
 
 class BranchEngine(StrategyEngine):
@@ -356,7 +356,7 @@ def main() -> int:
     init_session.add_argument(
         "--backtest-start",
         default=DEFAULT_BACKTEST_START,
-        help="Session-level backtest start date passed to causal-edge evaluate",
+        help="Session-level backtest start date passed to abel-edge evaluate",
     )
     discovery_group = init_session.add_mutually_exclusive_group()
     discovery_group.add_argument(
@@ -420,7 +420,7 @@ def main() -> int:
     prepare_branch.add_argument(
         "--python-bin",
         default=None,
-        help="Interpreter used to run causal-edge warm-cache (defaults to the workspace python when available)",
+        help="Interpreter used to run abel-edge warm-cache (defaults to the workspace python when available)",
     )
     prepare_branch.add_argument(
         "--cache-limit",
@@ -454,7 +454,7 @@ def main() -> int:
     run_branch.add_argument(
         "--python-bin",
         default=None,
-        help="Interpreter used to run causal-edge evaluate (defaults to the workspace python when available)",
+        help="Interpreter used to run abel-edge evaluate (defaults to the workspace python when available)",
     )
     promote_branch = sub.add_parser(
         "promote-branch",
@@ -501,7 +501,7 @@ def main() -> int:
     debug_branch.add_argument(
         "--python-bin",
         default=None,
-        help="Interpreter used to run causal-edge debug-evaluate (defaults to the workspace python when available)",
+        help="Interpreter used to run abel-edge debug-evaluate (defaults to the workspace python when available)",
     )
 
     render = sub.add_parser("render", help="Render summaries for a session")
@@ -1038,15 +1038,15 @@ def init_session_dir(
 
 def fetch_live_discovery(ticker: str, *, limit: int) -> dict:
     try:
-        from causal_edge.plugins.abel.credentials import (
+        from abel_edge.plugins.abel.credentials import (
             MissingAbelApiKeyError,
             require_api_key,
         )
-        from causal_edge.plugins.abel.discover import discover_graph_payload
+        from abel_edge.plugins.abel.discover import discover_graph_payload
     except ImportError as exc:
         raise RuntimeError(
-            "Live Abel discovery requires causal-edge with the Abel plugin installed. "
-            "Create a virtual environment, install causal-edge, then retry."
+            "Live Abel discovery requires abel-edge with the Abel plugin installed. "
+            "Create a virtual environment, install abel-edge, then retry."
         ) from exc
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:
@@ -1131,7 +1131,7 @@ def run_edge_verify_data(
     command = [
         python_bin,
         "-m",
-        "causal_edge.cli",
+        "abel_edge.cli",
         "verify-data",
         "--discovery-json",
         str(discovery_path),
@@ -1260,7 +1260,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     command = [
         python_bin,
         "-m",
-        "causal_edge.cli",
+        "abel_edge.cli",
         "warm-cache",
         "--adapter",
         cache_adapter,
@@ -1933,7 +1933,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
     command = [
         python_bin,
         "-m",
-        "causal_edge.cli",
+        "abel_edge.cli",
         "evaluate",
         "--workdir",
         str(branch),
@@ -2347,7 +2347,7 @@ def debug_branch_run(args: argparse.Namespace) -> int:
     command = [
         python_bin,
         "-m",
-        "causal_edge.cli",
+        "abel_edge.cli",
         "debug-evaluate",
         "--workdir",
         str(branch),
@@ -4646,8 +4646,8 @@ def alpha_decision(rows: list[dict[str, str]], result: dict, *, session: Path | 
     }
 
     try:
-        from causal_edge.validation.gate_logic import decide_keep_discard
-        from causal_edge.validation.metrics import load_profile
+        from abel_edge.validation.gate_logic import decide_keep_discard
+        from abel_edge.validation.metrics import load_profile
 
         decision = decide_keep_discard(
             result.get("metrics", {}),
@@ -4687,8 +4687,8 @@ def alpha_decision_with_runtime(
     }
     script = (
         "import json, sys\n"
-        "from causal_edge.validation.gate_logic import decide_keep_discard\n"
-        "from causal_edge.validation.metrics import load_profile\n"
+        "from abel_edge.validation.gate_logic import decide_keep_discard\n"
+        "from abel_edge.validation.metrics import load_profile\n"
         "payload = json.loads(sys.stdin.read())\n"
         "decision = decide_keep_discard(\n"
         "    payload['current_metrics'],\n"
@@ -4721,7 +4721,7 @@ def build_branch_context(
     round_id: str,
     backtest_start: str,
 ) -> dict:
-    """Build the structured context passed into causal-edge evaluate."""
+    """Build the structured context passed into abel-edge evaluate."""
     workspace_root = find_workspace_root(branch)
     branch_spec = load_branch_spec(branch)
     dependencies = {}
@@ -5774,7 +5774,7 @@ def render_round_note(**kwargs) -> str:
     effective_window = result.get("effective_window", {})
     diagnostics = result.get("diagnostics") or {}
     signal = diagnostics.get("signal") or {}
-    actions = kwargs.get("actions") or ["Executed raw causal-edge evaluation"]
+    actions = kwargs.get("actions") or ["Executed raw abel-edge evaluation"]
     action_lines = "\n".join(f"1. {action}" for action in actions)
     changed_dimensions = ordered_unique_strings(kwargs.get("changed_dimensions") or [])
     return f"""# {kwargs["round_id"]}
@@ -5878,7 +5878,7 @@ def validate_edge_handoff(
             )
             return
     try:
-        from causal_edge.research.handoff import (
+        from abel_edge.research.handoff import (
             load_strategy_handoff,
             validate_strategy_handoff,
         )
@@ -5906,7 +5906,7 @@ def validate_edge_handoff_with_runtime(
     script = (
         "import json, sys\n"
         "from pathlib import Path\n"
-        "from causal_edge.research.handoff import load_strategy_handoff, validate_strategy_handoff\n"
+        "from abel_edge.research.handoff import load_strategy_handoff, validate_strategy_handoff\n"
         "handoff_path = Path(sys.argv[1])\n"
         "payload = load_strategy_handoff(handoff_path)\n"
         "reasons = list(validate_strategy_handoff(payload, handoff_path=handoff_path))\n"

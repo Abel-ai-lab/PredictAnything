@@ -33,7 +33,7 @@ def _candidate_result_payload() -> dict:
             "hints": [],
         },
         "runtime_facts": {
-            "contract": "causal-edge.runtime-facts/v1",
+            "contract": "abel-edge.runtime-facts/v1",
             "verdict": "PASS",
             "semantic_verdict": "PASS",
             "runtime_stage": "validation",
@@ -185,7 +185,7 @@ def test_run_branch_round_updates_ledger_and_agent_context(
                     "hints": [],
                 },
                 "runtime_facts": {
-                    "contract": "causal-edge.runtime-facts/v1",
+                    "contract": "abel-edge.runtime-facts/v1",
                     "verdict": "PASS",
                     "semantic_verdict": "PASS",
                     "runtime_stage": "validation",

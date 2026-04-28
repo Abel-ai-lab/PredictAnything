@@ -13,7 +13,7 @@ framework = evidence validity and exploration-shape facts
 agent = strategy judgment and research insight
 ```
 
-`causal-edge` owns runtime legality and validation metrics.
+`abel-edge` owns runtime legality and validation metrics.
 `abel-invest` owns branch declarations, evidence labels, frontier
 facts, and the research journal surface.
 

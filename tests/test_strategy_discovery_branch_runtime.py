@@ -190,7 +190,7 @@ def _edge_result(
             "metric_failures": metric_failures or [],
         },
         "runtime_facts": {
-            "contract": "causal-edge.runtime-facts/v1",
+            "contract": "abel-edge.runtime-facts/v1",
             "verdict": verdict,
             "semantic_verdict": "PASS",
             "runtime_stage": "validation",
@@ -336,7 +336,7 @@ def _complete_candidate_spec(
 def test_evidence_runtime_facts_prefers_edge_contract() -> None:
     result = _edge_result(traced_inputs=[])
     result["runtime_facts"] = {
-        "contract": "causal-edge.runtime-facts/v1",
+        "contract": "abel-edge.runtime-facts/v1",
         "verdict": "PASS",
         "semantic_verdict": "PASS",
         "runtime_stage": "validation",

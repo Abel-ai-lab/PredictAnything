@@ -186,7 +186,7 @@ def build_default_manifest(name: str) -> dict:
         },
         "runtime": {
             "python": default_python_path(),
-            "edge_package": "causal-edge",
+            "edge_package": "abel-edge",
             "edge_spec": DEFAULT_EDGE_SPEC,
             "auth_strategy": "reuse_abel_auth_first",
         },
@@ -310,7 +310,7 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 
 - This workspace is for alpha-managed branch research.
 - Keep research sessions and branches under `research/`.
-- Do not run `causal-edge init` inside this workspace.
+- Do not run `abel-edge init` inside this workspace.
 - If you need a standalone Abel-edge project, create it in a separate directory outside this workspace.
 
 If the workspace runtime is missing or you want to replace it, run
@@ -382,7 +382,7 @@ declared graph-supported branch as graph-supported evidence. When a branch has
 candidate evidence worth external inspection, `upload-dashboard-bundle` sends
 branch evidence from the current workspace surfaces.
 This workspace is for alpha-managed branch research, so do not create a
-standalone `causal-edge init` project inside it. Put standalone edge work in a
+standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.
 
 ### Run one research round
@@ -422,7 +422,7 @@ def render_env_example() -> str:
     return """# Optional override for standalone Abel auth fallback
 # ABEL_API_KEY=
 
-# Optional: point causal-edge at a shared auth file
+# Optional: point abel-edge at a shared auth file
 # ABEL_AUTH_ENV_FILE=
 """
 
