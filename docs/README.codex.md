@@ -79,7 +79,7 @@ Run these commands from the project root:
 4. Bootstrap the default strategy workspace:
 
    ```bash
-   abel-strategy-discovery workspace bootstrap --path ./abel-strategy-discovery-workspace
+   abel-invest workspace bootstrap --path ./abel-invest-workspace
    ```
 
 ## How Auth Resolution Works
@@ -97,7 +97,7 @@ In the project-level install, the corresponding path is:
 .agents/abel-skills/skills/abel-auth/.env.skill
 ```
 
-`abel-ask` and `abel-strategy-discovery` also look for collection-level shared
+`abel-ask` and `abel-invest` also look for collection-level shared
 auth in sibling skill directories, so one successful `abel-auth` setup is enough
 for normal live use.
 

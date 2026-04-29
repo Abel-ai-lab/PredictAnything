@@ -3,4 +3,4 @@
 - `skills/abel/`
 - `skills/abel-ask/`
 - `skills/abel-auth/`
-- `skills/abel-strategy-discovery/`
+- `skills/abel-invest/`

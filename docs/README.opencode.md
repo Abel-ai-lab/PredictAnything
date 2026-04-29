@@ -45,5 +45,5 @@ Restart OpenCode, ask it to initialize Abel, then complete auth and workspace se
 
 ```bash
 abel-auth
-abel-strategy-discovery workspace bootstrap --path ./abel-strategy-discovery-workspace
+abel-invest workspace bootstrap --path ./abel-invest-workspace
 ```

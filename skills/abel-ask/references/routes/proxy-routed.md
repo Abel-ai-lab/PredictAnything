@@ -13,16 +13,22 @@ This file is the active workflow for `proxy_routed` reads.
 
 ### 3a. Structural screening
 
-Map mechanisms to graph nodes (manual -> `query_node` -> capillary discovery). After `query_node`, inspect `node_kind` before choosing the next verb.
+Map mechanisms to executable anchors (manual -> narrative CAP when helpful -> `query_node` -> capillary discovery). After `query_node`, inspect `node_kind` before choosing the next verb.
 
-- `asset` -> keep the current observe / neighbors / paths / intervene flow
+When the prompt is broad-theme, shortlist-first, or still anchor-sparse, narrative CAP is not optional seasoning; it is the first scout pass. Run `narrative_cap_probe.py query-node` after query rewrite, or `narrative_cap_probe.py narrate` when the candidate is already concrete, before you expand into `graph.paths`, `discover_*`, or broad web search. Escalate to `search_prepare` only when you need session or graph handles for a deeper follow-up. Treat `explain_outcome`, `focus_execution`, `predict`, and `what_if` as advanced follow-ons, not default first-pass tools.
+
+If the narrative scout yields no usable anchors after one rewrite, record that as a failed scout leg and then continue with graph plus web. Do not describe the answer as narrative-assisted unless at least one real narrative CAP call happened.
+
+If the query is theme-first and contains ticker-like tokens, rewrite it before relying on provider resolution. `AI`, `CAT`, and similar strings can overfit to exact symbols instead of the intended theme.
+
+- `asset` -> keep the current observe / `graph.neighbors` / `graph.paths` / intervene flow
 - `macro` -> use the canonical macro node id directly for `node_description` and any macro-capable structural surface; for `graph.paths` and similar checks, prefer direct `verb` calls instead of asset-only probe shortcuts that normalize to `<ticker>.price|volume`
 - if the next surface is still asset-only, say so explicitly and choose a proxy route intentionally instead of silently coercing the macro node
 
 For each structurally executable mapping:
 
 - `graph.paths` between cause and outcome proxy
-- Rank: dist <= 2 = strong, 3-4 = plausible, no path = narrative-only
+- Rank: dist <= 2 = strong, 3-4 = plausible, no path = narrative-only unless later graph support appears
 
 Structural connection does not equal causal transmission. Many dist=2 paths are shared macro exposure, not intervention-ready mechanism.
 
@@ -55,7 +61,6 @@ Layer 1 often gives generic financial context. Layer 2 is where the question-spe
 
 Also fire:
 
-- `validate_connectivity` on the whole chain
 - `discover_consensus` / `discover_deconsensus` across mechanisms
 - `discover_fragility` for single points of failure
 

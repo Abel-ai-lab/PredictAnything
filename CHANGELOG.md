@@ -4,6 +4,19 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.2.0] - 2026-04-28
+
+### Added
+
+- Added native OpenClaw plugin packaging for Abel, bundling the router, auth, causal-read, investment-discovery, and shared probe skills into one ClawHub package.
+- Added OpenClaw config discovery for Abel auth, including `skills.entries.abel.apiKey` and legacy `skills.entries.causal-abel.apiKey`.
+- Added the required no-op OpenClaw extension entry so ClawHub can publish the skill bundle as a native code plugin.
+
+### Changed
+
+- Updated ClawHub publishing to use `clawhub package publish` with source metadata and OpenClaw compatibility fields.
+- Updated OpenClaw-facing auth guidance so agents persist keys through OpenClaw config management instead of treating `.env.skill` as the primary path.
+
 ## [1.1.6] - 2026-04-10
 
 ### Added

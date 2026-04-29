@@ -1,9 +1,0 @@
-{
-  "active_profile": "prod",
-  "profiles": {
-    "prod": {
-      "cap_base_url": "https://cap.abel.ai/api",
-      "oauth_base_url": "https://api.abel.ai/echo/"
-    }
-  }
-}

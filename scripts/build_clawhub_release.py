@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 from pathlib import Path
 
 
 SKILL_NAME = "abel"
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "skills" / SKILL_NAME
+SKILLS_ROOT = Path(__file__).resolve().parents[1] / "skills"
+SOURCE_ROOT = SKILLS_ROOT / SKILL_NAME
 DEFAULT_OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "dist" / "clawhub"
+RELEASE_SKILL_NAMES = ("abel", "abel-auth", "abel-ask", "abel-invest", "abel-common")
 REMOVE_FRONTMATTER_KEYS = {
     "update_repo",
     "update_branch",
@@ -18,12 +21,18 @@ REMOVE_FRONTMATTER_KEYS = {
     "update_changelog_path",
 }
 
-NEW_INSTALL_SECTION = """## Install And Authorization
+OPENCLAW_API_KEY_PATH = "skills.entries.abel.apiKey"
+LEGACY_OPENCLAW_API_KEY_PATH = "skills.entries.causal-abel.apiKey"
+
+NEW_INSTALL_SECTION = f"""## Install And Authorization
 
 If the user installs Abel, asks to connect Abel, or the workflow is missing live Abel access, use `abel-auth`.
 
 - Reuse existing auth if available.
 - If auth is missing or invalid, hand off to `abel-auth`.
+- In OpenClaw, persist the resulting Abel API key to `{OPENCLAW_API_KEY_PATH}` so OpenClaw can inject `ABEL_API_KEY` for Abel skills.
+- The bundled probes also recognize legacy `{LEGACY_OPENCLAW_API_KEY_PATH}` for older OpenClaw installs.
+- Use `.env.skill` only for direct local script usage outside OpenClaw config management.
 - Do not continue to live Abel work until auth is ready.
 """
 
@@ -31,6 +40,50 @@ CLAWHUB_OPENAI_YAML = """interface:
   display_name: "Abel"
   short_description: "Main Abel entrypoint for causal reads, auth, and strategy discovery."
   default_prompt: "Use $abel to route this request to the right Abel skill."
+"""
+
+OPENCLAW_PLUGIN_MANIFEST = {
+    "id": "abel",
+    "name": "Abel",
+    "description": (
+        "Abel skill bundle for OpenClaw: routing, auth, causal reads, and investment"
+        "strategy discovery. Includes Python-backed skills and shared probes."
+    ),
+    "skills": ["./skills"],
+    "configSchema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {},
+    },
+}
+
+PACKAGE_JSON_BASE = {
+    "name": "abel",
+    "description": (
+        "Abel native OpenClaw plugin package with routing, auth, causal read, "
+        "and strategy discovery skills."
+    ),
+    "type": "module",
+    "private": False,
+    "openclaw": {
+        "extensions": ["./index.js"],
+        "compat": {
+            "pluginApi": ">=2026.3.24-beta.2",
+        },
+        "build": {
+            "openclawVersion": "2026.4.2",
+        },
+    },
+}
+
+OPENCLAW_EXTENSION_ENTRY = """import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+
+export default definePluginEntry({
+  id: "abel",
+  name: "Abel",
+  description: "Plugin-shipped Abel skills bundle.",
+  register(_api) {},
+});
 """
 
 
@@ -200,6 +253,46 @@ def transform_skill_md(source_text: str, version_override: str) -> str:
     return frontmatter + body.rstrip() + "\n"
 
 
+def transform_abel_auth_md(source_text: str) -> str:
+    return source_text.replace(
+        "4. Persist the resulting key to `skills/abel-auth/.env.skill` for this installed collection.\n",
+        (
+            f"4. In OpenClaw, persist the resulting key to `{OPENCLAW_API_KEY_PATH}`. "
+            "Use `.env.skill` only for direct local script usage outside OpenClaw "
+            "config management.\n"
+        ),
+    )
+
+
+AUTH_DOC_PRIMARY_PATHS = ("SKILL.md",)
+FORBIDDEN_PRIMARY_ENV_PHRASES = (
+    "Persist the key to `<skill-root>/.env.skill` when local storage is available.",
+    "Use `.env.skill` as the local auth file for this skill.",
+    "By default, use `<skill-root>/.env.skill` as the local auth file.",
+    "Persist the resulting key to `skills/abel-auth/.env.skill` for this installed collection.",
+)
+
+
+def validate_auth_story(rendered_docs: dict[str, str]) -> None:
+    for path in AUTH_DOC_PRIMARY_PATHS:
+        content = rendered_docs.get(path, "")
+        if OPENCLAW_API_KEY_PATH not in content:
+            raise ValueError(
+                f"Rendered {path} is missing the OpenClaw primary auth path "
+                f"{OPENCLAW_API_KEY_PATH!r}."
+            )
+        if ".env.skill" not in content:
+            raise ValueError(f"Rendered {path} must still mention `.env.skill` fallback.")
+
+    combined = "\n".join(rendered_docs.values())
+    for phrase in FORBIDDEN_PRIMARY_ENV_PHRASES:
+        if phrase in combined:
+            raise ValueError(
+                "Rendered ClawHub artifact still describes `.env.skill` as the "
+                f"primary auth path: {phrase!r}"
+            )
+
+
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
@@ -212,30 +305,92 @@ def remove_if_exists(path: Path) -> None:
         path.unlink()
 
 
-def main() -> int:
-    args = parse_args()
-    source_dir = Path(args.source).expanduser().resolve()
-    output_root = Path(args.output_root).expanduser().resolve()
+def frontmatter_value(lines: list[str], key: str) -> str:
+    for line in lines:
+        if not line or line[0].isspace() or ":" not in line:
+            continue
+        current_key, value = line.split(":", 1)
+        if current_key.strip() == key:
+            return value.strip().strip('"').strip("'")
+    return ""
+
+
+def build_artifact(
+    source_dir: Path,
+    output_root: Path,
+    version_override: str = "",
+) -> Path:
+    source_dir = source_dir.expanduser().resolve()
+    output_root = output_root.expanduser().resolve()
     output_dir = output_root / SKILL_NAME
 
     if not source_dir.exists():
-        raise SystemExit(f"Source skill directory not found: {source_dir}")
+        raise ValueError(f"Source skill directory not found: {source_dir}")
 
     remove_if_exists(output_dir)
     output_root.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source_dir, output_dir, ignore=ignore_copy_patterns)
+    output_dir.mkdir(parents=True)
+    source_skills_root = source_dir.parent
+    bundle_skills_root = output_dir / "skills"
+    bundle_skills_root.mkdir()
+    for skill_name in RELEASE_SKILL_NAMES:
+        skill_source = source_skills_root / skill_name
+        if not skill_source.exists():
+            raise ValueError(f"Release skill directory not found: {skill_source}")
+        shutil.copytree(
+            skill_source,
+            bundle_skills_root / skill_name,
+            ignore=ignore_copy_patterns,
+        )
 
-    skill_text = (output_dir / "SKILL.md").read_text(encoding="utf-8")
-    write_text(
-        output_dir / "SKILL.md", transform_skill_md(skill_text, args.version.strip())
+    skill_text = (bundle_skills_root / SKILL_NAME / "SKILL.md").read_text(
+        encoding="utf-8"
     )
-    write_text(output_dir / "agents" / "openai.yaml", CLAWHUB_OPENAI_YAML)
+    frontmatter_lines, _ = split_frontmatter(skill_text)
+    manifest = dict(OPENCLAW_PLUGIN_MANIFEST)
+    version = version_override.strip() or frontmatter_value(frontmatter_lines, "version")
+    if version:
+        manifest["version"] = version
+    package_json = dict(PACKAGE_JSON_BASE)
+    if version:
+        package_json["version"] = version
+    write_text(
+        output_dir / "openclaw.plugin.json",
+        json.dumps(manifest, indent=2) + "\n",
+    )
+    write_text(output_dir / "package.json", json.dumps(package_json, indent=2) + "\n")
+    write_text(output_dir / "index.js", OPENCLAW_EXTENSION_ENTRY)
 
+    rendered_skill_md = transform_skill_md(skill_text, version_override.strip())
+    validate_auth_story({"SKILL.md": rendered_skill_md})
+    write_text(bundle_skills_root / SKILL_NAME / "SKILL.md", rendered_skill_md)
+    write_text(bundle_skills_root / SKILL_NAME / "agents" / "openai.yaml", CLAWHUB_OPENAI_YAML)
+
+    auth_skill_path = bundle_skills_root / "abel-auth" / "SKILL.md"
+    write_text(
+        auth_skill_path,
+        transform_abel_auth_md(auth_skill_path.read_text(encoding="utf-8")),
+    )
+
+    for path in output_dir.glob("skills/**/.env.skill"):
+        remove_if_exists(path)
+    for path in output_dir.glob("skills/**/.env.skill.example"):
+        remove_if_exists(path)
+    for path in output_dir.glob("skills/**/.env.skills"):
+        remove_if_exists(path)
+    for path in output_dir.glob("skills/**/.env.skills.example"):
+        remove_if_exists(path)
     remove_if_exists(output_dir / "CHANGELOG.md")
-    remove_if_exists(output_dir / ".env.skill")
-    remove_if_exists(output_dir / ".env.skill.example")
-    remove_if_exists(output_dir / ".env.skills")
-    remove_if_exists(output_dir / ".env.skills.example")
+    return output_dir
+
+
+def main() -> int:
+    args = parse_args()
+    output_dir = build_artifact(
+        Path(args.source),
+        Path(args.output_root),
+        version_override=args.version,
+    )
     print(f"Built ClawHub artifact at {output_dir}")
     return 0
 

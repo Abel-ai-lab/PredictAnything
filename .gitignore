@@ -1,5 +1,6 @@
 __pycache__/
 *.egg-info/
+.venv/
 dist/
 causal-abel/.env.skills
 causal-abel/.env.skill
@@ -15,3 +16,6 @@ causal-abel/references/test-prompts.md
 causal-abel/references/verb-change-checklist.md
 codex-skill-eval/runs/*
 !codex-skill-eval/runs/.gitkeep
+.DS_Store
+endpoints.local.json
+maintainers/skills/

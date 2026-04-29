@@ -1,0 +1,29 @@
+[project]
+name = "abel-invest"
+version = "3.5.1"
+description = "Workspace-oriented research orchestration for Abel-driven strategy discovery"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "abel-edge>=0.8.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+abel-invest = "abel_invest.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["abel_invest*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

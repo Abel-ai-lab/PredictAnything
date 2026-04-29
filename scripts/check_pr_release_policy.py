@@ -10,7 +10,7 @@ SOURCE_VERSION_FILES = {
     "skills/abel/SKILL.md",
     "skills/abel-ask/SKILL.md",
     "skills/abel-auth/SKILL.md",
-    "skills/abel-strategy-discovery/SKILL.md",
+    "skills/abel-invest/SKILL.md",
 }
 CHANGELOG_FILE = "CHANGELOG.md"
 

@@ -43,5 +43,5 @@ Release tags are the recommended stable pin target.
 4. Bootstrap the default strategy workspace:
 
 ```bash
-abel-strategy-discovery workspace bootstrap --path ./abel-strategy-discovery-workspace
+abel-invest workspace bootstrap --path ./abel-invest-workspace
 ```

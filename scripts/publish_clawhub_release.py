@@ -54,7 +54,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tags",
         default="latest",
-        help="Comma-separated tags passed to clawhub publish.",
+        help="Comma-separated ClawHub package tags.",
+    )
+    parser.add_argument(
+        "--source-repo",
+        default="",
+        help="Source repository URL or owner/repo. Defaults to git remote.origin.url.",
+    )
+    parser.add_argument(
+        "--source-commit",
+        default="",
+        help="Source commit SHA. Defaults to the current git HEAD.",
+    )
+    parser.add_argument(
+        "--source-ref",
+        default="",
+        help="Optional source branch or ref. Defaults to the current git branch when available.",
+    )
+    parser.add_argument(
+        "--source-path",
+        default="",
+        help="Optional path inside the source repository for this package.",
     )
     parser.add_argument(
         "--dry-run",
@@ -91,6 +111,8 @@ def parse_frontmatter(text: str) -> dict[str, str]:
 
 def load_skill_metadata(source_dir: Path) -> dict[str, str]:
     skill_md = source_dir / "SKILL.md"
+    if not skill_md.exists():
+        skill_md = source_dir / "skills" / build_clawhub_release.SKILL_NAME / "SKILL.md"
     return parse_frontmatter(skill_md.read_text(encoding="utf-8"))
 
 
@@ -184,6 +206,56 @@ def build_artifact(source_dir: Path, output_root: Path) -> Path:
     return output_root / build_clawhub_release.SKILL_NAME
 
 
+def run_git(source_dir: Path, args: list[str]) -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(source_dir), *args],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    ).strip()
+
+
+def normalize_source_repo(remote_url: str) -> str:
+    remote_url = remote_url.strip()
+    if remote_url.startswith("git@github.com:"):
+        remote_url = remote_url.removeprefix("git@github.com:")
+    elif remote_url.startswith("https://github.com/"):
+        remote_url = remote_url.removeprefix("https://github.com/")
+    elif remote_url.startswith("http://github.com/"):
+        remote_url = remote_url.removeprefix("http://github.com/")
+
+    if remote_url.endswith(".git"):
+        remote_url = remote_url[:-4]
+    return remote_url.rstrip("/")
+
+
+def detect_git_source_metadata(source_dir: Path) -> dict[str, str]:
+    try:
+        source_repo = normalize_source_repo(
+            run_git(source_dir, ["config", "--get", "remote.origin.url"])
+        )
+        source_commit = run_git(source_dir, ["rev-parse", "HEAD"])
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(
+            "Could not detect git source metadata. Pass --source-repo and "
+            "--source-commit explicitly."
+        ) from exc
+
+    source_ref = ""
+    try:
+        detected_ref = run_git(source_dir, ["rev-parse", "--abbrev-ref", "HEAD"])
+        if detected_ref and detected_ref != "HEAD":
+            source_ref = detected_ref
+    except subprocess.CalledProcessError:
+        source_ref = ""
+
+    return {
+        "source_repo": source_repo,
+        "source_commit": source_commit,
+        "source_ref": source_ref,
+        "source_path": "",
+    }
+
+
 def clawhub_command() -> list[str]:
     if shutil.which("clawhub"):
         return ["clawhub"]
@@ -219,14 +291,26 @@ def main() -> int:
             f"source={version!r}, built={built_version!r}."
         )
 
+    detected_source = detect_git_source_metadata(source_dir)
+    source_repo = (args.source_repo or detected_source["source_repo"]).strip()
+    source_commit = (args.source_commit or detected_source["source_commit"]).strip()
+    source_ref = (args.source_ref or detected_source["source_ref"]).strip()
+    source_path = (args.source_path or detected_source["source_path"]).strip()
+    if not source_repo or not source_commit:
+        raise SystemExit(
+            "clawhub package publish requires source metadata. Pass "
+            "--source-repo and --source-commit explicitly."
+        )
+
     changelog_text = build_changelog_text(changelog_path, version)
     publish_command = [
         "clawhub",
+        "package",
         "publish",
         str(artifact_dir),
-        "--slug",
-        slug,
         "--name",
+        slug,
+        "--display-name",
         display_name,
         "--version",
         version,
@@ -234,11 +318,19 @@ def main() -> int:
         changelog_text,
         "--tags",
         args.tags,
+        "--source-repo",
+        source_repo,
+        "--source-commit",
+        source_commit,
     ]
+    if source_ref:
+        publish_command.extend(["--source-ref", source_ref])
+    if source_path:
+        publish_command.extend(["--source-path", source_path])
 
     if args.dry_run:
         print("Dry run: publish command")
-        print(subprocess.list2cmdline(publish_command))
+        print(subprocess.list2cmdline([*publish_command, "--dry-run"]))
         return 0
 
     clawhub = clawhub_command()
@@ -246,7 +338,7 @@ def main() -> int:
         run_checked([*clawhub, "whoami"])
 
     run_checked([*clawhub, *publish_command[1:]])
-    print(f"Published {slug} version {version} from {artifact_dir}")
+    print(f"Published bundle {slug} version {version} from {artifact_dir}")
     return 0
 
 

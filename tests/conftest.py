@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-STRATEGY_DISCOVERY_SKILL_ROOT = REPO_ROOT / "skills" / "abel-strategy-discovery"
+STRATEGY_DISCOVERY_SKILL_ROOT = REPO_ROOT / "skills" / "abel-invest"
 ABEL_COMMON_PYTHON_ROOT = REPO_ROOT / "skills" / "abel-common" / "python"
 
 if str(REPO_ROOT) not in sys.path:

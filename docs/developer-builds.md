@@ -2,26 +2,41 @@
 
 This page is for maintainers who need to build local Abel skill artifacts from repository source.
 
-## Build A Local Ask-Skill Version
+## Build The Full Skills Collection
 
-Use this when you want a local rendered `abel-ask` tree for testing endpoint config, smoke probes, or prompt changes without touching the published release path. The maintainer-owned source tree lives under `maintainers/skills/`, and the public install tree under `skills/` is rendered from it.
+Use this when you want to rebuild the full public `skills/` tree from the
+maintainer-owned collection source under `maintainers/skills/`.
 
 Public-safe render:
 
 ```bash
-python3 maintainers/abel-ask/render_skill.py --profile prod --output-dir skills/abel-ask
+python3 maintainers/render_collection.py --profile prod --output-dir skills
 ```
 
 Local SIT-style render:
 
 ```bash
-python3 maintainers/abel-ask/render_skill.py --include-local --profile sit --output-dir dist/local/abel-ask
+python3 maintainers/render_collection.py --include-local --profile sit --output-dir dist/local/skills
 ```
 
 Expected output:
 
-- public source ask skill: `skills/abel-ask/`
-- local rendered ask skill: `dist/local/abel-ask/`
+- public rendered collection: `skills/`
+- local rendered collection: `dist/local/skills/`
+
+The shared profile source lives at `maintainers/endpoints.json`. Local private
+overrides can live in `maintainers/endpoints.local.json`, or continue to use
+the legacy `maintainers/causal-abel/endpoints.local.json` path.
+
+## Build A Local Ask-Skill Version
+
+Use this when you only want a focused `abel-ask` render for smoke probes or
+debugging. This wrapper uses the same shared collection profile config.
+
+```bash
+python3 maintainers/abel-ask/render_skill.py --profile prod --output-dir skills/abel-ask
+python3 maintainers/abel-ask/render_skill.py --include-local --profile sit --output-dir dist/local/abel-ask
+```
 
 ## Verify The Local Ask-Skill Version
 
@@ -39,7 +54,9 @@ python3 maintainers/abel-ask/smoke_cap_probe.py --skill-root skills/abel-ask
 
 ## Build A ClawHub Release Version
 
-Use this when you want the publishable ClawHub artifact for the main `abel` entry skill.
+Use this when you want the publishable ClawHub package artifact for OpenClaw.
+The artifact is a native OpenClaw plugin with `openclaw.plugin.json` and all
+Abel skills under `skills/`.
 
 ```bash
 python3 scripts/build_clawhub_release.py
@@ -73,11 +90,8 @@ Or with a custom build root:
 python3 scripts/publish_clawhub_release.py --output-root dist/test-clawhub --dry-run
 ```
 
-The dry-run should print a `clawhub publish ...` command for:
-
-- `--slug abel`
-- `--name Abel`
-- the current source version from `skills/abel/SKILL.md`
+The dry-run should print a `clawhub package publish ... --dry-run` command for
+the built bundle artifact.
 
 ## Real ClawHub Publish
 

@@ -66,7 +66,7 @@ Optional project-local auth file:
 5. Bootstrap the default strategy workspace before normal strategy use:
 
 ```bash
-abel-strategy-discovery workspace bootstrap --path ./abel-strategy-discovery-workspace
+abel-invest workspace bootstrap --path ./abel-invest-workspace
 ```
 
 This creates or reuses the default workspace, prepares its runtime, and runs doctor.

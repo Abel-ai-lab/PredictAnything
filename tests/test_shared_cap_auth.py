@@ -40,3 +40,33 @@ def test_read_env_file_values_and_has_auth_token_parse_abel_api_key(tmp_path: Pa
 
     assert read_env_file_values(auth_file)["ABEL_API_KEY"] == "abel_xxx"
     assert has_auth_token(auth_file) is True
+
+
+def test_resolve_auth_env_file_reads_openclaw_skill_api_key(
+    monkeypatch, tmp_path: Path
+) -> None:
+    env_file = tmp_path / "workspace" / "skills" / "abel-ask" / ".env.skill"
+    config_path = tmp_path / "openclaw.json"
+    config_path.write_text(
+        '{"skills":{"entries":{"abel":{"apiKey":"abel-from-openclaw"}}}}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENCLAW_CONFIG_PATH", str(config_path))
+
+    assert resolve_auth_env_file(env_file) == config_path.resolve()
+    assert read_env_file_values(config_path)["ABEL_API_KEY"] == "abel-from-openclaw"
+
+
+def test_resolve_auth_env_file_reads_legacy_causal_abel_api_key(
+    monkeypatch, tmp_path: Path
+) -> None:
+    env_file = tmp_path / "workspace" / "skills" / "abel-ask" / ".env.skill"
+    config_path = tmp_path / "openclaw.json"
+    config_path.write_text(
+        '{"skills":{"entries":{"causal-abel":{"apiKey":"abel-from-legacy-openclaw"}}}}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENCLAW_CONFIG_PATH", str(config_path))
+
+    assert resolve_auth_env_file(env_file) == config_path.resolve()
+    assert read_env_file_values(config_path)["ABEL_API_KEY"] == "abel-from-legacy-openclaw"

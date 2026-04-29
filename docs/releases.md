@@ -20,7 +20,9 @@ OpenCode can pin a release tag, branch, or other git ref with:
 
 ## ClawHub Publication
 
-Build the ClawHub artifact from collection source into `dist/clawhub/abel`, then publish it. Do not commit generated release artifacts.
+Build the ClawHub bundle artifact from collection source into `dist/clawhub/abel`,
+then publish it with `clawhub package publish`. Do not commit generated release
+artifacts.
 
 For step-by-step maintainer build commands, see [developer-builds.md](developer-builds.md).
 

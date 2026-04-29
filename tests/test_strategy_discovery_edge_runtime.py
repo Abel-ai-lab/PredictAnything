@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abel_strategy_discovery import edge_runtime
+from abel_invest import edge_runtime
 
 
 def test_build_workspace_runtime_env_prefers_collection_auth_file(
@@ -20,13 +20,16 @@ def test_build_workspace_runtime_env_prefers_collection_auth_file(
     monkeypatch.setattr(
         edge_runtime,
         "__file__",
-        str(tmp_path / "skills" / "abel-strategy-discovery" / "abel_strategy_discovery" / "edge_runtime.py"),
+        str(tmp_path / "skills" / "abel-invest" / "abel_invest" / "edge_runtime.py"),
     )
     monkeypatch.setattr(edge_runtime, "load_workspace_manifest", lambda _root: {"paths": {}})
 
     env = edge_runtime.build_workspace_runtime_env(workspace_root, base={})
 
     assert env["ABEL_AUTH_ENV_FILE"] == str(auth_file.resolve())
+    assert env["ABEL_EDGE_CACHE_ROOT"] == str(
+        (workspace_root / "cache" / "market_data").resolve()
+    )
 
 
 def test_build_workspace_runtime_env_prefers_workspace_auth_when_present(
@@ -43,6 +46,9 @@ def test_build_workspace_runtime_env_prefers_workspace_auth_when_present(
     env = edge_runtime.build_workspace_runtime_env(workspace_root, base={})
 
     assert env["ABEL_AUTH_ENV_FILE"] == str(workspace_env.resolve())
+    assert env["ABEL_EDGE_CACHE_ROOT"] == str(
+        (workspace_root / "cache" / "market_data").resolve()
+    )
 
 
 def test_probe_abel_auth_prefers_collection_auth_file_without_runtime_probe(
@@ -60,7 +66,7 @@ def test_probe_abel_auth_prefers_collection_auth_file_without_runtime_probe(
     monkeypatch.setattr(
         edge_runtime,
         "__file__",
-        str(tmp_path / "skills" / "abel-strategy-discovery" / "abel_strategy_discovery" / "edge_runtime.py"),
+        str(tmp_path / "skills" / "abel-invest" / "abel_invest" / "edge_runtime.py"),
     )
     monkeypatch.setattr(edge_runtime, "load_workspace_manifest", lambda _root: {"paths": {}})
 

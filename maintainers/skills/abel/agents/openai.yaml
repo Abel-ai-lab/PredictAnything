@@ -1,4 +1,0 @@
-interface:
-  display_name: "Abel"
-  short_description: "Main Abel entrypoint for causal reads, strategy discovery, and auth."
-  default_prompt: "Use $abel to route this request to the right Abel skill."

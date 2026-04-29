@@ -10,6 +10,7 @@ metadata:
     requires:
       bins:
         - python
+    primaryEnv: ABEL_API_KEY
     homepage: https://github.com/Abel-ai-causality/Abel-skills
 ---
 
@@ -17,7 +18,7 @@ Use `Abel` as the main entrypoint.
 
 Before routing, verify auth state by running:
 
-`python ../abel-ask/scripts/cap_probe.py auth-status`
+`python ../abel-common/python/abel_common/cap/graph_probe.py auth-status`
 
 Do not guess from shell environment alone.
 
@@ -26,5 +27,5 @@ Do not guess from shell environment alone.
    user's original request.
 2. If the user wants quant strategy search, backtesting, candidate discovery, a research workspace,
    session continuation, branch preparation, branch debugging, or branch runs,
-   use `abel-strategy-discovery`.
+   use `abel-invest`.
 3. For other graph-native or decision-oriented Abel reads, use `abel-ask`.

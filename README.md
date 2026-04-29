@@ -7,7 +7,7 @@ Abel Skills is the collection repository for Abel agent skills. Users should ins
 - `abel`: main entrypoint
 - `abel-ask`: graph-native and proxy-routed causal reads
 - `abel-auth`: connect or repair Abel auth
-- `abel-strategy-discovery`: workspace-first strategy discovery
+- `abel-invest`: workspace-first strategy discovery
 
 ## Installation
 
@@ -60,9 +60,9 @@ Supports:
 Install from the published ClawHub package after release publication.
 
 Install-time auth note:
-- If you already have an Abel API key, write it to the canonical shared auth file before restart: `skills/abel-auth/.env.skill`
-- If you do not, make `abel-auth` your first action after restart so the key is persisted before normal live use
-- After auth is ready, bootstrap the default strategy workspace before normal strategy use: `abel-strategy-discovery workspace bootstrap --path ./abel-strategy-discovery-workspace`
+- If you already have an Abel API key, write it to the OpenClaw skill config path `skills.entries.abel.apiKey` before restart.
+- If you do not, make `abel-auth` your first action after restart so the key is persisted before normal live use.
+- After auth is ready, bootstrap the default strategy workspace before normal strategy use: `abel-invest workspace bootstrap --path ./abel-invest-workspace`
 
 ## Try These Questions
 

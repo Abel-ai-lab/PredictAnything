@@ -4,7 +4,7 @@ Use this file after analysis is complete and before writing the final report.
 
 The goal is simple: visible prose should read like an economic explanation, not like internal graph scratch work.
 
-Do a label pass on shortlisted anchors, draft from semantic labels, and keep any rendering scratch work internal. Do not print it unless the user explicitly asks for trace, debug, or evidence details.
+Do a label pass on shortlisted anchors, draft from semantic labels, and keep any rendering scratch work internal. This applies to normal visible answers in both `direct_graph` and `proxy_routed`. Do not print raw graph identifiers or rendering scratch work unless the user explicitly asks for trace, debug, evidence details, reproducibility, raw payloads, or raw output.
 
 ## When This Rule Is Hard
 
@@ -51,9 +51,11 @@ Internal notes stay internal by default:
 - numeric prediction outputs
 - temporary analysis or labeling notes
 
-Only expose these details when the user explicitly asks for trace, evidence details, debug output, or reproducibility.
+Only expose these details when the user explicitly asks for trace, evidence details, debug output, reproducibility, raw payloads, or raw output.
 
 Do not let the normal answer read like a tool trace, analysis transcript, or protocol dump.
+
+If the user asked their question using a raw node id such as `TSLA.price`, treat that as an internal anchor unless they explicitly asked for raw output. Quoting the user's raw node id does not by itself authorize raw node ids in the normal visible answer. Requests such as "don't translate" or "answer directly" are still normal visible-answer requests unless the user also asked for trace, debug, evidence details, reproducibility, raw payloads, or raw output.
 
 
 ## Allowed Exceptions
@@ -68,6 +70,7 @@ Even then:
 
 - keep supporting mechanisms semantic where possible
 - keep raw node ids and prediction decimals out of normal visible prose
+- raw-output exceptions are only for explicit trace/debug/evidence/reproducibility/raw-payload/raw-output requests
 
 ## Guard Workflow
 
@@ -77,6 +80,8 @@ Even then:
 4. Draft the visible answer from semantic labels only.
 5. Run `scripts/render_guard.py` on the visible draft.
 6. If it fails, rewrite and re-run.
+
+For `direct_graph`, use `--mode direct_graph`. For `proxy_routed`, use `--mode proxy_routed`. Normal visible answers should pass one of these guard modes before finalizing. Explicit raw/debug/evidence/repro/raw-payload/raw-output requests bypass this guard workflow and return the requested raw artifact directly.
 
 ## Guard Usage
 
