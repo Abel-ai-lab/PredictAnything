@@ -5,7 +5,7 @@ a research branch.
 
 ## Branch Model
 
-- `discovery.json` is the session candidate snapshot.
+- `graph_frontier.json` is the session graph node frontier.
 - `readiness.json` is the session coverage/advisory report.
 - `branch.yaml` defines the branch research declaration and runtime intent.
 - `prepare-branch` resolves inputs, writes the branch contract, and warms edge
@@ -13,9 +13,9 @@ a research branch.
 - `debug-branch` is the semantic preflight step.
 - `run-branch` consumes prepared inputs and records evidence.
 
-Discovery gives leads, not answers. Readiness gives coverage clues, not
-permission. A branch is a hypothesis family: a coherent thesis, input set,
-mechanism, model family, and complexity class.
+The graph frontier gives leads, not answers. Readiness gives coverage clues, not
+permission. A branch is a hypothesis family: a coherent thesis, graph node input
+set, mechanism, model family, and complexity class.
 
 ## Evidence Boundary
 
@@ -33,6 +33,20 @@ to count as protocol-complete candidate evidence:
 - `complexity_class`
 - `exploration_role`
 
+`selected_inputs` is the one authoring field for branch inputs. Prefer
+structured graph node entries:
+
+```yaml
+selected_inputs:
+  - node_id: AAPL.price
+    role: graph_input
+    source: frontier
+  - node_id: SPY.volume
+    role: control
+    source: external
+    source_reason: market-liquidity contrast outside the current frontier
+```
+
 The evidence ledger derives labels from explicit declaration fields plus actual
 edge runtime facts. `frontier.md` and `frontier.json` report coverage facts; they
 are not a strategy advisor.
@@ -42,6 +56,8 @@ Input realization is recorded separately from declaration:
 - declared input claim: what `branch.yaml` says the branch intends
 - prepared auxiliary inputs: what `prepare-branch` made available
 - actual auxiliary reads: what the engine read at runtime
+- declared, prepared, and actual graph node read facts
+- graph node read source: edge-native runtime facts or asset-read mapping
 - realized input claim: what kind of evidence the round actually supports
 
 If `input_claim=graph_supported` but runtime does not read the prepared graph
@@ -71,10 +87,12 @@ Broad exploration means a new input hypothesis, mechanism family, model family,
 complexity class, or expansion probe. Local refinement means parameter, sizing,
 threshold, filter, window, or implementation work inside the same family.
 
-The default priority is graph/input first, strategy variants second, and
-parameters last. Target-only controls are useful contrast evidence, but they do
-not cover graph-supported candidate input breadth when live graph candidates
-exist.
+The default priority is graph breadth first, strategy variants second, and
+parameters last. If the known node pool is too narrow, use
+`abel-invest frontier expand` to widen `graph_frontier.json` before spending
+many rounds on local strategy variants. Target-only controls are useful contrast
+evidence, but they do not cover graph-supported candidate input breadth when
+live graph candidates exist.
 
 ## Journal And Research Reflection
 
@@ -100,7 +118,7 @@ exploration.
 
 When `journal_coverage_complete=false`, use frontier facts and the journal to
 close the missing entries. State whether you are continuing the neighborhood,
-pivoting graph/input, changing strategy family, adding contrast evidence, or
+pivoting graph inputs, changing strategy family, adding contrast evidence, or
 stopping. The framework exposes the shape of the search; it should not choose
 the route.
 
@@ -116,7 +134,9 @@ the route.
 - `dependencies.json`
 
 Inspect these files before changing strategy logic. Prefer prepared branch
-inputs over discovery-side inference.
+inputs over frontier-side inference. `data_manifest.json` and
+`dependencies.json` include selected graph node facts alongside the ticker feeds
+used by the current runtime.
 
 ## What To Do
 

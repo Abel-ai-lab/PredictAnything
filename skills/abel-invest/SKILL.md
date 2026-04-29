@@ -44,7 +44,7 @@ Always start by resolving workspace state before strategy work.
   read `references/workspace-bootstrap.md`.
 - New session, normal round loop, or resuming a session:
   read `references/experiment-loop.md`.
-- Live graph discovery, graph/input expansion, or graph-first reasoning:
+- Live graph discovery, graph frontier expansion, or graph-first reasoning:
   read `references/discovery-protocol.md`.
 - Creating or revising `branch.yaml`, reviewing evidence labels,
   journal coverage, input realization, or research journal use:
@@ -71,9 +71,10 @@ Always start by resolving workspace state before strategy work.
    not generated strategy advice.
 8. Treat `agent_context.md` as the compact factual resume surface and
    `research_journal.md` as agent-owned research state.
-9. New sessions are graph-first: live causal graph discovery is the opening
-   search prior, then strategy variants, then parameters.
-10. Do not treat branch count as proof of breadth. Graph/input concentration,
+9. New sessions are graph-first: live causal graph discovery initializes
+   `graph_frontier.json`; widen graph breadth with `frontier expand` before
+   spending many rounds on strategy variants or parameters.
+10. Do not treat branch count as proof of breadth. Graph-node concentration,
    strategy-variant coverage, and local refinement pressure are separate facts.
 11. Do not call parameter, sizing, threshold, filter, or window tweaks broad
     exploration.
@@ -81,7 +82,8 @@ Always start by resolving workspace state before strategy work.
     with the round ledger reference before the next recorded round.
 13. Treat input realization as an evidence fact: a graph-supported declaration
     only becomes graph-supported evidence when runtime reads the prepared graph
-    inputs.
+    inputs. When graph-node reads are inferred from asset reads, preserve that
+    source as a fact rather than overstating edge-native field-level proof.
 14. When a branch has meaningful candidate evidence worth inspecting, upload
     the branch evidence bundle to the skill dashboard with
     `abel-invest upload-dashboard-bundle --branch <branch>
