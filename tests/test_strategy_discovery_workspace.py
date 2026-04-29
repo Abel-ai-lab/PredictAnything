@@ -26,11 +26,11 @@ def test_scaffold_workspace_writes_alpha_owned_boundary_guidance(tmp_path: Path)
     assert "evidence_ledger.json" in readme
     assert "frontier.md" in readme
     assert "research_journal.md" in readme
-    assert "upload-dashboard-bundle" in readme
+    assert "upload-dashboard-session" in readme
     assert "abel-auth" in readme
     assert "standalone `causal-edge init` project inside it" in agents
     assert "Do not create `./abel-invest-workspace` inside it." in agents
-    assert "upload-dashboard-bundle" in agents
+    assert "upload-dashboard-session" in agents
     assert "research_journal.md" in agents
     assert "abel-auth" in agents
 

@@ -254,7 +254,7 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     ni.print_status(session)
     status_output = capsys.readouterr().out
     assert "Dashboard upload:" in status_output
-    assert "abel-invest upload-dashboard-bundle --branch" in status_output
+    assert "abel-invest upload-dashboard-session --session" in status_output
     assert "Research journal:" in status_output
     assert "Agent memory:" not in status_output
     assert ni.check_session(session, strict=False) == 0
@@ -400,6 +400,9 @@ def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: P
         "missing_journal_rounds": [],
     }
     assert bundle["payload"]["rounds"][0]["roundId"] == "round-001"
+    assert bundle["payload"]["rounds"][0]["branchId"] == "graph-v1"
+    assert bundle["payload"]["rounds"][0]["branchRoundIndex"] == 1
+    assert bundle["payload"]["rounds"][0]["sessionRoundIndex"] == 1
     assert bundle["payload"]["rounds"][0]["evidenceLabel"] == "candidate_causal_evidence"
     assert bundle["payload"]["rounds"][0]["inputRealization"]["realized_input_claim"] == "graph_supported"
     assert any(
@@ -408,6 +411,118 @@ def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: P
     )
     assert "replaySnapshot" not in bundle["payload"]
     assert "promotion" not in bundle["payload"]
+
+
+def test_build_skill_dashboard_session_bundle_aggregates_branches_and_rounds(tmp_path: Path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-session-dashboard", tmp_path / "research")
+    branch_a = ni.init_branch_dir(session, "graph-v1")
+    branch_b = ni.init_branch_dir(session, "target-control")
+    ni.write_branch_state(branch_a, {"created_at": "2026-04-24T01:00:00+00:00"})
+    ni.write_branch_state(branch_b, {"created_at": "2026-04-24T01:10:00+00:00"})
+    spec_a = ni.load_branch_spec(branch_a)
+    spec_a.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "selected_inputs": ["AAPL"],
+        }
+    )
+    ni.write_branch_spec(branch_a, spec_a)
+    spec_b = ni.load_branch_spec(branch_b)
+    spec_b.update(
+        {
+            "hypothesis": "TSLA target-only control branch.",
+            "evidence_intent": "control",
+            "input_claim": "target_only",
+            "mechanism_family": "target_momentum",
+            "selected_inputs": [],
+        }
+    )
+    ni.write_branch_spec(branch_b, spec_b)
+    for branch, round_id, verdict, decision in [
+        (branch_a, "round-001", "FAIL", "discard"),
+        (branch_b, "round-001", "PASS", "keep"),
+    ]:
+        ni.append_tsv_row(
+            branch / "results.tsv",
+            ni.RESULTS_HEADER,
+            {
+                "exp_id": session.name,
+                "ticker": "TSLA",
+                "branch_id": branch.name,
+                "round_id": round_id,
+                "decision": decision,
+                "lo_adj": "",
+                "ic": "",
+                "omega": "",
+                "sharpe": "",
+                "max_dd": "",
+                "pnl": "",
+                "K": "",
+                "score": "7/9",
+                "verdict": verdict,
+                "mode": "explore",
+                "description": f"{branch.name} round",
+                "result_path": "",
+                "report_path": "",
+                "handoff_path": "",
+            },
+        )
+    for branch, round_id, verdict, decision in [
+        (branch_b, "round-001", "PASS", "keep"),
+        (branch_a, "round-001", "FAIL", "discard"),
+    ]:
+        ni.append_tsv_row(
+            session / "events.tsv",
+            ni.EVENTS_HEADER,
+            {
+                "timestamp": "2026-04-24T01:20:00+00:00",
+                "event": "round_recorded",
+                "branch_id": branch.name,
+                "round_id": round_id,
+                "mode": "explore",
+                "verdict": verdict,
+                "decision": decision,
+                "description": f"{branch.name} round",
+                "artifact_path": "",
+            },
+        )
+    ni.render_session(session)
+
+    bundle = ni.build_skill_dashboard_session_bundle(
+        session,
+        uploaded_at="2026-05-01T01:30:00+00:00",
+    )
+
+    assert bundle["sessionId"] == "tsla-session-dashboard"
+    assert "branchId" not in bundle
+    assert bundle["payload"]["session"]["id"] == "tsla-session-dashboard"
+    assert [branch["id"] for branch in bundle["payload"]["branches"]] == [
+        "graph-v1",
+        "target-control",
+    ]
+    exploration_map = bundle["payload"]["explorationMap"]
+    assert exploration_map["source"] == "local_session_evidence"
+    assert exploration_map["confidence"] == "high"
+    assert any(node["nodeId"] == "TSLA.price" for node in exploration_map["nodes"])
+    assert any(node["nodeId"] == "AAPL.price" for node in exploration_map["nodes"])
+    assert any(edge["edgeId"] == "AAPL.price->TSLA.price" for edge in exploration_map["edges"])
+    assert [
+        (route["branchId"], route["status"])
+        for route in exploration_map["routes"]
+    ] == [
+        ("graph-v1", "discarded"),
+        ("target-control", "kept"),
+    ]
+    assert [
+        (round_item["branchId"], round_item["roundId"], round_item["sessionRoundIndex"])
+        for round_item in bundle["payload"]["rounds"]
+    ] == [
+        ("target-control", "round-001", 1),
+        ("graph-v1", "round-001", 2),
+    ]
 
 
 def test_post_skill_dashboard_bundle_sends_api_key_header() -> None:
@@ -437,6 +552,38 @@ def test_post_skill_dashboard_bundle_sends_api_key_header() -> None:
     request, timeout = calls[0]
     assert result["data"]["bundleId"] == "bundle-1"
     assert request.full_url == "https://router.example/web/skill-dashboard/bundles"
+    assert request.get_header("Api-key") == "secret-key"
+    assert request.get_header("Content-type") == "application/json"
+    assert timeout == 60
+
+
+def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
+    calls = []
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"code": 200, "data": {"sessionId": "s1"}}'
+
+    def fake_opener(request, timeout):
+        calls.append((request, timeout))
+        return _Response()
+
+    result = ni.post_skill_dashboard_session(
+        base_url="https://router.example",
+        api_key="secret-key",
+        bundle={"sessionId": "s1", "payload": {"session": {}, "branches": [], "rounds": []}},
+        opener=fake_opener,
+    )
+
+    request, timeout = calls[0]
+    assert result["data"]["sessionId"] == "s1"
+    assert request.full_url == "https://router.example/web/skill-dashboard/sessions"
     assert request.get_header("Api-key") == "secret-key"
     assert request.get_header("Content-type") == "application/json"
     assert timeout == 60
