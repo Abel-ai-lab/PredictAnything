@@ -438,11 +438,19 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
     assert runtime_profile["target"] == "TSLA"
     assert branch_spec["selected_inputs"] == ["AAPL", "MSFT"]
     assert dependencies["selected_inputs"] == ["AAPL", "MSFT"]
+    assert dependencies["selected_graph_nodes"] == ["AAPL.price", "MSFT.price"]
     assert data_manifest["selected_inputs"] == ["AAPL", "MSFT"]
+    assert data_manifest["selected_graph_nodes"] == ["AAPL.price", "MSFT.price"]
+    assert data_manifest["target_node"] == "TSLA.price"
     assert "selected_drivers" not in branch_spec
     assert "selected_drivers" not in dependencies
     assert "selected_drivers" not in data_manifest
     assert [feed["name"] for feed in data_manifest["feeds"]] == ["primary", "AAPL", "MSFT"]
+    assert [feed["graph_node_id"] for feed in data_manifest["feeds"]] == [
+        "TSLA.price",
+        "AAPL.price",
+        "MSFT.price",
+    ]
     assert probe_samples["target"] == "TSLA"
     assert len(probe_samples["sample_decision_dates"]) >= 2
     assert "DecisionContext" in context_guide
@@ -880,6 +888,50 @@ def test_frontier_reports_coverage_without_route_recommendation(tmp_path) -> Non
     assert not any(term in frontier_text.lower() for term in forbidden)
     assert "## Next Step" not in session_text
     assert "candidate_causal_evidence" in session_text
+
+
+def test_evidence_rows_record_graph_node_runtime_facts(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-graph-node-runtime", tmp_path / "research")
+    ni.write_discovery(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-node-v1")
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL price and MSFT volume pressure leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "Prepared graph nodes are not read or validation fails.",
+            "requested_start": "2020-01-01",
+            "selected_inputs": [
+                {"node_id": "AAPL.price", "role": "graph_input", "source": "frontier"},
+                {"node_id": "MSFT.volume", "role": "graph_input", "source": "frontier"},
+            ],
+        }
+    )
+    _record_synthetic_round(
+        session,
+        branch,
+        spec=spec,
+        result=_edge_result(traced_inputs=["MSFT"]),
+    )
+
+    ni.render_session(session)
+    ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
+    frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
+    row = ledger["rows"][-1]
+
+    assert row["evidence_label"] == "candidate_causal_evidence"
+    assert row["declared_selected_inputs"] == ["AAPL", "MSFT"]
+    assert row["declared_selected_graph_nodes"] == ["AAPL.price", "MSFT.volume"]
+    assert row["prepared_selected_graph_nodes"] == ["AAPL.price", "MSFT.volume"]
+    assert row["prepared_traced_graph_nodes"] == ["MSFT.volume"]
+    assert row["actual_graph_node_reads"] == ["MSFT.volume"]
+    assert row["actual_graph_node_read_source"] == "asset_read_mapping"
+    assert row["graph_node_read_gap"] is False
+    assert row["input_realization"]["selected_graph_node_reads"] == ["MSFT.volume"]
+    assert frontier["graph_node_reads"] == ["MSFT.volume"]
 
 
 def test_frontier_surfaces_candidate_failures_and_resume_facts(tmp_path) -> None:
