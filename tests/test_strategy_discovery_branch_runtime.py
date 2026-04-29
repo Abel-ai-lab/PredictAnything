@@ -465,11 +465,50 @@ def test_default_branch_spec_starts_as_graph_first_draft_declaration(tmp_path) -
     assert spec["complexity_class"] == "unspecified"
     assert spec["exploration_role"] == "candidate"
     assert spec["overlap_mode"] == "target_only"
-    assert spec["selected_inputs"] == ["AAPL", "MSFT"]
+    assert spec["target_node"] == "TSLA.price"
+    assert spec["selected_inputs"] == [
+        {"node_id": "AAPL.price", "role": "graph_input", "source": "frontier"},
+        {"node_id": "MSFT.price", "role": "graph_input", "source": "frontier"},
+    ]
+    assert "suggested_inputs" not in spec
+    assert ni.branch_selected_inputs(spec) == ["AAPL", "MSFT"]
+    assert ni.branch_selected_graph_nodes(spec) == ["AAPL.price", "MSFT.price"]
     assert "selected_drivers" not in spec
     assert status["protocol_complete"] is False
     assert "hypothesis" in status["protocol_gaps"]
     assert "evidence_intent:draft" in status["protocol_gaps"]
+    assert status["selected_graph_nodes"] == ["AAPL.price", "MSFT.price"]
+
+
+def test_branch_spec_preserves_structured_external_graph_inputs(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-external-input", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "external-v1")
+
+    spec = ni.load_branch_spec(branch)
+    spec["selected_inputs"] = [
+        {
+            "asset": "SPY",
+            "field": "volume",
+            "role": "control",
+            "source": "external",
+            "source_reason": "agent selected a market-liquidity control outside current frontier",
+        },
+        {"node_id": "SPY.volume", "source": "external"},
+    ]
+    ni.write_branch_spec(branch, spec)
+
+    stored = ni.load_branch_spec(branch)
+
+    assert stored["selected_inputs"] == [
+        {
+            "node_id": "SPY.volume",
+            "role": "control",
+            "source": "external",
+            "source_reason": "agent selected a market-liquidity control outside current frontier",
+        }
+    ]
+    assert ni.branch_selected_inputs(stored) == ["SPY"]
+    assert ni.branch_selected_graph_nodes(stored) == ["SPY.volume"]
 
 
 def test_default_branch_spec_stays_target_only_when_discovery_is_pending(tmp_path) -> None:

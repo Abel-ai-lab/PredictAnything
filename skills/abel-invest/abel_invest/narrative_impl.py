@@ -1709,6 +1709,7 @@ def init_branch_dir(session: Path, branch_id: str) -> Path:
     with SessionLock(session):
         discovery = load_discovery(session)
         readiness = load_readiness(session)
+        graph_frontier = load_graph_frontier(session)
         branch = session / "branches" / branch_id
         branch.mkdir(parents=True, exist_ok=True)
         (branch / "rounds").mkdir(parents=True, exist_ok=True)
@@ -1727,6 +1728,7 @@ def init_branch_dir(session: Path, branch_id: str) -> Path:
                     branch=branch,
                     discovery=discovery,
                     readiness=readiness,
+                    graph_frontier=graph_frontier,
                 ),
             )
         engine = branch / "engine.py"
@@ -5606,10 +5608,55 @@ def normalize_exploration_role(branch_spec: dict) -> str:
 
 
 def branch_selected_inputs(branch_spec: dict) -> list[str]:
+    return ordered_unique_upper(
+        asset
+        for asset, _field in (
+            split_graph_node_id(entry["node_id"])
+            for entry in branch_selected_input_entries(branch_spec)
+            if entry.get("node_id")
+        )
+    )
+
+
+def branch_selected_graph_nodes(branch_spec: dict) -> list[str]:
+    return ordered_unique_strings(
+        entry["node_id"]
+        for entry in branch_selected_input_entries(branch_spec)
+        if entry.get("node_id")
+    )
+
+
+def branch_selected_input_entries(branch_spec: dict) -> list[dict[str, str]]:
     raw = branch_spec.get("selected_inputs")
     if not isinstance(raw, list):
         return []
-    return ordered_unique_upper(raw)
+    entries: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in raw:
+        if isinstance(item, dict):
+            node_id = normalize_graph_node_ref(
+                str(item.get("node_id") or item.get("node") or "").strip()
+            )
+            if not node_id:
+                asset = str(item.get("asset") or item.get("ticker") or "").strip()
+                field = str(item.get("field") or "price").strip()
+                node_id = normalize_graph_node_ref(f"{asset}.{field}") if asset else ""
+            role = str(item.get("role") or "graph_input").strip() or "graph_input"
+            source = str(item.get("source") or "frontier").strip() or "frontier"
+            source_reason = str(item.get("source_reason") or "").strip()
+        else:
+            node_id = normalize_graph_node_ref(str(item or "").strip())
+            role = "graph_input"
+            source = "frontier"
+            source_reason = ""
+        if not node_id or node_id in seen:
+            continue
+        entry = {"node_id": node_id, "role": role, "source": source}
+        if source_reason:
+            entry["source_reason"] = source_reason
+        entries.append(entry)
+        seen.add(node_id)
+    return entries
 
 
 def ordered_unique_upper(values) -> list[str]:
@@ -5627,9 +5674,15 @@ def ordered_unique_strings(values) -> list[str]:
 
 def canonicalize_branch_spec_inputs(payload: dict) -> dict:
     branch_spec = dict(payload)
-    selected = branch_selected_inputs(branch_spec)
-    if selected or "selected_inputs" in branch_spec:
-        branch_spec["selected_inputs"] = selected
+    entries = branch_selected_input_entries(branch_spec)
+    if entries or "selected_inputs" in branch_spec:
+        raw = branch_spec.get("selected_inputs")
+        if isinstance(raw, list) and any(isinstance(item, dict) for item in raw):
+            branch_spec["selected_inputs"] = entries
+        else:
+            branch_spec["selected_inputs"] = [
+                split_graph_node_id(entry["node_id"])[0] for entry in entries
+            ]
     branch_spec.pop("selected_drivers", None)
     return branch_spec
 
@@ -5642,6 +5695,7 @@ def branch_declaration_status(branch_spec: dict) -> dict[str, object]:
     invalidation_condition = str(branch_spec.get("invalidation_condition") or "").strip()
     requested_start = str(branch_spec.get("requested_start") or "").strip()
     selected_inputs = branch_selected_inputs(branch_spec)
+    selected_graph_nodes = branch_selected_graph_nodes(branch_spec)
 
     gaps: list[str] = []
     if not has_explicit_hypothesis(hypothesis):
@@ -5674,6 +5728,7 @@ def branch_declaration_status(branch_spec: dict) -> dict[str, object]:
         "invalidation_condition": invalidation_condition,
         "requested_start": requested_start,
         "selected_inputs": selected_inputs,
+        "selected_graph_nodes": selected_graph_nodes,
     }
 
 
@@ -5697,37 +5752,60 @@ def write_branch_spec(branch: Path, payload: dict) -> None:
     )
 
 
-def discovery_candidate_tickers(discovery: dict) -> list[str]:
-    target = str(discovery.get("ticker") or "").strip().upper()
-    ordered: list[str] = []
-    for section in ("parents", "blanket_new", "children"):
-        for item in discovery.get(section) or []:
-            if isinstance(item, dict):
-                ticker = str(item.get("ticker") or "").strip().upper()
-            else:
-                ticker = str(item or "").strip().upper()
-            if not ticker or ticker == target or ticker in ordered:
-                continue
-            ordered.append(ticker)
-    return ordered
+def graph_frontier_candidate_node_ids(
+    frontier: dict,
+    readiness: dict,
+    *,
+    limit: int,
+) -> list[str]:
+    target_node = normalize_graph_node_ref(str(frontier.get("target_node") or "").strip())
+    usable_assets = set(readiness_usable_tickers(readiness))
+    candidates: list[tuple[int, int, str]] = []
+    for node in frontier.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        node_id = normalize_graph_node_ref(str(node.get("node_id") or "").strip())
+        if not node_id or node_id == target_node:
+            continue
+        roles = {str(role) for role in node.get("discovery_roles") or []}
+        if "target" in roles:
+            continue
+        asset = str(node.get("asset") or split_graph_node_id(node_id)[0]).upper()
+        readiness_rank = 0 if asset in usable_assets else 1
+        depth = int(node.get("depth") or 0)
+        candidates.append((readiness_rank, depth, node_id))
+    return [node_id for _ready, _depth, node_id in sorted(candidates)[:limit]]
 
 
-def suggest_branch_drivers(discovery: dict, readiness: dict, *, limit: int = 5) -> list[str]:
-    discovered = discovery_candidate_tickers(discovery)
-    usable = set(readiness_usable_tickers(readiness))
-    prioritized = [ticker for ticker in discovered if ticker in usable]
-    fallback = [ticker for ticker in discovered if ticker not in usable]
-    return (prioritized + fallback)[:limit]
+def graph_input_entry(
+    node_id: str,
+    *,
+    source: str = "frontier",
+    role: str = "graph_input",
+) -> dict[str, str]:
+    return {"node_id": normalize_graph_node_ref(node_id), "role": role, "source": source}
 
 
-def build_default_branch_spec(*, branch: Path, discovery: dict, readiness: dict) -> dict:
-    suggested = suggest_branch_drivers(discovery, readiness, limit=5)
-    selected = suggested[: min(3, len(suggested))]
-    graph_first = bool(selected)
+def build_default_branch_spec(
+    *,
+    branch: Path,
+    discovery: dict,
+    readiness: dict,
+    graph_frontier: dict,
+) -> dict:
+    suggested_nodes = graph_frontier_candidate_node_ids(graph_frontier, readiness, limit=5)
+    selected_nodes = suggested_nodes[: min(3, len(suggested_nodes))]
+    graph_first = bool(selected_nodes)
     return {
         "version": 2,
         "branch_id": branch.name,
         "target": discovery.get("ticker", branch.parent.parent.parent.name.upper()),
+        "target_node": normalize_graph_node_ref(
+            str(graph_frontier.get("target_node") or "")
+        )
+        or default_graph_node_id(
+            str(discovery.get("ticker") or branch.parent.parent.parent.name).upper()
+        ),
         "hypothesis": "",
         "evidence_intent": "draft",
         "input_claim": "graph_supported" if graph_first else "target_only",
@@ -5740,8 +5818,7 @@ def build_default_branch_spec(*, branch: Path, discovery: dict, readiness: dict)
         "requested_start": _get_backtest_start(discovery),
         "resolved_start_policy": "requested",
         "overlap_mode": "target_only",
-        "selected_inputs": selected,
-        "suggested_drivers": suggested,
+        "selected_inputs": [graph_input_entry(node_id) for node_id in selected_nodes],
         "data_requirements": {
             "timeframe": "1d",
             "fields": ["close"],
