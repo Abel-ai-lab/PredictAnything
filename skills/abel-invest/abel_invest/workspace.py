@@ -271,7 +271,6 @@ abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branc
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 edit research/tsla/tsla-v1/research_journal.md
-abel-invest upload-dashboard-bundle --branch research/tsla/tsla-v1/branches/<chosen-branch> --base-url <router-base-url>
 ```
 
 Use that path as orientation, not as a rigid script. The important boundary is:
@@ -301,8 +300,6 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `prepare-branch` should run before a recorded round
 - `frontier.md` reports input realization: declared graph-supported inputs only
   count as realized when the engine reads prepared auxiliary inputs
-- `upload-dashboard-bundle` uploads branch evidence from the current workspace
-  surfaces, not promotion or replay artifacts
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter baseline for the first end-to-end run, not a finished branch thesis
 
@@ -363,7 +360,6 @@ abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branc
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 edit research/tsla/tsla-v1/research_journal.md
-abel-invest upload-dashboard-bundle --branch research/tsla/tsla-v1/branches/<chosen-branch> --base-url <router-base-url>
 ```
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
@@ -378,9 +374,7 @@ runtime for daily work. Treat branch count as a file-organization fact, not as
 proof of graph/input breadth. Use `research_journal.md` to record your own
 evidence-linked insight and continue/pivot reasoning after each recorded round.
 Check journal coverage before starting another round. Check input realization before treating a
-declared graph-supported branch as graph-supported evidence. When a branch has
-candidate evidence worth external inspection, `upload-dashboard-bundle` sends
-branch evidence from the current workspace surfaces.
+declared graph-supported branch as graph-supported evidence.
 This workspace is for alpha-managed branch research, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.

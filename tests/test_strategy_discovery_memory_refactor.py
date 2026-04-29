@@ -253,8 +253,8 @@ def test_run_branch_round_updates_ledger_and_agent_context(
 
     ni.print_status(session)
     status_output = capsys.readouterr().out
-    assert "Dashboard upload:" in status_output
-    assert "abel-invest upload-dashboard-bundle --branch" in status_output
+    assert "Dashboard upload:" not in status_output
+    assert "abel-invest upload-dashboard-bundle --branch" not in status_output
     assert "Research journal:" in status_output
     assert "Agent memory:" not in status_output
     assert ni.check_session(session, strict=False) == 0

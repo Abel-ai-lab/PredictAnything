@@ -2118,18 +2118,6 @@ def run_branch_round(args: argparse.Namespace) -> int:
             frame_text,
         ],
     )
-    if decision == "keep" and dashboard_round_is_candidate(
-        session=session,
-        branch_id=branch.name,
-        round_id=round_id,
-    ):
-        print("")
-        print("Dashboard upload:")
-        print(
-            "  "
-            f"abel-invest upload-dashboard-bundle --branch {branch} "
-            "--base-url <router-base-url>"
-        )
     return 0
 
 

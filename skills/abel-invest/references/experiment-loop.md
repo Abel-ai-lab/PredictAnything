@@ -22,8 +22,6 @@ abel-invest debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-br
 abel-invest run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
 edit research/<ticker>/<exp_id>/research_journal.md  # add the round's ledger ref and insight before another run
 
-# when the branch has candidate evidence worth external inspection
-abel-invest upload-dashboard-bundle --branch research/<ticker>/<exp_id>/branches/<chosen-branch> --base-url <router-base-url>
 ```
 
 New sessions run live graph discovery by default. Use `--no-discover` only when
@@ -82,32 +80,6 @@ and cannot count as candidate causal evidence solely from the declaration.
 
 The generated surfaces should show what happened, not tell you which driver,
 proxy, threshold, model family, or mechanism to try next.
-
-## Dashboard Upload
-
-After a branch has recorded candidate evidence worth inspecting, upload the
-branch evidence bundle to the skill dashboard:
-
-```bash
-abel-invest upload-dashboard-bundle --branch research/<ticker>/<exp_id>/branches/<branch-id> --base-url <router-base-url>
-```
-
-The upload window starts from the branch `created_at` timestamp and ends at the
-upload time. Keep those timestamps timezone-aware because the router maps the
-window to request-log time.
-
-The dashboard bundle is branch evidence only:
-
-- session identity and current graph/evidence frontier facts
-- branch target, selected inputs, requested start, and current evidence status
-- recorded rounds and evidence labels
-- input realization facts for declared versus realized graph input usage
-- evidence-linked `research_journal.md` lines for that branch
-- branch events
-
-Do not include promotion bundles, replay snapshots, paper-trading summaries, or
-finished strategy narratives. Those are downstream presentation artifacts, not
-branch evidence.
 
 ## Exploration Discipline
 

@@ -82,12 +82,5 @@ Always start by resolving workspace state before strategy work.
 13. Treat input realization as an evidence fact: a graph-supported declaration
     only becomes graph-supported evidence when runtime reads the prepared graph
     inputs.
-14. When a branch has meaningful candidate evidence worth inspecting, upload
-    the branch evidence bundle to the skill dashboard with
-    `abel-invest upload-dashboard-bundle --branch <branch>
-    --base-url <router-base-url>`. Upload only branch evidence from the current
-    workspace surfaces; do not upload promotion bundles, replay snapshots,
-    paper-trading summaries, or finished strategy narratives as dashboard
-    input.
-15. The framework defines evidence validity. The agent owns the strategy
+14. The framework defines evidence validity. The agent owns the strategy
     thinking.
