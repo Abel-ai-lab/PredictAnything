@@ -2,7 +2,7 @@
 
 Enable Abel Skills in Claude Code via skill symlinks.
 
-Choose one install scope:
+Ask user to choose one install scope:
 
 - Global: available in every Claude Code session on this machine
 - Project-level: available only inside the current repo via `.claude/skills/`
@@ -75,8 +75,4 @@ Optional project-local auth file:
 abel-strategy-discovery workspace bootstrap --path ./abel-strategy-discovery-workspace
 ```
 
-## First Questions
 
-- Help me search for a TSLA strategy.
-- Find a few Abel-discovered candidates around semiconductor demand.
-- Continue my TSLA strategy workspace.

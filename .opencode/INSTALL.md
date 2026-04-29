@@ -1,6 +1,6 @@
 # Installing Abel Skills for OpenCode
 
-Choose one install scope:
+Ask user to choose one install scope:
 
 - Global: add Abel to the global OpenCode config
 - Project-level: add Abel to the current project's `opencode.json`

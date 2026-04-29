@@ -28,3 +28,8 @@ Do not guess from shell environment alone.
    session continuation, branch preparation, branch debugging, or branch runs,
    use `abel-strategy-discovery`.
 3. For other graph-native or decision-oriented Abel reads, use `abel-ask`.
+
+## Some Good First Questions if user don't know what to ask:
+
+- Help me search for a TSLA trading strategy.
+- Should I still invest in a MBA degree?
