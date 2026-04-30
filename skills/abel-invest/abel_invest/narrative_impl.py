@@ -64,6 +64,7 @@ EVENTS_HEADER = [
 ]
 
 DEFAULT_BACKTEST_START = "2020-01-01"
+DEFAULT_ABEL_ROUTER_BASE_URL = "https://api.abel.ai/router/"
 SESSION_STATE_FILENAME = "session_state.json"
 BRANCH_STATE_FILENAME = "branch_state.json"
 READINESS_FILENAME = "readiness.json"
@@ -490,14 +491,9 @@ def main() -> int:
 
     upload_dashboard = sub.add_parser(
         "upload-dashboard-bundle",
-        help="Upload branch evidence to the Abel router skill dashboard",
+        help="Send branch evidence to the online research view",
     )
     upload_dashboard.add_argument("--branch", required=True)
-    upload_dashboard.add_argument(
-        "--base-url",
-        default="",
-        help="Abel router base URL. Defaults to ABEL_ROUTER_BASE_URL or CAP_ROUTER_BASE_URL.",
-    )
     upload_dashboard.add_argument(
         "--api-key",
         default="",
@@ -512,6 +508,26 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="Build and print the payload without sending it.",
+    )
+    upload_session_dashboard = sub.add_parser(
+        "visualize-session",
+        help="Create an online exploration summary from a session folder",
+    )
+    upload_session_dashboard.add_argument("--session", required=True)
+    upload_session_dashboard.add_argument(
+        "--api-key",
+        default="",
+        help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
+    )
+    upload_session_dashboard.add_argument(
+        "--output-json",
+        default=None,
+        help="Optional path to write the generated payload before sending.",
+    )
+    upload_session_dashboard.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Build and print the generated payload without sending it.",
     )
 
     debug_branch = sub.add_parser(
@@ -693,6 +709,8 @@ def main() -> int:
         return promote_branch_bundle(args)
     if args.command == "upload-dashboard-bundle":
         return upload_skill_dashboard_bundle(args)
+    if args.command == "visualize-session":
+        return upload_skill_dashboard_session(args)
     if args.command == "debug-branch":
         return debug_branch_run(args)
     if args.command == "render":
@@ -1993,7 +2011,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
     start_at = require_timezone_aware_iso(created_at or _now(), field_name="startAt")
     end_at = require_timezone_aware_iso(uploaded_at or _now(), field_name="endAt")
     if datetime.fromisoformat(end_at) <= datetime.fromisoformat(start_at):
-        raise RuntimeError("skill dashboard upload requires endAt after startAt")
+        raise RuntimeError("branch evidence view requires endAt after startAt")
 
     latest = rows[-1] if rows else {}
     latest_note = read_round_note(branch, latest.get("round_id", ""))
@@ -2021,6 +2039,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
     input_realization = frontier.get("input_realization") if isinstance(frontier.get("input_realization"), dict) else {}
     research_reflection = frontier.get("research_reflection") if isinstance(frontier.get("research_reflection"), dict) else {}
     journal_coverage = frontier.get("journal_coverage") if isinstance(frontier.get("journal_coverage"), dict) else {}
+    round_order = session_round_order(events)
     return {
         "sessionId": session.name,
         "branchId": branch.name,
@@ -2041,7 +2060,12 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
                 "inputRealization": input_realization,
             },
             "branch": branch_payload,
-            "rounds": skill_dashboard_rounds(branch, rows, ledger),
+            "rounds": indexed_skill_dashboard_rounds(
+                branch=branch,
+                rows=rows,
+                ledger=ledger,
+                round_order=round_order,
+            ),
             "branchInsights": skill_dashboard_branch_insights(
                 session=session,
                 ledger=ledger,
@@ -2051,6 +2075,513 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
             "episodes": skill_dashboard_episodes(events, branch_id=branch.name),
         },
     }
+
+
+def build_skill_dashboard_session_bundle(session: Path, *, uploaded_at: str | None = None) -> dict:
+    session = resolve_workspace_arg_path(session).resolve()
+    discovery = load_discovery(session)
+    render_session(session)
+    frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
+    ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
+    if not ledger:
+        ledger = build_evidence_ledger(session, discovery, load_branches(session))
+        frontier = build_frontier(ledger, journal_status=build_research_journal_status(session, ledger=ledger, frontier={}))
+    events = read_tsv_rows(session / "events.tsv")
+    start_at = require_timezone_aware_iso(
+        _first_session_event_time(events) or _now(),
+        field_name="startAt",
+    )
+    end_at = require_timezone_aware_iso(uploaded_at or _now(), field_name="endAt")
+    if datetime.fromisoformat(end_at) <= datetime.fromisoformat(start_at):
+        raise RuntimeError("online session view requires endAt after startAt")
+
+    graph_priority = frontier.get("graph_priority") if isinstance(frontier.get("graph_priority"), dict) else {}
+    input_realization = frontier.get("input_realization") if isinstance(frontier.get("input_realization"), dict) else {}
+    research_reflection = frontier.get("research_reflection") if isinstance(frontier.get("research_reflection"), dict) else {}
+    journal_coverage = frontier.get("journal_coverage") if isinstance(frontier.get("journal_coverage"), dict) else {}
+    round_order = session_round_order(events)
+    branches = []
+    rounds = []
+    for branch_info in load_branches(session):
+        branch = branch_info["branch_dir"]
+        branch_spec = load_branch_spec(branch)
+        branch_rows = read_tsv_rows(branch / "results.tsv")
+        latest = branch_rows[-1] if branch_rows else {}
+        branch_payload = skill_dashboard_branch_payload(
+            branch=branch,
+            branch_spec=branch_spec,
+            discovery=discovery,
+            ledger=ledger,
+            rows=branch_rows,
+        )
+        branches.append(branch_payload)
+        rounds.extend(
+            indexed_skill_dashboard_rounds(
+                branch=branch,
+                rows=branch_rows,
+                ledger=ledger,
+                round_order=round_order,
+            )
+        )
+        if latest and not branch_payload.get("latestRoundId"):
+            branch_payload["latestRoundId"] = latest.get("round_id", "")
+    missing_order = 0
+    for item in rounds:
+        if not item["sessionRoundIndex"]:
+            missing_order += 1
+            item["sessionRoundIndex"] = len(round_order) + missing_order
+    rounds.sort(
+        key=lambda item: (
+            item["sessionRoundIndex"],
+            str(item.get("branchId") or ""),
+            str(item.get("roundId") or ""),
+        )
+    )
+
+    return {
+        "sessionId": session.name,
+        "startAt": start_at,
+        "endAt": end_at,
+        "payload": {
+            "session": {
+                "id": session.name,
+                "ticker": discovery.get("ticker", session.parent.name.upper()),
+                "assetScope": discovery.get("ticker", session.parent.name.upper()),
+                "targetNode": dashboard_session_target_node(branches, discovery),
+                "graphDiscoverySource": ledger.get("graph_discovery_source", discovery.get("source", "unknown")),
+                "graphDiscoveryK": ledger.get("graph_discovery_k", discovery.get("K_discovery", 0)),
+                "discoveredDrivers": ordered_unique_upper(ledger.get("discovered_drivers") or []),
+                "frontierRows": frontier.get("row_count", 0),
+                "frontier": frontier,
+                "status": dashboard_session_status(rounds),
+                "graphFirstUncovered": bool(graph_priority.get("graph_first_uncovered")),
+                "researchReflection": research_reflection,
+                "journalCoverage": journal_coverage,
+                "inputRealization": input_realization,
+            },
+            "branches": branches,
+            "rounds": rounds,
+            "explorationMap": build_skill_dashboard_exploration_map(
+                session=session,
+                discovery=discovery,
+                branches=branches,
+                rounds=rounds,
+                ledger=ledger,
+            ),
+            "branchInsights": skill_dashboard_session_insights(
+                session=session,
+                ledger=ledger,
+                frontier=frontier,
+            ),
+            "episodes": skill_dashboard_session_episodes(events),
+        },
+    }
+
+
+def session_round_order(events: list[dict[str, str]]) -> dict[tuple[str, str], int]:
+    order: dict[tuple[str, str], int] = {}
+    for row in events:
+        if row.get("event") not in {"round_recorded", "round_workflow_blocked"}:
+            continue
+        branch_id = str(row.get("branch_id") or "").strip()
+        round_id = str(row.get("round_id") or "").strip()
+        if branch_id and round_id and (branch_id, round_id) not in order:
+            order[(branch_id, round_id)] = len(order) + 1
+    return order
+
+
+def build_skill_dashboard_exploration_map(
+    *,
+    session: Path,
+    discovery: dict,
+    branches: list[dict],
+    rounds: list[dict],
+    ledger: dict,
+) -> dict:
+    target_node = str(discovery.get("target_node") or "").strip()
+    if not target_node:
+        ticker = str(discovery.get("ticker") or session.parent.name).strip().upper()
+        target_node = f"{ticker}.price" if ticker else ""
+
+    nodes: dict[str, dict] = {}
+    edges: dict[str, dict] = {}
+    routes: list[dict] = []
+    map_rounds: list[dict] = []
+    discovery_nodes = dashboard_discovery_node_lookup(discovery)
+
+    if target_node:
+        touch_dashboard_node(
+            nodes,
+            target_node,
+            label=target_node.split(".", 1)[0],
+            kind="target",
+            status="target",
+            source="discovery",
+        )
+
+    for group_name, status in (("parents", "discovered"), ("blanket_new", "discovered")):
+        for item in discovery.get(group_name) or []:
+            if not isinstance(item, dict):
+                continue
+            node_id = str(item.get("node_id") or "").strip()
+            ticker = str(item.get("ticker") or node_id.split(".", 1)[0]).strip().upper()
+            if not node_id:
+                node_id = f"{ticker}.price" if ticker else ""
+            if not node_id:
+                continue
+            touch_dashboard_node(
+                nodes,
+                node_id,
+                label=ticker or node_id,
+                kind="driver",
+                status=status,
+                source=f"discovery.{group_name}",
+            )
+            if target_node and node_id != target_node:
+                touch_dashboard_edge(
+                    edges,
+                    node_id,
+                    target_node,
+                    kind=group_name,
+                    source=f"discovery.{group_name}",
+                )
+
+    ledger_rows = [
+        row for row in (ledger.get("rows") or [])
+        if isinstance(row, dict) and row.get("run_type") == "round"
+    ]
+    ledger_by_round = {
+        (str(row.get("branch_id") or ""), str(row.get("round_id") or "")): row
+        for row in ledger_rows
+    }
+    rounds_by_branch: dict[str, list[dict]] = {}
+    for item in rounds:
+        rounds_by_branch.setdefault(str(item.get("branchId") or ""), []).append(item)
+
+    for branch in branches:
+        branch_id = str(branch.get("id") or "").strip()
+        selected = ordered_unique_upper(branch.get("selectedInputs") or [])
+        branch_rounds = rounds_by_branch.get(branch_id, [])
+        latest_round_id = str(branch.get("latestRoundId") or "")
+        best_round_id = str(branch.get("bestRoundId") or "")
+        route_status = dashboard_route_status(branch_rounds)
+        selected_node_ids = [
+            dashboard_node_id(symbol, discovery_nodes)
+            for symbol in selected
+            if dashboard_node_id(symbol, discovery_nodes)
+        ]
+        actual_reads = ordered_unique_upper(
+            item
+            for row in branch_rounds
+            for item in (row.get("actualReads") or [])
+        )
+        actual_node_ids = [
+            dashboard_node_id(symbol, discovery_nodes)
+            for symbol in actual_reads
+            if dashboard_node_id(symbol, discovery_nodes)
+        ]
+        for node_id in selected_node_ids:
+            touch_dashboard_node(
+                nodes,
+                node_id,
+                label=node_id.split(".", 1)[0],
+                kind="driver",
+                status="selected",
+                source="branch.selected_inputs",
+                branch_id=branch_id,
+            )
+            if target_node and node_id != target_node:
+                touch_dashboard_edge(
+                    edges,
+                    node_id,
+                    target_node,
+                    kind="selected_input",
+                    source="branch.selected_inputs",
+                    branch_id=branch_id,
+                )
+        for node_id in actual_node_ids:
+            touch_dashboard_node(
+                nodes,
+                node_id,
+                label=node_id.split(".", 1)[0],
+                kind="driver",
+                status="read",
+                source="ledger.actual_reads",
+                branch_id=branch_id,
+            )
+            if target_node and node_id != target_node:
+                touch_dashboard_edge(
+                    edges,
+                    node_id,
+                    target_node,
+                    kind="actual_read",
+                    source="ledger.actual_reads",
+                    branch_id=branch_id,
+                )
+
+        routes.append(
+            {
+                "branchId": branch_id,
+                "label": branch_id,
+                "status": route_status,
+                "targetNodeId": target_node,
+                "selectedNodeIds": selected_node_ids,
+                "actualReadNodeIds": actual_node_ids,
+                "bestRoundId": best_round_id,
+                "latestRoundId": latest_round_id,
+            }
+        )
+        for round_item in branch_rounds:
+            key = (branch_id, str(round_item.get("roundId") or ""))
+            ledger_row = ledger_by_round.get(key, {})
+            highlight_nodes = actual_node_ids or selected_node_ids
+            if target_node:
+                highlight_nodes = ordered_unique_strings([*highlight_nodes, target_node])
+            map_rounds.append(
+                {
+                    "branchId": branch_id,
+                    "roundId": round_item.get("roundId", ""),
+                    "sessionRoundIndex": round_item.get("sessionRoundIndex"),
+                    "branchRoundIndex": round_item.get("branchRoundIndex"),
+                    "verdict": round_item.get("verdict", ""),
+                    "decision": round_item.get("decision", ""),
+                    "evidenceLabel": round_item.get("evidenceLabel", ""),
+                    "score": round_item.get("score", ""),
+                    "highlightNodeIds": highlight_nodes,
+                    "highlightEdgeIds": [
+                        f"{node_id}->{target_node}"
+                        for node_id in highlight_nodes
+                        if target_node and node_id != target_node
+                    ],
+                    "metricFailureMetrics": ledger_row.get("metric_failure_metrics", []),
+                }
+            )
+
+    return {
+        "source": "local_session_evidence",
+        "confidence": "high",
+        "targetNodeId": target_node,
+        "nodes": sorted(nodes.values(), key=lambda item: item["nodeId"]),
+        "edges": sorted(edges.values(), key=lambda item: item["edgeId"]),
+        "routes": routes,
+        "rounds": sorted(
+            map_rounds,
+            key=lambda item: (
+                item.get("sessionRoundIndex") or 2147483647,
+                item.get("branchId") or "",
+                item.get("roundId") or "",
+            ),
+        ),
+        "queries": [],
+    }
+
+
+def dashboard_discovery_node_lookup(discovery: dict) -> dict[str, str]:
+    lookup = {}
+    for key in ("parents", "blanket_new", "children"):
+        for item in discovery.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            ticker = str(item.get("ticker") or "").strip().upper()
+            node_id = str(item.get("node_id") or "").strip()
+            if ticker and node_id:
+                lookup[ticker] = node_id
+    ticker = str(discovery.get("ticker") or discovery.get("target_asset") or "").strip().upper()
+    target_node = str(discovery.get("target_node") or "").strip()
+    if ticker and target_node:
+        lookup[ticker] = target_node
+    return lookup
+
+
+def dashboard_node_id(symbol: str, discovery_nodes: dict[str, str]) -> str:
+    value = str(symbol or "").strip().upper()
+    if not value:
+        return ""
+    return discovery_nodes.get(value, f"{value}.price")
+
+
+def dashboard_route_status(rounds: list[dict]) -> str:
+    if any(item.get("decision") == "keep" for item in rounds):
+        return "kept"
+    if any(str(item.get("verdict") or "").upper() == "FAIL" for item in rounds):
+        return "discarded"
+    if any(str(item.get("verdict") or "").upper() == "ERROR" for item in rounds):
+        return "blocked"
+    return "exploring"
+
+
+def touch_dashboard_node(
+    nodes: dict[str, dict],
+    node_id: str,
+    *,
+    label: str,
+    kind: str,
+    status: str,
+    source: str,
+    branch_id: str = "",
+) -> None:
+    node = nodes.setdefault(
+        node_id,
+        {
+            "nodeId": node_id,
+            "label": label,
+            "kind": kind,
+            "status": status,
+            "sources": [],
+            "branchIds": [],
+        },
+    )
+    if status == "read" or node.get("status") in {"discovered", "target"}:
+        node["status"] = status if node.get("status") != "target" else "target"
+    append_unique_nonempty(node["sources"], source)
+    append_unique_nonempty(node["branchIds"], branch_id)
+
+
+def touch_dashboard_edge(
+    edges: dict[str, dict],
+    from_node_id: str,
+    to_node_id: str,
+    *,
+    kind: str,
+    source: str,
+    branch_id: str = "",
+) -> None:
+    edge_id = f"{from_node_id}->{to_node_id}"
+    edge = edges.setdefault(
+        edge_id,
+        {
+            "edgeId": edge_id,
+            "fromNodeId": from_node_id,
+            "toNodeId": to_node_id,
+            "kind": kind,
+            "sources": [],
+            "branchIds": [],
+        },
+    )
+    append_unique_nonempty(edge["sources"], source)
+    append_unique_nonempty(edge["branchIds"], branch_id)
+
+
+def append_unique_nonempty(items: list, value: str) -> None:
+    text = str(value or "").strip()
+    if text and text not in items:
+        items.append(text)
+
+
+def indexed_skill_dashboard_rounds(
+    *,
+    branch: Path,
+    rows: list[dict[str, str]],
+    ledger: dict,
+    round_order: dict[tuple[str, str], int],
+) -> list[dict]:
+    rounds = []
+    for branch_round_index, round_item in enumerate(skill_dashboard_rounds(branch, rows, ledger), start=1):
+        rounds.append(
+            {
+                **round_item,
+                "branchId": branch.name,
+                "branchRoundIndex": branch_round_index,
+                "sessionRoundIndex": round_order.get((branch.name, round_item.get("roundId", "")), 0),
+            }
+        )
+    return rounds
+
+
+def skill_dashboard_branch_payload(
+    *,
+    branch: Path,
+    branch_spec: dict,
+    discovery: dict,
+    ledger: dict,
+    rows: list[dict[str, str]],
+) -> dict:
+    latest = rows[-1] if rows else {}
+    latest_note = read_round_note(branch, latest.get("round_id", ""))
+    best_round_id = dashboard_best_round_id(rows)
+    return {
+        "id": branch.name,
+        "targetAsset": dashboard_branch_target_asset(branch_spec, discovery),
+        "targetNode": dashboard_branch_target_node(branch_spec, discovery),
+        "requestedStart": branch_requested_start(branch, discovery),
+        "selectedInputs": branch_selected_inputs(branch_spec),
+        "sourceType": str(branch_spec.get("input_claim") or "unspecified"),
+        "methodFamily": str(branch_spec.get("model_family") or "").strip(),
+        "mechanismFamily": str(branch_spec.get("mechanism_family") or "").strip(),
+        "complexityClass": str(branch_spec.get("complexity_class") or "").strip(),
+        "status": str(latest.get("decision") or branch_spec.get("status") or "exploratory"),
+        "thesis": current_branch_hypothesis(branch, rows) or latest_note.get("hypothesis", ""),
+        "latestEvidenceLabel": dashboard_latest_evidence_label(
+            ledger,
+            branch_id=branch.name,
+            round_id=latest.get("round_id", ""),
+        ),
+        "bestRoundId": best_round_id,
+        "latestRoundId": latest.get("round_id", ""),
+    }
+
+
+def dashboard_best_round_id(rows: list[dict[str, str]]) -> str:
+    for row in reversed(rows):
+        if row.get("decision") == "keep":
+            return row.get("round_id", "")
+    return rows[-1].get("round_id", "") if rows else ""
+
+
+def dashboard_session_target_node(branches: list[dict], discovery: dict) -> str:
+    for branch in branches:
+        target = str(branch.get("targetNode") or "").strip()
+        if target:
+            return target
+    ticker = str(discovery.get("ticker") or "").strip().upper()
+    return f"{ticker}.price" if ticker else ""
+
+
+def dashboard_session_status(rounds: list[dict]) -> str:
+    if any(item.get("decision") == "keep" for item in rounds):
+        return "has_candidate"
+    if any(item.get("evidenceLabel") == "workflow_blocker" for item in rounds):
+        return "blocked"
+    return "exploring"
+
+
+def skill_dashboard_session_insights(*, session: Path, ledger: dict, frontier: dict) -> list[dict]:
+    insights = []
+    for branch_info in load_branches(session):
+        insights.extend(
+            skill_dashboard_branch_insights(
+                session=session,
+                ledger=ledger,
+                frontier=frontier,
+                branch_id=branch_info["branch_id"],
+            )
+        )
+    return insights
+
+
+def skill_dashboard_session_episodes(rows: list[dict[str, str]]) -> list[dict]:
+    return [
+        {
+            "timestamp": row.get("timestamp", ""),
+            "event": row.get("event", ""),
+            "branchId": row.get("branch_id", ""),
+            "roundId": row.get("round_id", ""),
+            "mode": row.get("mode", ""),
+            "verdict": row.get("verdict", ""),
+            "decision": row.get("decision", ""),
+            "summary": row.get("description", ""),
+            "artifactPath": row.get("artifact_path", ""),
+        }
+        for row in rows
+    ]
+
+
+def _first_session_event_time(rows: list[dict[str, str]]) -> str:
+    for row in rows:
+        timestamp = str(row.get("timestamp") or "").strip()
+        if timestamp:
+            return timestamp
+    return ""
 
 
 def post_skill_dashboard_bundle(
@@ -2079,7 +2610,37 @@ def post_skill_dashboard_bundle(
             raw = response.read().decode("utf-8")
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Skill dashboard upload failed: HTTP {exc.code}: {detail}") from exc
+        raise RuntimeError(f"Dashboard bundle upload failed: HTTP {exc.code}: {detail}") from exc
+    return json.loads(raw)
+
+
+def post_skill_dashboard_session(
+    *,
+    base_url: str,
+    api_key: str,
+    bundle: dict,
+    opener=urlopen,
+    timeout: int = 60,
+) -> dict:
+    normalized_base_url = str(base_url or "").strip().rstrip("/")
+    if not normalized_base_url:
+        raise RuntimeError("Missing Abel router base URL")
+    normalized_api_key = str(api_key or "").strip()
+    if not normalized_api_key:
+        raise RuntimeError("Missing Abel API key")
+    body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+    request = Request(
+        f"{normalized_base_url}/web/skill-dashboard/sessions",
+        data=body,
+        headers={"Content-Type": "application/json", "api-key": normalized_api_key},
+        method="POST",
+    )
+    try:
+        with opener(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Session visualization failed: HTTP {exc.code}: {detail}") from exc
     return json.loads(raw)
 
 
@@ -2095,22 +2656,34 @@ def upload_skill_dashboard_bundle(args: argparse.Namespace) -> int:
         return 0
 
     workspace_root = find_workspace_root(branch)
-    base_url = resolve_skill_dashboard_base_url(args.base_url)
+    base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
     result = post_skill_dashboard_bundle(base_url=base_url, api_key=api_key, bundle=bundle)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
 
 
-def resolve_skill_dashboard_base_url(value: str | None) -> str:
-    base_url = (
-        str(value or "").strip()
-        or os.getenv("ABEL_ROUTER_BASE_URL", "").strip()
-        or os.getenv("CAP_ROUTER_BASE_URL", "").strip()
-    )
-    if not base_url:
-        raise RuntimeError("Set --base-url or ABEL_ROUTER_BASE_URL before uploading dashboard bundles")
-    return base_url
+def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
+    session = resolve_workspace_arg_path(args.session).resolve()
+    bundle = build_skill_dashboard_session_bundle(session)
+    if args.output_json:
+        output_path = resolve_workspace_arg_path(args.output_json).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+    if args.dry_run:
+        print(json.dumps(bundle, indent=2, ensure_ascii=False))
+        return 0
+
+    workspace_root = find_workspace_root(session)
+    base_url = resolve_skill_dashboard_base_url()
+    api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
+    result = post_skill_dashboard_session(base_url=base_url, api_key=api_key, bundle=bundle)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+def resolve_skill_dashboard_base_url(value: str | None = None) -> str:
+    return str(value or "").strip() or DEFAULT_ABEL_ROUTER_BASE_URL
 
 
 def resolve_skill_dashboard_api_key(value: str | None, *, workspace_root: Path | None) -> str:
@@ -2127,7 +2700,7 @@ def resolve_skill_dashboard_api_key(value: str | None, *, workspace_root: Path |
             token = (env_values.get("ABEL_API_KEY") or env_values.get("CAP_API_KEY") or "").strip()
             if token:
                 return token
-    raise RuntimeError("Set --api-key or run abel-auth before uploading dashboard bundles")
+    raise RuntimeError("Set --api-key or run abel-auth before creating an online session view")
 
 
 def skill_dashboard_rounds(branch: Path, rows: list[dict[str, str]], ledger: dict) -> list[dict]:
@@ -2673,17 +3246,25 @@ def run_branch_round(args: argparse.Namespace) -> int:
             frame_text,
         ],
     )
-    if decision == "keep" and dashboard_round_is_candidate(
-        session=session,
-        branch_id=branch.name,
-        round_id=round_id,
+    if (
+        str(result.get("verdict") or "").upper() == "PASS"
+        and decision == "keep"
+        and dashboard_round_is_candidate(
+            session=session,
+            branch_id=branch.name,
+            round_id=round_id,
+        )
     ):
         print("")
-        print("Dashboard upload:")
+        print("Session visualization available:")
+        print(
+            "  Candidate PASS recorded. Ask the user whether to create "
+            "an online view of this session."
+        )
+        print("  If the user agrees, run:")
         print(
             "  "
-            f"abel-invest upload-dashboard-bundle --branch {branch} "
-            "--base-url <router-base-url>"
+            f"abel-invest visualize-session --session {session}"
         )
     return 0
 
@@ -5694,6 +6275,9 @@ def load_discovery(session: Path) -> dict:
     frontier_path = graph_frontier_path(session)
     if frontier_path.exists():
         return graph_frontier_to_discovery(load_graph_frontier(session))
+    discovery_path = session / "discovery.json"
+    if discovery_path.exists():
+        return json.loads(discovery_path.read_text(encoding="utf-8"))
     return {
         "ticker": session.parent.name.upper(),
         "source": "unknown",

@@ -56,7 +56,7 @@ python3 maintainers/abel-ask/smoke_cap_probe.py --skill-root skills/abel-ask
 
 Use this when you want the publishable ClawHub package artifact for OpenClaw.
 The artifact is a native OpenClaw plugin with `openclaw.plugin.json` and all
-Abel skills under `skills/`.
+public Abel skill directories listed explicitly in `openclaw.plugin.json`.
 
 ```bash
 python3 scripts/build_clawhub_release.py

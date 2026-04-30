@@ -14,6 +14,7 @@ SKILLS_ROOT = Path(__file__).resolve().parents[1] / "skills"
 SOURCE_ROOT = SKILLS_ROOT / SKILL_NAME
 DEFAULT_OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "dist" / "clawhub"
 RELEASE_SKILL_NAMES = ("abel", "abel-auth", "abel-ask", "abel-invest", "abel-common")
+OPENCLAW_MANIFEST_SKILL_NAMES = ("abel", "abel-auth", "abel-ask", "abel-invest")
 REMOVE_FRONTMATTER_KEYS = {
     "update_repo",
     "update_branch",
@@ -46,10 +47,10 @@ OPENCLAW_PLUGIN_MANIFEST = {
     "id": "abel",
     "name": "Abel",
     "description": (
-        "Abel skill bundle for OpenClaw: routing, auth, causal reads, and investment"
+        "Abel skill bundle for OpenClaw: routing, auth, causal reads, and investment "
         "strategy discovery. Includes Python-backed skills and shared probes."
     ),
-    "skills": ["./skills"],
+    "skills": [f"./skills/{skill_name}" for skill_name in OPENCLAW_MANIFEST_SKILL_NAMES],
     "configSchema": {
         "type": "object",
         "additionalProperties": False,
@@ -93,12 +94,16 @@ def ignore_copy_patterns(_directory: str, names: list[str]) -> set[str]:
         if (
             name == "__pycache__"
             or name.endswith(".pyc")
+            or name.endswith(".egg-info")
             or name
             in {
                 ".env.skill",
                 ".env.skill.example",
                 ".env.skills",
                 ".env.skills.example",
+                ".pytest_cache",
+                "build",
+                "dist",
             }
         ):
             ignored.add(name)

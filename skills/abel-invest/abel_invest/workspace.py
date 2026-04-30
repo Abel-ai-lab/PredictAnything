@@ -272,7 +272,8 @@ abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branc
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 edit research/tsla/tsla-v1/research_journal.md
-abel-invest upload-dashboard-bundle --branch research/tsla/tsla-v1/branches/<chosen-branch> --base-url <router-base-url>
+# ask the user first after a candidate PASS, or run when the user requests it
+abel-invest visualize-session --session research/tsla/tsla-v1
 ```
 
 Use that path as orientation, not as a rigid script. The important boundary is:
@@ -303,8 +304,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `prepare-branch` should run before a recorded round
 - `frontier.md` reports input realization: declared graph-supported inputs only
   count as realized when the engine reads prepared graph inputs
-- `upload-dashboard-bundle` uploads branch evidence from the current workspace
-  surfaces, not promotion or replay artifacts
+- `visualize-session` creates an online session view from the session folder;
+  run it only when the user requests it or agrees after a candidate PASS
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter baseline for the first end-to-end run, not a finished branch thesis
 
@@ -366,7 +367,8 @@ abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branc
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 edit research/tsla/tsla-v1/research_journal.md
-abel-invest upload-dashboard-bundle --branch research/tsla/tsla-v1/branches/<chosen-branch> --base-url <router-base-url>
+# ask the user first after a candidate PASS, or run when the user requests it
+abel-invest visualize-session --session research/tsla/tsla-v1
 ```
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
@@ -382,9 +384,10 @@ fact, not as proof of graph breadth. Use `research_journal.md` to record your
 own evidence-linked insight and continue/pivot reasoning after each recorded
 round. Check journal coverage before starting another round. Check input
 realization before treating a declared graph-supported branch as graph-supported
-evidence. When a branch has candidate evidence worth external inspection,
-`upload-dashboard-bundle` sends
-branch evidence from the current workspace surfaces.
+evidence. Do not create the online session view automatically; after a
+candidate PASS, ask the user first. If the user agrees or explicitly asks to
+visualize the session, `visualize-session` builds the view from the session
+folder.
 This workspace is for alpha-managed branch research, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.
