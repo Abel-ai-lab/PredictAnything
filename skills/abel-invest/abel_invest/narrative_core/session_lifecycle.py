@@ -30,6 +30,7 @@ from abel_invest.narrative_core.io import (
 from abel_invest.narrative_core.evidence.journal import ensure_research_journal
 from abel_invest.narrative_core.contracts.paths import branch_spec_path, branch_state_path, session_state_path
 from abel_invest.narrative_core.readiness import format_data_readiness_summary
+from abel_invest.narrative_core.rendering.session_rendering import render_session
 from abel_invest.narrative_core.state import (
     load_branch_state,
     load_discovery,
@@ -43,12 +44,6 @@ from abel_invest.workspace import (
     resolve_workspace_entry,
     resolve_workspace_paths,
 )
-
-
-def _narrative():
-    from abel_invest import narrative_impl
-
-    return narrative_impl
 
 
 def resolve_session_root(root_arg: str | None) -> Path:
@@ -181,7 +176,7 @@ def init_session_dir(
                         "artifact_path": READINESS_FILENAME,
                     },
                 )
-        _narrative().render_session(session)
+        render_session(session)
     return session
 
 
@@ -304,5 +299,5 @@ def init_branch_dir(session: Path, branch_id: str) -> Path:
                 "artifact_path": "",
             },
         )
-        _narrative().render_session(session)
+        render_session(session)
     return branch

@@ -10,12 +10,7 @@ from pathlib import Path
 from abel_invest.narrative_core.contracts.constants import EVENTS_HEADER, RESULTS_HEADER
 from abel_invest.narrative_core.io import _now, append_tsv_row
 from abel_invest.narrative_core.rendering.renderers import render_round_note
-
-
-def _narrative():
-    from abel_invest import narrative_impl
-
-    return narrative_impl
+from abel_invest.narrative_core.rendering.session_rendering import render_session
 
 
 def record_workflow_blocker_round(
@@ -135,7 +130,7 @@ def record_workflow_blocker_round(
             "artifact_path": str(result_path.relative_to(session)),
         },
     )
-    _narrative().render_session(session)
+    render_session(session)
 
 
 def build_workflow_blocker_result(

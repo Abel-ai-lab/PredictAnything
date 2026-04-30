@@ -47,12 +47,6 @@ from abel_invest.narrative_core.readiness import (
 from abel_invest.narrative_core.contracts.templates import ENGINE_TEMPLATE
 
 
-def _narrative():
-    from abel_invest import narrative_impl
-
-    return narrative_impl
-
-
 def current_experiment_metadata() -> dict[str, str]:
     return {
         key: str(os.environ.get(env_name) or "").strip()
@@ -314,11 +308,12 @@ def update_backtest_start(
     backtest_start: str,
     source: str,
 ) -> tuple[dict, dict]:
-    narrative = _narrative()
+    from abel_invest.narrative_core.session_lifecycle import refresh_data_readiness
+
     discovery = load_discovery(session)
     updated_discovery = dict(discovery)
     updated_discovery["backtest"] = {"start": backtest_start}
-    readiness = narrative.refresh_data_readiness(
+    readiness = refresh_data_readiness(
         session=session,
         discovery_data=updated_discovery,
         backtest_start=backtest_start,

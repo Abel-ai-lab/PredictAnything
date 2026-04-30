@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 from abel_invest.narrative_core.contracts.branch_spec import (
@@ -37,12 +38,6 @@ from abel_invest.workspace import (
     load_workspace_manifest,
     resolve_runtime_python,
 )
-
-
-def _narrative():
-    from abel_invest import narrative_impl
-
-    return narrative_impl
 
 
 def branch_parent_branch_id(branch_dir: Path) -> str:
@@ -314,7 +309,7 @@ def alpha_decision_with_runtime(
         ")\n"
         "print(decision)\n"
     )
-    completed = _narrative().subprocess.run(
+    completed = subprocess.run(
         [str(python_path), "-c", script],
         input=json.dumps(payload),
         capture_output=True,

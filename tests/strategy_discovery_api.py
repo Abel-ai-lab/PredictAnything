@@ -1,6 +1,6 @@
 """Test-only access to strategy-discovery owner modules.
 
-This keeps tests off the old ``narrative_impl`` helper facade while preserving
+This keeps tests off the public ``narrative_impl`` facade while preserving
 compact call sites during the refactor.
 """
 
@@ -34,7 +34,7 @@ from abel_invest.narrative_core.dashboard import (
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts
 from abel_invest.narrative_core.io import append_tsv_row
 from abel_invest.narrative_core.evidence.journal import build_research_journal_status
-from abel_invest.narrative_impl import (
+from abel_invest.narrative_core.commands import (
     debug_branch_run,
     handle_workspace_command,
     main,
