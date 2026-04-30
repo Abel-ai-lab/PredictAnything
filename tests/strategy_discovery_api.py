@@ -34,15 +34,15 @@ from abel_invest.narrative_core.dashboard import (
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts
 from abel_invest.narrative_core.io import append_tsv_row
 from abel_invest.narrative_core.evidence.journal import build_research_journal_status
-from abel_invest.narrative_core.commands import (
+from abel_invest.narrative_core.command_handlers.branch import (
     debug_branch_run,
-    handle_workspace_command,
-    main,
     prepare_branch_inputs,
     promote_branch_bundle,
     run_branch_round,
     subprocess,
 )
+from abel_invest.narrative_core.command_handlers.workspace import handle_workspace_command
+from abel_invest.narrative_core.commands import main
 from abel_invest.narrative_core.contracts.paths import (
     context_guide_path,
     data_manifest_path,
