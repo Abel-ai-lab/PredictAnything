@@ -7,16 +7,13 @@ summaries on top of raw abel-edge evaluation outputs.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -50,181 +47,64 @@ from abel_invest.workspace import (
     resolve_workspace_paths,
     scaffold_workspace,
 )
-
-EVENTS_HEADER = [
-    "timestamp",
-    "event",
-    "branch_id",
-    "round_id",
-    "mode",
-    "verdict",
-    "decision",
-    "description",
-    "artifact_path",
-]
-
-DEFAULT_BACKTEST_START = "2020-01-01"
-DEFAULT_ABEL_ROUTER_BASE_URL = "https://api.abel.ai/router/"
-SESSION_STATE_FILENAME = "session_state.json"
-BRANCH_STATE_FILENAME = "branch_state.json"
-READINESS_FILENAME = "readiness.json"
-GRAPH_FRONTIER_FILENAME = "graph_frontier.json"
-BRANCH_SPEC_FILENAME = "branch.yaml"
-DEPENDENCIES_FILENAME = "dependencies.json"
-RUNTIME_PROFILE_FILENAME = "runtime_profile.json"
-EXECUTION_CONSTRAINTS_FILENAME = "execution_constraints.json"
-DATA_MANIFEST_FILENAME = "data_manifest.json"
-CONTEXT_GUIDE_FILENAME = "context_guide.md"
-PROBE_SAMPLES_FILENAME = "probe_samples.json"
-AGENT_CONTEXT_FILENAME = "agent_context.md"
-RESEARCH_JOURNAL_FILENAME = "research_journal.md"
-EVIDENCE_LEDGER_FILENAME = "evidence_ledger.json"
-FRONTIER_JSON_FILENAME = "frontier.json"
-FRONTIER_MARKDOWN_FILENAME = "frontier.md"
-
-EVIDENCE_INTENTS = {"candidate", "control", "diagnostic", "draft"}
-INPUT_CLAIMS = {"graph_supported", "target_only", "supplement", "mixed"}
-GRAPH_INPUT_CLAIMS = {"graph_supported", "supplement", "mixed"}
-DECLARATION_PLACEHOLDER_VALUES = {"", "unspecified", "unknown", "draft", "todo", "tbd"}
-DECLARATION_REQUIRED_FIELDS = [
-    "hypothesis",
-    "evidence_intent",
-    "input_claim",
-    "mechanism_family",
-    "invalidation_condition",
-    "requested_start",
-]
-MODEL_FAMILIES = {
-    "rule_signal",
-    "linear_model",
-    "tree_model",
-    "learned_model",
-    "ensemble",
-    "hybrid",
-    "unspecified",
-}
-COMPLEXITY_CLASSES = {
-    "simple_signal",
-    "interaction",
-    "regime",
-    "portfolio",
-    "learned_model",
-    "hybrid",
-    "unspecified",
-}
-EXPLORATION_ROLES = {
-    "candidate",
-    "control",
-    "ablation",
-    "expansion_probe",
-    "refinement",
-    "diagnostic",
-    "unspecified",
-}
-CHANGED_DIMENSIONS = {
-    "drivers",
-    "mechanism",
-    "model_family",
-    "complexity",
-    "sizing",
-    "thresholds",
-    "filters",
-    "window",
-    "implementation",
-}
-BROAD_CHANGED_DIMENSIONS = {"drivers", "mechanism", "model_family", "complexity"}
-LOCAL_CHANGED_DIMENSIONS = {"sizing", "thresholds", "filters", "window", "implementation"}
-INPUT_BREADTH_ROUND_THRESHOLD = 8
-GRAPH_PRIORITY_ROUND_MINIMUM = 3
-JOURNAL_GENERATED_HEADER_END = "<!-- ABEL_GENERATED_HEADER_END -->"
-JOURNAL_REFERENCE_RE = re.compile(
-    r"(ledger:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+|"
-    r"frontier:[A-Za-z0-9_.-]+|"
-    r"frontier\.md|"
-    r"evidence_ledger\.json|"
-    r"artifact:[^\s)]+|"
-    r"branches/[^\s)]+)"
+from abel_invest.constants import (
+    AGENT_CONTEXT_FILENAME,
+    BRANCH_SPEC_FILENAME,
+    BRANCH_STATE_FILENAME,
+    BROAD_CHANGED_DIMENSIONS,
+    CHANGED_DIMENSIONS,
+    COMPLEXITY_CLASSES,
+    CONTEXT_GUIDE_FILENAME,
+    DATA_MANIFEST_FILENAME,
+    DECLARATION_PLACEHOLDER_VALUES,
+    DEFAULT_BACKTEST_START,
+    DEPENDENCIES_FILENAME,
+    EVIDENCE_INTENTS,
+    EVIDENCE_LEDGER_FILENAME,
+    EVENTS_HEADER,
+    EXECUTION_CONSTRAINTS_FILENAME,
+    EXPERIMENT_METADATA_ENV,
+    EXPLORATION_ROLES,
+    FRONTIER_JSON_FILENAME,
+    FRONTIER_MARKDOWN_FILENAME,
+    GRAPH_INPUT_CLAIMS,
+    GRAPH_PRIORITY_ROUND_MINIMUM,
+    INPUT_BREADTH_ROUND_THRESHOLD,
+    INPUT_CLAIMS,
+    JOURNAL_GENERATED_HEADER_END,
+    JOURNAL_REFERENCE_RE,
+    LOCAL_CHANGED_DIMENSIONS,
+    MODEL_FAMILIES,
+    PROBE_SAMPLES_FILENAME,
+    READINESS_FILENAME,
+    RESEARCH_JOURNAL_FILENAME,
+    RESULTS_HEADER,
+    RUNTIME_PROFILE_FILENAME,
+    SESSION_STATE_FILENAME,
 )
-
-EXPERIMENT_METADATA_ENV = {
-    "protocol_id": "ABEL_EXPERIMENT_PROTOCOL_ID",
-    "experiment_mode": "ABEL_EXPERIMENT_MODE",
-    "round_budget": "ABEL_EXPERIMENT_ROUND_BUDGET",
-    "abel_skills_commit": "ABEL_SKILLS_COMMIT",
-    "abel_edge_commit": "ABEL_EDGE_COMMIT",
-}
-
-RESULTS_HEADER = [
-    "exp_id",
-    "ticker",
-    "branch_id",
-    "round_id",
-    "decision",
-    "lo_adj",
-    "ic",
-    "omega",
-    "sharpe",
-    "max_dd",
-    "pnl",
-    "K",
-    "score",
-    "verdict",
-    "mode",
-    "description",
-    "result_path",
-    "report_path",
-    "handoff_path",
-]
-
-ENGINE_TEMPLATE = '''"""Research engine for {ticker}. Replace the starter baseline when the branch thesis is ready.
-
-Default backtest behavior should follow branch.yaml first and the injected context second.
-If provided, self.context contains workspace/session/branch/discovery/readiness metadata from Abel strategy discovery.
-Use branch.yaml to make the critical research choices explicit:
-  - hypothesis
-  - evidence_intent
-  - input_claim
-  - mechanism_family
-  - invalidation_condition
-  - target
-  - requested_start
-  - selected_inputs
-  - overlap_mode
-Write against DecisionContext instead of raw research helpers:
-  - ctx.decision_index()
-  - ctx.target.series("close")
-  - ctx.feed(name).asof_series("close")
-  - ctx.points()
-  - ctx.decisions(next_position)
-If data or runtime setup is broken, let the error surface and inspect it with `abel-invest debug-branch`;
-do not hide setup failures behind synthetic outputs.
-Current readiness warning: {readiness_warning}
-Coverage hints: {coverage_hints_text}
-"""
- 
-from __future__ import annotations
-
-from abel_edge.engine.base import StrategyEngine
-
-
-class BranchEngine(StrategyEngine):
-    def compute_decisions(self, ctx):
-        close = ctx.target.series("close")
-        if close.empty:
-            raise RuntimeError(
-                "The default Abel strategy discovery baseline loaded no usable target bars. "
-                "Confirm the requested window in branch.yaml, then rerun "
-                "`abel-invest prepare-branch`."
-            )
-        # Debug-safe starting point: a simple target-trend starter baseline.
-        # It exists to make the first branch runnable and comparable, not to
-        # pretend that discovery has already been translated into a real edge.
-        slow_mean = close.rolling(window=40, min_periods=15).mean()
-        next_position = (close > slow_mean).astype(float).fillna(0.0)
-        if len(next_position) > 0:
-            next_position.iloc[0] = 0.0
-        return ctx.decisions(next_position)
-'''
+from abel_invest.io import (
+    SessionLock,
+    _now,
+    _today,
+    append_tsv_row,
+    read_env_file_values,
+    read_tsv_rows,
+    write_json_file,
+    write_tsv_header,
+    write_tsv_rows,
+)
+from abel_invest.paths import (
+    branch_spec_path,
+    branch_state_path,
+    context_guide_path,
+    data_manifest_path,
+    dependencies_path,
+    execution_constraints_path,
+    probe_samples_path,
+    runtime_profile_path,
+    session_state_path,
+)
+from abel_invest.templates import ENGINE_TEMPLATE
 
 
 def main() -> int:
@@ -2890,19 +2770,6 @@ def require_timezone_aware_iso(value: str, *, field_name: str) -> str:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise RuntimeError(f"{field_name} must include timezone")
     return parsed.isoformat()
-
-
-def read_env_file_values(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    values: dict[str, str] = {}
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip("\"'")
-    return values
 
 
 def promote_branch_bundle(args: argparse.Namespace) -> int:
@@ -6298,34 +6165,6 @@ def load_readiness(session: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def branch_spec_path(branch: Path) -> Path:
-    return branch / BRANCH_SPEC_FILENAME
-
-
-def dependencies_path(branch: Path) -> Path:
-    return branch / "inputs" / DEPENDENCIES_FILENAME
-
-
-def runtime_profile_path(branch: Path) -> Path:
-    return branch / "inputs" / RUNTIME_PROFILE_FILENAME
-
-
-def execution_constraints_path(branch: Path) -> Path:
-    return branch / "inputs" / EXECUTION_CONSTRAINTS_FILENAME
-
-
-def data_manifest_path(branch: Path) -> Path:
-    return branch / "inputs" / DATA_MANIFEST_FILENAME
-
-
-def context_guide_path(branch: Path) -> Path:
-    return branch / "inputs" / CONTEXT_GUIDE_FILENAME
-
-
-def probe_samples_path(branch: Path) -> Path:
-    return branch / "inputs" / PROBE_SAMPLES_FILENAME
-
-
 def branch_inputs_ready(branch: Path) -> bool:
     required = (
         dependencies_path(branch),
@@ -6880,10 +6719,6 @@ def build_context_guide_markdown(
     return "\n".join(lines) + "\n"
 
 
-def branch_state_path(branch: Path) -> Path:
-    return branch / BRANCH_STATE_FILENAME
-
-
 def load_branch_state(branch: Path) -> dict:
     path = branch_state_path(branch)
     if not path.exists():
@@ -6896,10 +6731,6 @@ def write_branch_state(branch: Path, payload: dict) -> None:
         json.dumps(payload, indent=2, sort_keys=True),
         encoding="utf-8",
     )
-
-
-def session_state_path(session: Path) -> Path:
-    return session / SESSION_STATE_FILENAME
 
 
 def load_session_state(session: Path) -> dict:
@@ -7407,13 +7238,6 @@ def validate_edge_handoff_with_runtime(
         failures.append(f"{branch_name}: edge handoff rejected - {reason}")
 
 
-def read_tsv_rows(path: Path) -> list[dict[str, str]]:
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
-
-
 def ensure_research_journal(session: Path) -> Path:
     path = session / RESEARCH_JOURNAL_FILENAME
     if not path.exists():
@@ -7612,36 +7436,6 @@ def resolve_evidence_reference(
     return candidate.exists()
 
 
-def write_tsv_header(path: Path, header: list[str]) -> None:
-    if path.exists():
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=header, delimiter="\t")
-        writer.writeheader()
-
-
-def write_tsv_rows(path: Path, header: list[str], rows: list[dict[str, str]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=header, delimiter="\t")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({key: row.get(key, "") for key in header})
-
-
-def append_tsv_row(path: Path, header: list[str], row: dict[str, str]) -> None:
-    write_tsv_header(path, header)
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=header, delimiter="\t")
-        writer.writerow(row)
-
-
-def write_json_file(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-
-
 def format_event_line(row: dict[str, str]) -> str:
     tail = " ".join(
         part
@@ -7662,43 +7456,6 @@ def _get_backtest_start(discovery: dict) -> str:
         if start:
             return str(start)
     return DEFAULT_BACKTEST_START
-
-
-class SessionLock:
-    def __init__(self, session: Path, timeout: float = 30.0):
-        self.lock_path = session / ".alpha.lock"
-        self.timeout = timeout
-        self.fd: int | None = None
-
-    def __enter__(self):
-        deadline = time.time() + self.timeout
-        while True:
-            try:
-                self.fd = os.open(
-                    str(self.lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR
-                )
-                os.write(self.fd, str(os.getpid()).encode("utf-8"))
-                return self
-            except FileExistsError:
-                if time.time() >= deadline:
-                    raise TimeoutError(f"Timed out waiting for lock {self.lock_path}")
-                time.sleep(0.1)
-
-    def __exit__(self, exc_type, exc, tb):
-        if self.fd is not None:
-            os.close(self.fd)
-        try:
-            self.lock_path.unlink()
-        except FileNotFoundError:
-            pass
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 if __name__ == "__main__":
