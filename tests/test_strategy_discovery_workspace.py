@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from abel_invest import narrative_impl
-from abel_invest.env import resolve_alpha_source
-from abel_invest.workspace import (
+import strategy_discovery_api as strategy_api
+from abel_invest.workspace_core.env import resolve_alpha_source
+from abel_invest.workspace_core.workspace import (
     build_default_manifest,
     render_workspace_status,
     scaffold_workspace,
@@ -63,7 +63,7 @@ def test_workspace_bootstrap_rejects_nested_target_with_reentry_hint(
         no_editable=False,
     )
 
-    rc = narrative_impl.handle_workspace_command(args)
+    rc = strategy_api.handle_workspace_command(args)
     out = capsys.readouterr().out
 
     assert rc == 1

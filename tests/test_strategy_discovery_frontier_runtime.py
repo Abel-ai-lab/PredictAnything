@@ -4,7 +4,8 @@ import json
 import sys
 from pathlib import Path
 
-from abel_invest import narrative_impl as ni
+from abel_invest.narrative_core.evidence import graph_frontier
+import strategy_discovery_api as ni
 
 
 def _seed_discovery() -> dict:
@@ -78,7 +79,7 @@ def test_frontier_expand_cli_updates_graph_frontier(tmp_path: Path, monkeypatch,
             "created_at": "2026-04-29T00:00:00+00:00",
         }
 
-    monkeypatch.setattr(ni, "fetch_live_graph_expansion", fake_fetch_live_graph_expansion)
+    monkeypatch.setattr(graph_frontier, "fetch_live_graph_expansion", fake_fetch_live_graph_expansion)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -99,13 +100,13 @@ def test_frontier_expand_cli_updates_graph_frontier(tmp_path: Path, monkeypatch,
 
     assert ni.main() == 0
     out = capsys.readouterr().out
-    graph_frontier = json.loads((session / ni.GRAPH_FRONTIER_FILENAME).read_text(encoding="utf-8"))
-    node_ids = [node["node_id"] for node in graph_frontier["nodes"]]
+    frontier_payload = json.loads((session / ni.GRAPH_FRONTIER_FILENAME).read_text(encoding="utf-8"))
+    node_ids = [node["node_id"] for node in frontier_payload["nodes"]]
     events = (session / "events.tsv").read_text(encoding="utf-8")
 
     assert node_ids == ["AAPL.price", "MSFT.volume", "TSLA.price"]
-    assert graph_frontier["nodes"][2]["last_expanded_at"] == "2026-04-29T00:00:00+00:00"
-    assert graph_frontier["expansions"][-1]["new_nodes"] == ["AAPL.price", "MSFT.volume"]
+    assert frontier_payload["nodes"][2]["last_expanded_at"] == "2026-04-29T00:00:00+00:00"
+    assert frontier_payload["expansions"][-1]["new_nodes"] == ["AAPL.price", "MSFT.volume"]
     assert "event\tbranch_id\tround_id" in events
     assert "frontier_expanded" in events
     assert "new_nodes: 2" in out
@@ -119,7 +120,7 @@ def test_failed_live_discovery_attempt_surfaces_as_auth_or_runtime_error(
     def _raise_discovery(*_args, **_kwargs):
         raise RuntimeError("auth missing for test")
 
-    monkeypatch.setattr(ni, "fetch_live_graph_frontier", _raise_discovery)
+    monkeypatch.setattr(graph_frontier, "fetch_live_graph_frontier", _raise_discovery)
 
     try:
         ni.init_session_dir(
@@ -138,7 +139,7 @@ def test_unexpected_live_discovery_exception_stays_visible(tmp_path: Path, monke
     def _raise_discovery(*_args, **_kwargs):
         raise Exception("404 Client Error: Not Found for url: https://cap.abel.ai/api/cap")
 
-    monkeypatch.setattr(ni, "fetch_live_graph_frontier", _raise_discovery)
+    monkeypatch.setattr(graph_frontier, "fetch_live_graph_frontier", _raise_discovery)
 
     try:
         ni.init_session_dir(

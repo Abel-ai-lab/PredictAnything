@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
 
-from abel_invest.edge_runtime import probe_edge_context_json, probe_edge_discovery_payload
-from abel_invest.workspace import (
+from abel_invest.workspace_core.edge_runtime import probe_edge_context_json, probe_edge_discovery_payload
+from abel_invest.workspace_core.workspace import (
     default_workspace_path,
     resolve_workspace_entry,
     load_workspace_manifest,
@@ -211,7 +211,7 @@ def resolve_alpha_source(explicit: str | Path | None = None) -> Path:
     if explicit is not None:
         return validate_source_tree(Path(explicit).expanduser().resolve(), "Abel strategy discovery")
 
-    candidate = Path(__file__).resolve().parent.parent
+    candidate = Path(__file__).resolve().parents[2]
     if (candidate / "pyproject.toml").exists():
         return candidate
 
