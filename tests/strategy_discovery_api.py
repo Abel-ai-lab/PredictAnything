@@ -1,6 +1,6 @@
 """Test-only access to strategy-discovery owner modules.
 
-This keeps tests off the public ``narrative_impl`` facade while preserving
+This keeps tests off the public CLI entrypoint while preserving
 compact call sites during the refactor.
 """
 
