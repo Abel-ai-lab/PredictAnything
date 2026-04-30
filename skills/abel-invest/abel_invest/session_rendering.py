@@ -12,6 +12,7 @@ from abel_invest.constants import (
     FRONTIER_MARKDOWN_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
 )
+from abel_invest.context import validate_edge_handoff
 from abel_invest.evidence import load_json_object, write_evidence_ledger
 from abel_invest.frontier import build_frontier, render_frontier_markdown
 from abel_invest.io import write_json_file
@@ -35,12 +36,6 @@ from abel_invest.state import (
     load_readiness,
     read_round_note,
 )
-
-
-def _narrative():
-    from abel_invest import narrative_impl
-
-    return narrative_impl
 
 
 def render_session(session: Path) -> None:
@@ -158,7 +153,6 @@ def check_session(session: Path, *, strict: bool) -> int:
     if not branches:
         failures.append("No branches found")
 
-    narrative = _narrative()
     for branch in branches:
         branch_dir = branch["branch_dir"]
         rows = branch["rows"]
@@ -205,7 +199,7 @@ def check_session(session: Path, *, strict: bool) -> int:
                     f"{branch_dir.name}: round note missing context_path for {round_id}"
                 )
             if strict and row.get("decision") != "blocked":
-                narrative.validate_edge_handoff(session, branch_dir.name, row, failures)
+                validate_edge_handoff(session, branch_dir.name, row, failures)
         if strict:
             for text_path in (
                 branch_dir / "README.md",

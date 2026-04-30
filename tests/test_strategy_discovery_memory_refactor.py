@@ -5,7 +5,7 @@ import subprocess
 from argparse import Namespace
 from pathlib import Path
 
-from abel_invest import narrative_impl as ni
+import strategy_discovery_api as ni
 
 
 def _candidate_result_payload() -> dict:

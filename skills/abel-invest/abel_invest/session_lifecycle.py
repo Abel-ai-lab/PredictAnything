@@ -98,11 +98,10 @@ def init_session_dir(
     ensure_research_journal(session)
     discovery_data = None
     readiness_report = None
-    narrative = _narrative()
     if discover:
-        discovery_data = narrative.fetch_live_discovery(ticker, limit=discover_limit)
+        discovery_data = fetch_live_discovery(ticker, limit=discover_limit)
         discovery_data["backtest"] = {"start": backtest_start}
-        readiness_report = narrative.refresh_data_readiness(
+        readiness_report = refresh_data_readiness(
             session=session,
             discovery_data=discovery_data,
             backtest_start=backtest_start,
@@ -113,9 +112,9 @@ def init_session_dir(
             write_session_state(session, {})
         discovery_path = session / "discovery.json"
         if discovery_data is not None:
-            narrative.write_discovery(session, discovery_data)
+            write_discovery(session, discovery_data)
         elif not discovery_path.exists():
-            narrative.write_discovery(
+            write_discovery(
                 session,
                 {
                     "ticker": ticker.upper(),
@@ -129,7 +128,7 @@ def init_session_dir(
                 },
             )
         if readiness_report is not None:
-            narrative.write_readiness(session, readiness_report)
+            write_readiness(session, readiness_report)
         append_tsv_row(
             session / "events.tsv",
             EVENTS_HEADER,
@@ -182,7 +181,7 @@ def init_session_dir(
                         "artifact_path": READINESS_FILENAME,
                     },
                 )
-        narrative.render_session(session)
+        _narrative().render_session(session)
     return session
 
 

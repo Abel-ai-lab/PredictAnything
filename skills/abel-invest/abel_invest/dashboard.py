@@ -22,7 +22,11 @@ from abel_invest.constants import (
     RESEARCH_JOURNAL_FILENAME,
 )
 from abel_invest.edge_runtime import resolve_runtime_auth_env_file
-from abel_invest.evidence import parse_changed_dimensions
+from abel_invest.evidence import (
+    build_evidence_ledger,
+    load_json_object,
+    parse_changed_dimensions,
+)
 from abel_invest.frontier import build_frontier
 from abel_invest.io import _now, read_env_file_values, read_tsv_rows
 from abel_invest.journal import (
@@ -31,28 +35,30 @@ from abel_invest.journal import (
     journal_note_line_items,
     resolve_journal_reference,
 )
+from abel_invest.session_lifecycle import resolve_workspace_arg_path
+from abel_invest.session_rendering import render_session
+from abel_invest.state import (
+    current_branch_hypothesis,
+    load_branch_state,
+    load_branches,
+    load_discovery,
+    read_round_note,
+)
 from abel_invest.workspace import find_workspace_root
 
 
-def _narrative():
-    from abel_invest import narrative_impl
-
-    return narrative_impl
-
-
 def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None) -> dict:
-    narrative = _narrative()
-    branch = narrative.resolve_workspace_arg_path(branch).resolve()
+    branch = resolve_workspace_arg_path(branch).resolve()
     session = branch.parent.parent
-    discovery = narrative.load_discovery(session)
-    narrative.render_session(session)
-    frontier = narrative.load_json_object(session / FRONTIER_JSON_FILENAME)
-    ledger = narrative.load_json_object(session / EVIDENCE_LEDGER_FILENAME)
+    discovery = load_discovery(session)
+    render_session(session)
+    frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
+    ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
     if not ledger:
-        ledger = narrative.build_evidence_ledger(session, discovery, narrative.load_branches(session))
+        ledger = build_evidence_ledger(session, discovery, load_branches(session))
         frontier = build_frontier(ledger, journal_status=build_research_journal_status(session, ledger=ledger, frontier={}))
     branch_spec = load_branch_spec(branch)
-    branch_state = narrative.load_branch_state(branch)
+    branch_state = load_branch_state(branch)
     rows = read_tsv_rows(branch / "results.tsv")
     events = read_tsv_rows(session / "events.tsv")
 
@@ -66,7 +72,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
         raise RuntimeError("skill dashboard upload requires endAt after startAt")
 
     latest = rows[-1] if rows else {}
-    latest_note = narrative.read_round_note(branch, latest.get("round_id", ""))
+    latest_note = read_round_note(branch, latest.get("round_id", ""))
     branch_payload = {
         "id": branch.name,
         "targetAsset": dashboard_branch_target_asset(branch_spec, discovery),
@@ -78,7 +84,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
         "mechanismFamily": str(branch_spec.get("mechanism_family") or "").strip(),
         "complexityClass": str(branch_spec.get("complexity_class") or "").strip(),
         "status": str(latest.get("decision") or branch_spec.get("status") or "exploratory"),
-        "thesis": narrative.current_branch_hypothesis(branch, rows) or latest_note.get("hypothesis", ""),
+        "thesis": current_branch_hypothesis(branch, rows) or latest_note.get("hypothesis", ""),
         "latestEvidenceLabel": dashboard_latest_evidence_label(
             ledger,
             branch_id=branch.name,
@@ -154,11 +160,10 @@ def post_skill_dashboard_bundle(
 
 
 def upload_skill_dashboard_bundle(args: argparse.Namespace) -> int:
-    narrative = _narrative()
-    branch = narrative.resolve_workspace_arg_path(args.branch).resolve()
+    branch = resolve_workspace_arg_path(args.branch).resolve()
     bundle = build_skill_dashboard_bundle(branch)
     if args.output_json:
-        output_path = narrative.resolve_workspace_arg_path(args.output_json).resolve()
+        output_path = resolve_workspace_arg_path(args.output_json).resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
     if args.dry_run:
@@ -202,7 +207,6 @@ def resolve_skill_dashboard_api_key(value: str | None, *, workspace_root: Path |
 
 
 def skill_dashboard_rounds(branch: Path, rows: list[dict[str, str]], ledger: dict) -> list[dict]:
-    narrative = _narrative()
     ledger_rows = {
         str(row.get("round_id") or ""): row
         for row in (ledger.get("rows") or [])
@@ -211,7 +215,7 @@ def skill_dashboard_rounds(branch: Path, rows: list[dict[str, str]], ledger: dic
     rounds = []
     for row in rows:
         round_id = str(row.get("round_id") or "").strip()
-        note = narrative.read_round_note(branch, round_id)
+        note = read_round_note(branch, round_id)
         evidence = ledger_rows.get(round_id, {})
         rounds.append(
             {
@@ -302,7 +306,7 @@ def skill_dashboard_episodes(rows: list[dict[str, str]], *, branch_id: str) -> l
 
 
 def dashboard_round_is_candidate(*, session: Path, branch_id: str, round_id: str) -> bool:
-    ledger = _narrative().load_json_object(session / EVIDENCE_LEDGER_FILENAME)
+    ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
     for row in ledger.get("rows") or []:
         if (
             isinstance(row, dict)

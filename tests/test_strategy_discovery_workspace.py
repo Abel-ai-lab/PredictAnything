@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from abel_invest import narrative_impl
+import strategy_discovery_api as narrative_impl
 from abel_invest.env import resolve_alpha_source
 from abel_invest.workspace import (
     build_default_manifest,

@@ -6,7 +6,8 @@ import sys
 from argparse import Namespace
 from pathlib import Path
 
-from abel_invest import narrative_impl as ni
+from abel_invest import session_lifecycle
+import strategy_discovery_api as ni
 
 
 def _sample_discovery() -> dict:
@@ -549,8 +550,8 @@ def test_init_session_cli_runs_live_discovery_by_default(
             expansion_limit=limit,
         )
 
-    monkeypatch.setattr(ni, "fetch_live_graph_frontier", fake_fetch_live_graph_frontier)
-    monkeypatch.setattr(ni, "refresh_data_readiness", lambda **_kwargs: _sample_readiness())
+    monkeypatch.setattr(session_lifecycle, "fetch_live_discovery", fake_fetch_live_discovery)
+    monkeypatch.setattr(session_lifecycle, "refresh_data_readiness", lambda **_kwargs: _sample_readiness())
     monkeypatch.setattr(
         sys,
         "argv",
@@ -589,7 +590,7 @@ def test_init_session_cli_no_discover_is_explicit_pending_fallback(
     def fail_fetch_live_graph_frontier(*_args, **_kwargs) -> dict:
         raise AssertionError("live discovery should not run with --no-discover")
 
-    monkeypatch.setattr(ni, "fetch_live_graph_frontier", fail_fetch_live_graph_frontier)
+    monkeypatch.setattr(session_lifecycle, "fetch_live_discovery", fail_fetch_live_discovery)
     monkeypatch.setattr(
         sys,
         "argv",

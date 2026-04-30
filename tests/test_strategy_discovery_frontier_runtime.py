@@ -4,7 +4,8 @@ import json
 import sys
 from pathlib import Path
 
-from abel_invest import narrative_impl as ni
+from abel_invest import session_lifecycle
+import strategy_discovery_api as ni
 
 
 def _seed_discovery() -> dict:
@@ -119,7 +120,7 @@ def test_failed_live_discovery_attempt_surfaces_as_auth_or_runtime_error(
     def _raise_discovery(*_args, **_kwargs):
         raise RuntimeError("auth missing for test")
 
-    monkeypatch.setattr(ni, "fetch_live_graph_frontier", _raise_discovery)
+    monkeypatch.setattr(session_lifecycle, "fetch_live_discovery", _raise_discovery)
 
     try:
         ni.init_session_dir(
@@ -138,7 +139,7 @@ def test_unexpected_live_discovery_exception_stays_visible(tmp_path: Path, monke
     def _raise_discovery(*_args, **_kwargs):
         raise Exception("404 Client Error: Not Found for url: https://cap.abel.ai/api/cap")
 
-    monkeypatch.setattr(ni, "fetch_live_graph_frontier", _raise_discovery)
+    monkeypatch.setattr(session_lifecycle, "fetch_live_discovery", _raise_discovery)
 
     try:
         ni.init_session_dir(
