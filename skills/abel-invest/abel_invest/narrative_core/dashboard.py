@@ -21,7 +21,7 @@ from abel_invest.narrative_core.contracts.constants import (
     FRONTIER_JSON_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
 )
-from abel_invest.edge_runtime import resolve_runtime_auth_env_file
+from abel_invest.workspace_core.edge_runtime import resolve_runtime_auth_env_file
 from abel_invest.narrative_core.evidence.evidence import (
     build_evidence_ledger,
     load_json_object,
@@ -44,7 +44,7 @@ from abel_invest.narrative_core.state import (
     load_discovery,
     read_round_note,
 )
-from abel_invest.workspace import find_workspace_root
+from abel_invest.workspace_core.workspace import find_workspace_root
 
 
 def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None) -> dict:

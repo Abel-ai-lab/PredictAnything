@@ -9,8 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from abel_invest.edge_runtime import build_workspace_runtime_env
-from abel_invest.workspace import (
+from abel_invest.workspace_core.edge_runtime import build_workspace_runtime_env
+from abel_invest.workspace_core.workspace import (
     find_workspace_root,
     load_workspace_manifest,
     resolve_runtime_python,

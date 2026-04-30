@@ -33,7 +33,7 @@ from abel_invest.narrative_core.state import (
     branch_uses_default_scaffold,
     current_experiment_metadata,
 )
-from abel_invest.workspace import (
+from abel_invest.workspace_core.workspace import (
     find_workspace_root,
     load_workspace_manifest,
     resolve_runtime_python,

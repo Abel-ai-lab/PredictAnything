@@ -7,13 +7,13 @@ import json
 import os
 from pathlib import Path
 
-from abel_invest.doctor import (
+from abel_invest.workspace_core.doctor import (
     doctor_exit_code,
     render_doctor_report,
     run_doctor,
 )
-from abel_invest.env import init_workspace_env
-from abel_invest.workspace import (
+from abel_invest.workspace_core.env import init_workspace_env
+from abel_invest.workspace_core.workspace import (
     build_default_manifest,
     default_workspace_path,
     default_activate_command,

@@ -18,9 +18,9 @@ from abel_invest.narrative_core.contracts.constants import (
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
 )
-from abel_invest.doctor import build_auth_recovery_instruction
+from abel_invest.workspace_core.doctor import build_auth_recovery_instruction
 from abel_invest.narrative_core.runtime.edge_commands import run_edge_verify_data
-from abel_invest.edge_runtime import resolve_runtime_auth_env_file
+from abel_invest.workspace_core.edge_runtime import resolve_runtime_auth_env_file
 from abel_invest.narrative_core.io import (
     SessionLock,
     _now,
@@ -39,7 +39,7 @@ from abel_invest.narrative_core.state import (
     write_branch_state,
     write_session_state,
 )
-from abel_invest.workspace import (
+from abel_invest.workspace_core.workspace import (
     load_workspace_manifest,
     resolve_workspace_entry,
     resolve_workspace_paths,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 from abel_invest.narrative_core.contracts.constants import CHANGED_DIMENSIONS, DEFAULT_BACKTEST_START
-from abel_invest.workspace import DEFAULT_WORKSPACE_NAME
+from abel_invest.workspace_core.workspace import DEFAULT_WORKSPACE_NAME
 
 
 def build_parser() -> argparse.ArgumentParser:

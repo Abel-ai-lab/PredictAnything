@@ -21,13 +21,13 @@ from abel_invest.narrative_core.contracts.branch_spec import (
     has_explicit_hypothesis,
     load_branch_spec,
 )
-from abel_invest.edge_runtime import (
+from abel_invest.workspace_core.edge_runtime import (
     build_workspace_runtime_env,
 )
 from abel_invest.narrative_core.runtime.edge_commands import (
     resolve_default_python_bin,
 )
-from abel_invest.workspace import (
+from abel_invest.workspace_core.workspace import (
     find_workspace_root,
     resolve_workspace_env_file,
 )

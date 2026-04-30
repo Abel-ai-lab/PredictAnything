@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abel_invest.edge_runtime import (
+from abel_invest.workspace_core.edge_runtime import (
     probe_abel_auth,
     probe_abel_edge_cli,
     probe_abel_edge_import,
     probe_edge_context_json,
     probe_edge_discovery_payload,
 )
-from abel_invest.workspace import (
+from abel_invest.workspace_core.workspace import (
     default_workspace_path,
     load_workspace_manifest,
     resolve_workspace_entry,

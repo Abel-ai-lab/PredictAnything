@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abel_invest import doctor
+from abel_invest.workspace_core import doctor
 
 
 def test_run_doctor_ready_reports_alpha_managed_branch_research(

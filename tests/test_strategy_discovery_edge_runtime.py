@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abel_invest import edge_runtime
+from abel_invest.workspace_core import edge_runtime
 
 
 def test_build_workspace_runtime_env_prefers_collection_auth_file(
@@ -20,7 +20,7 @@ def test_build_workspace_runtime_env_prefers_collection_auth_file(
     monkeypatch.setattr(
         edge_runtime,
         "__file__",
-        str(tmp_path / "skills" / "abel-invest" / "abel_invest" / "edge_runtime.py"),
+        str(tmp_path / "skills" / "abel-invest" / "abel_invest" / "workspace_core" / "edge_runtime.py"),
     )
     monkeypatch.setattr(edge_runtime, "load_workspace_manifest", lambda _root: {"paths": {}})
 
@@ -66,7 +66,7 @@ def test_probe_abel_auth_prefers_collection_auth_file_without_runtime_probe(
     monkeypatch.setattr(
         edge_runtime,
         "__file__",
-        str(tmp_path / "skills" / "abel-invest" / "abel_invest" / "edge_runtime.py"),
+        str(tmp_path / "skills" / "abel-invest" / "abel_invest" / "workspace_core" / "edge_runtime.py"),
     )
     monkeypatch.setattr(edge_runtime, "load_workspace_manifest", lambda _root: {"paths": {}})
 

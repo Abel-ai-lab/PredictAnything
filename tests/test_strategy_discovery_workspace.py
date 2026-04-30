@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 import strategy_discovery_api as strategy_api
-from abel_invest.env import resolve_alpha_source
-from abel_invest.workspace import (
+from abel_invest.workspace_core.env import resolve_alpha_source
+from abel_invest.workspace_core.workspace import (
     build_default_manifest,
     render_workspace_status,
     scaffold_workspace,

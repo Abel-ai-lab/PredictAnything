@@ -9,11 +9,11 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
-from abel_invest.workspace import load_workspace_manifest, resolve_workspace_paths
+from abel_invest.workspace_core.workspace import load_workspace_manifest, resolve_workspace_paths
 
 
 def common_python_root() -> Path:
-    return Path(__file__).resolve().parents[2] / "abel-common" / "python"
+    return Path(__file__).resolve().parents[3] / "abel-common" / "python"
 
 
 def collection_auth_anchor() -> Path:
