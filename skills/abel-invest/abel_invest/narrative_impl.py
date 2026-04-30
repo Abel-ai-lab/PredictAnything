@@ -6275,6 +6275,9 @@ def load_discovery(session: Path) -> dict:
     frontier_path = graph_frontier_path(session)
     if frontier_path.exists():
         return graph_frontier_to_discovery(load_graph_frontier(session))
+    discovery_path = session / "discovery.json"
+    if discovery_path.exists():
+        return json.loads(discovery_path.read_text(encoding="utf-8"))
     return {
         "ticker": session.parent.name.upper(),
         "source": "unknown",
