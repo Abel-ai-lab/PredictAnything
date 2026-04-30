@@ -253,8 +253,10 @@ def test_run_branch_round_updates_ledger_and_agent_context(
 
     ni.print_status(session)
     status_output = capsys.readouterr().out
-    assert "Dashboard upload:" in status_output
-    assert "abel-invest upload-dashboard-session --session" in status_output
+    assert "Session visualization available:" in status_output
+    assert "Ask the user whether to create an online view of this session." in status_output
+    assert "abel-invest visualize-session --session" in status_output
+    assert "--base-url" not in status_output
     assert "Research journal:" in status_output
     assert "Agent memory:" not in status_output
     assert ni.check_session(session, strict=False) == 0
@@ -587,3 +589,7 @@ def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
     assert request.get_header("Api-key") == "secret-key"
     assert request.get_header("Content-type") == "application/json"
     assert timeout == 60
+
+
+def test_resolve_skill_dashboard_base_url_defaults_to_abel_router() -> None:
+    assert ni.resolve_skill_dashboard_base_url("") == "https://api.abel.ai/router/"

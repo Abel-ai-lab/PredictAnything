@@ -82,12 +82,14 @@ Always start by resolving workspace state before strategy work.
 13. Treat input realization as an evidence fact: a graph-supported declaration
     only becomes graph-supported evidence when runtime reads the prepared graph
     inputs.
-14. When a session has meaningful evidence worth inspecting, upload the session
-    exploration state to the skill dashboard with
-    `abel-invest upload-dashboard-session --session <session>
-    --base-url <router-base-url>`. Dashboard display is session-first: branch
-    is a strategy family and round is branch-owned evidence. Do not upload
-    promotion bundles, replay snapshots, paper-trading summaries, or finished
-    strategy narratives as dashboard input.
-15. The framework defines evidence validity. The agent owns the strategy
+14. Do not create an online session view automatically. If a candidate round
+    passes, ask the user whether to create an online visualization of this
+    session. If the user agrees, or if the user explicitly asks to visualize
+    the session, run
+    `abel-invest visualize-session --session <session>`. Pass the session folder; the command builds
+    the online view from local session evidence.
+15. The default Abel router base URL is `https://api.abel.ai/router/`.
+    `abel-auth` owns API key setup. Do not ask the user or agent to provide a
+    router URL unless they are intentionally testing another router.
+16. The framework defines evidence validity. The agent owns the strategy
     thinking.

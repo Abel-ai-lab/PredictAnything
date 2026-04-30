@@ -64,6 +64,7 @@ EVENTS_HEADER = [
 ]
 
 DEFAULT_BACKTEST_START = "2020-01-01"
+DEFAULT_ABEL_ROUTER_BASE_URL = "https://api.abel.ai/router/"
 SESSION_STATE_FILENAME = "session_state.json"
 BRANCH_STATE_FILENAME = "branch_state.json"
 READINESS_FILENAME = "readiness.json"
@@ -469,14 +470,9 @@ def main() -> int:
 
     upload_dashboard = sub.add_parser(
         "upload-dashboard-bundle",
-        help="Upload branch evidence to the Abel router skill dashboard",
+        help="Send branch evidence to the online research view",
     )
     upload_dashboard.add_argument("--branch", required=True)
-    upload_dashboard.add_argument(
-        "--base-url",
-        default="",
-        help="Abel router base URL. Defaults to ABEL_ROUTER_BASE_URL or CAP_ROUTER_BASE_URL.",
-    )
     upload_dashboard.add_argument(
         "--api-key",
         default="",
@@ -493,15 +489,10 @@ def main() -> int:
         help="Build and print the payload without sending it.",
     )
     upload_session_dashboard = sub.add_parser(
-        "upload-dashboard-session",
-        help="Upload session exploration state to the Abel router skill dashboard",
+        "visualize-session",
+        help="Create an online exploration summary from a session folder",
     )
     upload_session_dashboard.add_argument("--session", required=True)
-    upload_session_dashboard.add_argument(
-        "--base-url",
-        default="",
-        help="Abel router base URL. Defaults to ABEL_ROUTER_BASE_URL or CAP_ROUTER_BASE_URL.",
-    )
     upload_session_dashboard.add_argument(
         "--api-key",
         default="",
@@ -510,12 +501,12 @@ def main() -> int:
     upload_session_dashboard.add_argument(
         "--output-json",
         default=None,
-        help="Optional path to write the upload payload before sending.",
+        help="Optional path to write the generated payload before sending.",
     )
     upload_session_dashboard.add_argument(
         "--dry-run",
         action="store_true",
-        help="Build and print the payload without sending it.",
+        help="Build and print the generated payload without sending it.",
     )
 
     debug_branch = sub.add_parser(
@@ -694,7 +685,7 @@ def main() -> int:
         return promote_branch_bundle(args)
     if args.command == "upload-dashboard-bundle":
         return upload_skill_dashboard_bundle(args)
-    if args.command == "upload-dashboard-session":
+    if args.command == "visualize-session":
         return upload_skill_dashboard_session(args)
     if args.command == "debug-branch":
         return debug_branch_run(args)
@@ -1465,7 +1456,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
     start_at = require_timezone_aware_iso(created_at or _now(), field_name="startAt")
     end_at = require_timezone_aware_iso(uploaded_at or _now(), field_name="endAt")
     if datetime.fromisoformat(end_at) <= datetime.fromisoformat(start_at):
-        raise RuntimeError("skill dashboard upload requires endAt after startAt")
+        raise RuntimeError("branch evidence view requires endAt after startAt")
 
     latest = rows[-1] if rows else {}
     latest_note = read_round_note(branch, latest.get("round_id", ""))
@@ -1547,7 +1538,7 @@ def build_skill_dashboard_session_bundle(session: Path, *, uploaded_at: str | No
     )
     end_at = require_timezone_aware_iso(uploaded_at or _now(), field_name="endAt")
     if datetime.fromisoformat(end_at) <= datetime.fromisoformat(start_at):
-        raise RuntimeError("skill dashboard session upload requires endAt after startAt")
+        raise RuntimeError("online session view requires endAt after startAt")
 
     graph_priority = frontier.get("graph_priority") if isinstance(frontier.get("graph_priority"), dict) else {}
     input_realization = frontier.get("input_realization") if isinstance(frontier.get("input_realization"), dict) else {}
@@ -2064,7 +2055,7 @@ def post_skill_dashboard_bundle(
             raw = response.read().decode("utf-8")
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Skill dashboard upload failed: HTTP {exc.code}: {detail}") from exc
+        raise RuntimeError(f"Dashboard bundle upload failed: HTTP {exc.code}: {detail}") from exc
     return json.loads(raw)
 
 
@@ -2094,7 +2085,7 @@ def post_skill_dashboard_session(
             raw = response.read().decode("utf-8")
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Skill dashboard upload failed: HTTP {exc.code}: {detail}") from exc
+        raise RuntimeError(f"Session visualization failed: HTTP {exc.code}: {detail}") from exc
     return json.loads(raw)
 
 
@@ -2110,7 +2101,7 @@ def upload_skill_dashboard_bundle(args: argparse.Namespace) -> int:
         return 0
 
     workspace_root = find_workspace_root(branch)
-    base_url = resolve_skill_dashboard_base_url(args.base_url)
+    base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
     result = post_skill_dashboard_bundle(base_url=base_url, api_key=api_key, bundle=bundle)
     print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -2129,22 +2120,15 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
         return 0
 
     workspace_root = find_workspace_root(session)
-    base_url = resolve_skill_dashboard_base_url(args.base_url)
+    base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
     result = post_skill_dashboard_session(base_url=base_url, api_key=api_key, bundle=bundle)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
 
 
-def resolve_skill_dashboard_base_url(value: str | None) -> str:
-    base_url = (
-        str(value or "").strip()
-        or os.getenv("ABEL_ROUTER_BASE_URL", "").strip()
-        or os.getenv("CAP_ROUTER_BASE_URL", "").strip()
-    )
-    if not base_url:
-        raise RuntimeError("Set --base-url or ABEL_ROUTER_BASE_URL before uploading dashboard bundles")
-    return base_url
+def resolve_skill_dashboard_base_url(value: str | None = None) -> str:
+    return str(value or "").strip() or DEFAULT_ABEL_ROUTER_BASE_URL
 
 
 def resolve_skill_dashboard_api_key(value: str | None, *, workspace_root: Path | None) -> str:
@@ -2161,7 +2145,7 @@ def resolve_skill_dashboard_api_key(value: str | None, *, workspace_root: Path |
             token = (env_values.get("ABEL_API_KEY") or env_values.get("CAP_API_KEY") or "").strip()
             if token:
                 return token
-    raise RuntimeError("Set --api-key or run abel-auth before uploading dashboard bundles")
+    raise RuntimeError("Set --api-key or run abel-auth before creating an online session view")
 
 
 def skill_dashboard_rounds(branch: Path, rows: list[dict[str, str]], ledger: dict) -> list[dict]:
@@ -2707,17 +2691,25 @@ def run_branch_round(args: argparse.Namespace) -> int:
             frame_text,
         ],
     )
-    if decision == "keep" and dashboard_round_is_candidate(
-        session=session,
-        branch_id=branch.name,
-        round_id=round_id,
+    if (
+        str(result.get("verdict") or "").upper() == "PASS"
+        and decision == "keep"
+        and dashboard_round_is_candidate(
+            session=session,
+            branch_id=branch.name,
+            round_id=round_id,
+        )
     ):
         print("")
-        print("Dashboard upload:")
+        print("Session visualization available:")
+        print(
+            "  Candidate PASS recorded. Ask the user whether to create "
+            "an online view of this session."
+        )
+        print("  If the user agrees, run:")
         print(
             "  "
-            f"abel-invest upload-dashboard-session --session {session} "
-            "--base-url <router-base-url>"
+            f"abel-invest visualize-session --session {session}"
         )
     return 0
 
