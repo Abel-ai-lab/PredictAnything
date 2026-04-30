@@ -21,7 +21,7 @@ def test_scaffold_workspace_writes_alpha_owned_boundary_guidance(tmp_path: Path)
     agents = (root / "AGENTS.md").read_text(encoding="utf-8")
 
     assert "This workspace is for alpha-managed branch research." in readme
-    assert "Do not run `causal-edge init` inside this workspace." in readme
+    assert "Do not run `abel-edge init` inside this workspace." in readme
     assert "Do not bootstrap `./abel-invest-workspace` inside it." in readme
     assert "evidence_ledger.json" in readme
     assert "frontier.md" in readme
@@ -29,7 +29,7 @@ def test_scaffold_workspace_writes_alpha_owned_boundary_guidance(tmp_path: Path)
     assert "visualize-session" in readme
     assert "creates an online session view" in readme
     assert "abel-auth" in readme
-    assert "standalone `causal-edge init` project inside it" in agents
+    assert "standalone `abel-edge init` project inside it" in agents
     assert "Do not create `./abel-invest-workspace` inside it." in agents
     assert "visualize-session" in agents
     assert "online session view" in agents

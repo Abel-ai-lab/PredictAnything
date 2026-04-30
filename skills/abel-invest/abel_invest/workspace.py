@@ -186,7 +186,7 @@ def build_default_manifest(name: str) -> dict:
         },
         "runtime": {
             "python": default_python_path(),
-            "edge_package": "causal-edge",
+            "edge_package": "abel-edge",
             "edge_spec": DEFAULT_EDGE_SPEC,
             "auth_strategy": "reuse_abel_auth_first",
         },
@@ -261,6 +261,7 @@ into branch evidence.
 abel-invest doctor
 {default_activate_command()}
 abel-invest init-session --ticker TSLA --exp-id tsla-v1
+abel-invest frontier status --session research/tsla/tsla-v1
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
 edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
@@ -280,8 +281,9 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `branch.yaml` makes the branch inputs explicit
 - `prepare-branch` resolves inputs before you treat any round as evidence
 - the starter `engine.py` is only there to verify branch wiring before a branch-specific mechanism exists
-- new sessions default to graph-first research: use causal graph inputs first,
-  then strategy variants, then parameters
+- new sessions default to graph-first research: use `graph_frontier.json` and
+  `frontier expand` to widen graph breadth first, then strategy variants, then
+  parameters
 - every recorded round requires an agent-written `research_journal.md` entry
   with the round ledger ref before the next recorded round
 
@@ -294,14 +296,14 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 
 ## What This Workspace Makes Explicit
 
-- session owns `discovery.json` and `readiness.json`
+- session owns `graph_frontier.json` and `readiness.json`
 - session owns `evidence_ledger.json`, `frontier.md`, `agent_context.md`, and
   `research_journal.md` after rendering
 - branch owns `branch.yaml`
 - edge owns the market-data cache
 - `prepare-branch` should run before a recorded round
 - `frontier.md` reports input realization: declared graph-supported inputs only
-  count as realized when the engine reads prepared auxiliary inputs
+  count as realized when the engine reads prepared graph inputs
 - `visualize-session` creates an online session view from the session folder;
   run it only when the user requests it or agrees after a candidate PASS
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
@@ -311,7 +313,7 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 
 - This workspace is for alpha-managed branch research.
 - Keep research sessions and branches under `research/`.
-- Do not run `causal-edge init` inside this workspace.
+- Do not run `abel-edge init` inside this workspace.
 - If you need a standalone Abel-edge project, create it in a separate directory outside this workspace.
 
 If the workspace runtime is missing or you want to replace it, run
@@ -354,6 +356,7 @@ is the workspace root. Do not create `./abel-invest-workspace` inside it.
 ```bash
 abel-invest doctor
 abel-invest init-session --ticker TSLA --exp-id tsla-v1
+abel-invest frontier status --session research/tsla/tsla-v1
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
 edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
@@ -370,22 +373,23 @@ abel-invest visualize-session --session research/tsla/tsla-v1
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
 `abel-auth`, then rerun `doctor`.
-Treat `branch.yaml` as the place where target, start, drivers, and overlap
-become explicit. Treat `prepare-branch` as the moment that makes those inputs
-real. Treat the generated `engine.py` as a starter path check; once the branch
-path is proven, encode the branch-specific mechanism there. Treat session
-readiness as advisory context; the branch's explicit `requested_start` is the
-runtime start when it is set. Treat this workspace `.venv` as the canonical
-runtime for daily work. Treat branch count as a file-organization fact, not as
-proof of graph/input breadth. Use `research_journal.md` to record your own
-evidence-linked insight and continue/pivot reasoning after each recorded round.
-Check journal coverage before starting another round. Check input realization before treating a
-declared graph-supported branch as graph-supported evidence. Do not create the
-online session view automatically; after a candidate PASS, ask the user first.
-If the user agrees or explicitly asks to visualize the session,
-`visualize-session` builds the view from the session folder.
+Treat `branch.yaml` as the place where target, start, graph inputs, and overlap
+become explicit. Treat `prepare-branch` as the moment that makes those graph
+inputs real. Treat the generated `engine.py` as a starter path check; once the
+branch path is proven, encode the branch-specific mechanism there. Treat
+session readiness as advisory context; the branch's explicit `requested_start`
+is the runtime start when it is set. Treat this workspace `.venv` as the
+canonical runtime for daily work. Treat branch count as a file-organization
+fact, not as proof of graph breadth. Use `research_journal.md` to record your
+own evidence-linked insight and continue/pivot reasoning after each recorded
+round. Check journal coverage before starting another round. Check input
+realization before treating a declared graph-supported branch as graph-supported
+evidence. Do not create the online session view automatically; after a
+candidate PASS, ask the user first. If the user agrees or explicitly asks to
+visualize the session, `visualize-session` builds the view from the session
+folder.
 This workspace is for alpha-managed branch research, so do not create a
-standalone `causal-edge init` project inside it. Put standalone edge work in a
+standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.
 
 ### Run one research round
@@ -425,7 +429,7 @@ def render_env_example() -> str:
     return """# Optional override for standalone Abel auth fallback
 # ABEL_API_KEY=
 
-# Optional: point causal-edge at a shared auth file
+# Optional: point abel-edge at a shared auth file
 # ABEL_AUTH_ENV_FILE=
 """
 

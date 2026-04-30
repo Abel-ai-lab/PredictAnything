@@ -13,7 +13,7 @@ framework = evidence validity and exploration-shape facts
 agent = strategy judgment and research insight
 ```
 
-`causal-edge` owns runtime legality and validation metrics.
+`abel-edge` owns runtime legality and validation metrics.
 `abel-invest` owns branch declarations, evidence labels, frontier
 facts, and the research journal surface.
 
@@ -24,6 +24,10 @@ Use Abel-discovered causal structure as the default search prior because it
 reduces blind search and is more likely to survive regime change. Correlation
 signals can still be useful, but they enter as supplements or controls unless
 the branch declares and validates a stronger claim.
+
+Graph-first means widening the graph frontier when the known node pool is too
+narrow. It does not mean repeatedly choosing more tickers from a fixed branch
+candidate list.
 
 **Evidence labels are not strategy advice.**
 Candidate/control/diagnostic/blocker labels say what kind of research evidence a
@@ -54,10 +58,11 @@ The branch-default path is:
 
 1. resolve workspace and doctor readiness
 2. start or resume a graph-first session
-3. declare branch hypothesis and selected inputs
-4. prepare branch inputs
-5. write `compute_decisions(self, ctx)`
-6. run semantic preflight
-7. record evidence
-8. inspect ledger/frontier facts
-9. update the research journal before deep local refinement
+3. expand `graph_frontier.json` when graph breadth is still thin
+4. declare branch hypothesis and selected graph inputs
+5. prepare branch inputs
+6. write `compute_decisions(self, ctx)`
+7. run semantic preflight
+8. record evidence
+9. inspect ledger/frontier facts
+10. update the research journal before deep local refinement

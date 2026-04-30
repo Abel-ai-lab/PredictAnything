@@ -6,8 +6,8 @@ from pathlib import Path
 
 from abel_invest.edge_runtime import (
     probe_abel_auth,
-    probe_causal_edge_cli,
-    probe_causal_edge_import,
+    probe_abel_edge_cli,
+    probe_abel_edge_import,
     probe_edge_context_json,
     probe_edge_discovery_payload,
 )
@@ -51,8 +51,8 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             "checks": {
                 "workspace_manifest": "fail",
                 "python_env": "not_run",
-                "causal_edge_import": "not_run",
-                "causal_edge_cli": "not_run",
+                "abel_edge_import": "not_run",
+                "abel_edge_cli": "not_run",
                 "edge_discovery_payload": "not_run",
                 "edge_context_json": "not_run",
                 "auth": "not_run",
@@ -73,8 +73,8 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             "checks": {
                 "workspace_manifest": "fail",
                 "python_env": "not_run",
-                "causal_edge_import": "not_run",
-                "causal_edge_cli": "not_run",
+                "abel_edge_import": "not_run",
+                "abel_edge_cli": "not_run",
                 "edge_discovery_payload": "not_run",
                 "edge_context_json": "not_run",
                 "auth": "not_run",
@@ -86,8 +86,8 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
     checks: dict[str, object] = {
         "workspace_manifest": "pass",
         "python_env": "pass" if python_path.exists() else "fail",
-        "causal_edge_import": "not_run",
-        "causal_edge_cli": "not_run",
+        "abel_edge_import": "not_run",
+        "abel_edge_cli": "not_run",
         "edge_discovery_payload": "not_run",
         "edge_context_json": "not_run",
         "auth": "not_run",
@@ -114,20 +114,20 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
         )
         return result
 
-    import_check = probe_causal_edge_import(python_path, root)
-    checks["causal_edge_import"] = "pass" if import_check.get("ok") else "fail"
+    import_check = probe_abel_edge_import(python_path, root)
+    checks["abel_edge_import"] = "pass" if import_check.get("ok") else "fail"
     if not import_check.get("ok"):
         result.update(
             {
                 "status": "edge_missing",
-                "summary": f"Workspace python cannot import causal_edge: {import_check.get('error', 'unknown error')}",
+                "summary": f"Workspace python cannot import abel_edge: {import_check.get('error', 'unknown error')}",
                 "next_step": "abel-invest env init  # or use --runtime-python /path/to/python",
             }
         )
         return result
 
-    cli_check = probe_causal_edge_cli(python_path, root)
-    checks["causal_edge_cli"] = "pass" if cli_check.get("ok") else "fail"
+    cli_check = probe_abel_edge_cli(python_path, root)
+    checks["abel_edge_cli"] = "pass" if cli_check.get("ok") else "fail"
 
     discovery_contract_ok = probe_edge_discovery_payload(python_path, root)
     checks["edge_discovery_payload"] = "pass" if discovery_contract_ok else "fail"
@@ -172,7 +172,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
         {
             "status": "ready",
             "summary": (
-                "Workspace, Python environment, causal-edge, and Abel auth are ready "
+                "Workspace, Python environment, abel-edge, and Abel auth are ready "
                 "for alpha-managed branch research."
             ),
             "next_step": (

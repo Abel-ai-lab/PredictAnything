@@ -27,6 +27,9 @@ def test_build_workspace_runtime_env_prefers_collection_auth_file(
     env = edge_runtime.build_workspace_runtime_env(workspace_root, base={})
 
     assert env["ABEL_AUTH_ENV_FILE"] == str(auth_file.resolve())
+    assert env["ABEL_EDGE_CACHE_ROOT"] == str(
+        (workspace_root / "cache" / "market_data").resolve()
+    )
 
 
 def test_build_workspace_runtime_env_prefers_workspace_auth_when_present(
@@ -43,6 +46,9 @@ def test_build_workspace_runtime_env_prefers_workspace_auth_when_present(
     env = edge_runtime.build_workspace_runtime_env(workspace_root, base={})
 
     assert env["ABEL_AUTH_ENV_FILE"] == str(workspace_env.resolve())
+    assert env["ABEL_EDGE_CACHE_ROOT"] == str(
+        (workspace_root / "cache" / "market_data").resolve()
+    )
 
 
 def test_probe_abel_auth_prefers_collection_auth_file_without_runtime_probe(
