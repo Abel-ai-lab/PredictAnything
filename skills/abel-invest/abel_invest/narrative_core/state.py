@@ -15,10 +15,12 @@ from abel_invest.narrative_core.contracts.branch_spec import (
 from abel_invest.narrative_core.contracts.constants import (
     CONTEXT_GUIDE_FILENAME,
     DATA_MANIFEST_FILENAME,
+    DEFAULT_BACKTEST_START,
     DEPENDENCIES_FILENAME,
     EVENTS_HEADER,
     EXECUTION_CONSTRAINTS_FILENAME,
     EXPERIMENT_METADATA_ENV,
+    GRAPH_FRONTIER_FILENAME,
     PROBE_SAMPLES_FILENAME,
     READINESS_FILENAME,
     RUNTIME_PROFILE_FILENAME,
@@ -181,16 +183,26 @@ def load_branches(session: Path) -> list[dict]:
 
 
 def load_discovery(session: Path) -> dict:
+    from abel_invest.narrative_core.evidence.graph_frontier import (
+        graph_frontier_path,
+        graph_frontier_to_discovery,
+        load_graph_frontier,
+    )
+
+    if graph_frontier_path(session).exists():
+        return graph_frontier_to_discovery(load_graph_frontier(session))
     path = session / "discovery.json"
-    if not path.exists():
-        return {
-            "ticker": session.parent.name.upper(),
-            "source": "unknown",
-            "parents": [],
-            "blanket_new": [],
-            "K_discovery": 0,
-        }
-    return json.loads(path.read_text(encoding="utf-8"))
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return {
+        "ticker": session.parent.name.upper(),
+        "source": "unknown",
+        "parents": [],
+        "blanket_new": [],
+        "children": [],
+        "K_discovery": 0,
+        "backtest": {"start": DEFAULT_BACKTEST_START},
+    }
 
 
 def load_readiness(session: Path) -> dict:
@@ -308,21 +320,29 @@ def update_backtest_start(
     backtest_start: str,
     source: str,
 ) -> tuple[dict, dict]:
-    from abel_invest.narrative_core.session_lifecycle import refresh_data_readiness
+    from abel_invest.narrative_core.evidence.graph_frontier import (
+        graph_frontier_to_discovery,
+        load_graph_frontier,
+        write_graph_frontier,
+    )
+    from abel_invest.narrative_core.rendering.session_rendering import render_session
+    from abel_invest.narrative_core.session_lifecycle import refresh_data_readiness, write_readiness
 
-    discovery = load_discovery(session)
-    updated_discovery = dict(discovery)
-    updated_discovery["backtest"] = {"start": backtest_start}
+    frontier = load_graph_frontier(session)
+    updated_frontier = dict(frontier)
+    updated_frontier["requested_window"] = {"start": backtest_start, "end": None}
+    updated_frontier["updated_at"] = _now()
+    updated_discovery = graph_frontier_to_discovery(updated_frontier)
     readiness = refresh_data_readiness(
         session=session,
         discovery_data=updated_discovery,
         backtest_start=backtest_start,
     )
     with SessionLock(session):
-        narrative.write_discovery(session, updated_discovery)
+        write_graph_frontier(session, updated_frontier)
         readiness_path = session / READINESS_FILENAME
         if readiness:
-            narrative.write_readiness(session, readiness)
+            write_readiness(session, readiness)
         else:
             readiness_path.unlink(missing_ok=True)
         state = load_session_state(session)
@@ -342,7 +362,7 @@ def update_backtest_start(
                 "description": (
                     f"Updated session backtest start to {backtest_start} via {source}"
                 ),
-                "artifact_path": "discovery.json",
+                "artifact_path": GRAPH_FRONTIER_FILENAME,
             },
         )
         if readiness:
@@ -364,7 +384,7 @@ def update_backtest_start(
                     "artifact_path": READINESS_FILENAME,
                 },
             )
-        narrative.render_session(session)
+        render_session(session)
     return updated_discovery, readiness or {}
 
 

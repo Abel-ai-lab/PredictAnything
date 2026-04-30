@@ -14,6 +14,7 @@ from abel_invest.narrative_core.contracts.branch_spec import (
 from abel_invest.narrative_core.contracts.constants import (
     DEFAULT_BACKTEST_START,
     EVENTS_HEADER,
+    GRAPH_FRONTIER_FILENAME,
     READINESS_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
@@ -28,6 +29,7 @@ from abel_invest.narrative_core.io import (
     write_tsv_header,
 )
 from abel_invest.narrative_core.evidence.journal import ensure_research_journal
+from abel_invest.narrative_core.evidence import graph_frontier
 from abel_invest.narrative_core.contracts.paths import branch_spec_path, branch_state_path, session_state_path
 from abel_invest.narrative_core.readiness import format_data_readiness_summary
 from abel_invest.narrative_core.rendering.session_rendering import render_session
@@ -91,37 +93,32 @@ def init_session_dir(
     session = root / ticker.lower() / exp_id
     session.mkdir(parents=True, exist_ok=True)
     ensure_research_journal(session)
+    frontier_data = None
     discovery_data = None
     readiness_report = None
     if discover:
-        discovery_data = fetch_live_discovery(ticker, limit=discover_limit)
-        discovery_data["backtest"] = {"start": backtest_start}
+        frontier_data = graph_frontier.fetch_live_graph_frontier(
+            ticker,
+            limit=discover_limit,
+            backtest_start=backtest_start,
+        )
+        discovery_data = graph_frontier.graph_frontier_to_discovery(frontier_data)
         readiness_report = refresh_data_readiness(
             session=session,
             discovery_data=discovery_data,
             backtest_start=backtest_start,
         )
+    else:
+        frontier_data = graph_frontier.build_pending_graph_frontier(
+            ticker,
+            backtest_start=backtest_start,
+        )
+        discovery_data = graph_frontier.graph_frontier_to_discovery(frontier_data)
     with SessionLock(session):
         write_tsv_header(session / "events.tsv", EVENTS_HEADER)
         if not session_state_path(session).exists():
             write_session_state(session, {})
-        discovery_path = session / "discovery.json"
-        if discovery_data is not None:
-            write_discovery(session, discovery_data)
-        elif not discovery_path.exists():
-            write_discovery(
-                session,
-                {
-                    "ticker": ticker.upper(),
-                    "source": "pending",
-                    "parents": [],
-                    "blanket_new": [],
-                    "children": [],
-                    "K_discovery": 0,
-                    "backtest": {"start": backtest_start},
-                    "created_at": _now(),
-                },
-            )
+        graph_frontier.write_graph_frontier(session, frontier_data)
         if readiness_report is not None:
             write_readiness(session, readiness_report)
         append_tsv_row(
@@ -139,7 +136,7 @@ def init_session_dir(
                 "artifact_path": "",
             },
         )
-        if discovery_data is not None:
+        if discover and discovery_data is not None:
             append_tsv_row(
                 session / "events.tsv",
                 EVENTS_HEADER,
@@ -154,7 +151,7 @@ def init_session_dir(
                     "description": (
                         f"Recorded live Abel discovery with K={discovery_data['K_discovery']}"
                     ),
-                    "artifact_path": str(discovery_path.relative_to(session)),
+                    "artifact_path": GRAPH_FRONTIER_FILENAME,
                 },
             )
             if readiness_report:
@@ -258,6 +255,7 @@ def init_branch_dir(session: Path, branch_id: str) -> Path:
     with SessionLock(session):
         discovery = load_discovery(session)
         readiness = load_readiness(session)
+        frontier = graph_frontier.load_graph_frontier(session)
         branch = session / "branches" / branch_id
         branch.mkdir(parents=True, exist_ok=True)
         (branch / "rounds").mkdir(parents=True, exist_ok=True)
@@ -276,6 +274,7 @@ def init_branch_dir(session: Path, branch_id: str) -> Path:
                     branch=branch,
                     discovery=discovery,
                     readiness=readiness,
+                    graph_frontier=frontier,
                 ),
             )
         engine = branch / "engine.py"

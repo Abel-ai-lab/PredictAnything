@@ -27,7 +27,7 @@ do not hide setup failures behind synthetic outputs.
 Current readiness warning: {readiness_warning}
 Coverage hints: {coverage_hints_text}
 """
- 
+
 from __future__ import annotations
 
 from abel_edge.engine.base import StrategyEngine

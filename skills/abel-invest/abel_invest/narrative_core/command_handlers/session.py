@@ -9,6 +9,7 @@ from abel_invest.narrative_core.contracts.constants import (
     BRANCH_SPEC_FILENAME,
     BRANCH_STATE_FILENAME,
     EVENTS_HEADER,
+    GRAPH_FRONTIER_FILENAME,
     READINESS_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
 )
@@ -52,15 +53,15 @@ def handle_init_session(args: argparse.Namespace) -> int:
     readiness = load_readiness(session)
     print(f"Created Abel strategy discovery session at {session}")
     print(f"  ticker: {discovery.get('ticker', args.ticker.upper())}")
-    print(f"  discovery: {session / 'discovery.json'}")
+    print(f"  graph_frontier: {session / GRAPH_FRONTIER_FILENAME}")
     print(f"  journal: {session / RESEARCH_JOURNAL_FILENAME}")
     print(f"  events: {session / 'events.tsv'}")
     if readiness:
         print(f"  readiness: {session / READINESS_FILENAME}")
     if args.discover:
         print(
-            f"  discovery_source: {discovery.get('source', 'unknown')} "
-            f"(K={discovery.get('K_discovery', 0)})"
+            f"  frontier_source: {discovery.get('source', 'unknown')} "
+            f"(nodes={discovery.get('K_discovery', 0) + 1})"
         )
         readiness_summary = format_data_readiness_summary(readiness)
         if readiness_summary:
@@ -71,7 +72,7 @@ def handle_init_session(args: argparse.Namespace) -> int:
         if warning:
             print(f"  warning: {warning}")
     else:
-        print("  discovery_source: pending (live discovery not run)")
+        print("  frontier_source: pending (live discovery not run)")
     print("")
     print("From here:")
     for line in render_breadth_first_start_lines(session):

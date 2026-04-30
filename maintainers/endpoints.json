@@ -5,6 +5,11 @@
       "cap_base_url": "https://cap.abel.ai/api",
       "narrative_cap_base_url": "https://cap.abel.ai/narrative",
       "oauth_base_url": "https://api.abel.ai/router/"
+    },
+    "sit": {
+      "cap_base_url": "https://cap-sit.abel.ai/api",
+      "narrative_cap_base_url": "https://cap-sit.abel.ai/narrative",
+      "oauth_base_url": "https://api-sit.abel.ai/router/"
     }
   }
 }

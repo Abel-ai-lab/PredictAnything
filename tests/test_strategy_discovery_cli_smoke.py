@@ -35,7 +35,8 @@ def test_public_cli_session_branch_render_status_check_smoke(
         ],
     ) == 0
     session = root / "tsla" / "cli-smoke"
-    assert (session / "discovery.json").exists()
+    assert (session / ni.GRAPH_FRONTIER_FILENAME).exists()
+    assert not (session / "discovery.json").exists()
 
     assert _run_cli(
         monkeypatch,

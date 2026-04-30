@@ -17,6 +17,7 @@ EVENTS_HEADER = [
 ]
 
 DEFAULT_BACKTEST_START = "2020-01-01"
+DEFAULT_ABEL_ROUTER_BASE_URL = "https://api.abel.ai/router/"
 SESSION_STATE_FILENAME = "session_state.json"
 BRANCH_STATE_FILENAME = "branch_state.json"
 READINESS_FILENAME = "readiness.json"
@@ -30,6 +31,7 @@ PROBE_SAMPLES_FILENAME = "probe_samples.json"
 AGENT_CONTEXT_FILENAME = "agent_context.md"
 RESEARCH_JOURNAL_FILENAME = "research_journal.md"
 EVIDENCE_LEDGER_FILENAME = "evidence_ledger.json"
+GRAPH_FRONTIER_FILENAME = "graph_frontier.json"
 FRONTIER_JSON_FILENAME = "frontier.json"
 FRONTIER_MARKDOWN_FILENAME = "frontier.md"
 

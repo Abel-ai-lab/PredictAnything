@@ -13,6 +13,7 @@ from abel_invest.narrative_core.contracts.branch_spec import (
     branch_requested_start,
     branch_dependencies_payload,
     branch_selected_inputs,
+    branch_selected_graph_nodes,
     build_context_guide_markdown,
     build_data_manifest_payload,
     build_execution_constraints_payload,
@@ -114,6 +115,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     if not target:
         raise RuntimeError("Branch spec is missing a target ticker.")
     selected_inputs = branch_selected_inputs(branch_spec)
+    selected_graph_nodes = branch_selected_graph_nodes(branch_spec)
     symbols = [target]
     for ticker in selected_inputs:
         if ticker not in symbols:
@@ -197,6 +199,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     data_manifest = build_data_manifest_payload(
         target=target,
         selected_inputs=selected_inputs,
+        selected_graph_nodes=selected_graph_nodes,
         cache_payload=cache_payload,
         readiness=readiness,
     )

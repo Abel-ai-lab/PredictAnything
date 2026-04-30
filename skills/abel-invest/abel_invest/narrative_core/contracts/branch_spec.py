@@ -103,11 +103,103 @@ def normalize_exploration_role(branch_spec: dict) -> str:
     return "unspecified"
 
 
-def branch_selected_inputs(branch_spec: dict) -> list[str]:
+def split_graph_node_id(node_id: str) -> tuple[str, str]:
+    value = str(node_id or "").strip()
+    if "." not in value:
+        return value.upper(), "price"
+    asset, field = value.split(".", 1)
+    return asset.strip().upper(), field.strip().lower() or "price"
+
+
+def normalize_graph_node_ref(value: str) -> str:
+    asset, field = split_graph_node_id(value)
+    if not asset:
+        return ""
+    return f"{asset}.{field}"
+
+
+def default_graph_node_id(asset: str) -> str:
+    return f"{str(asset or '').strip().upper()}.price"
+
+
+def branch_selected_input_entries(branch_spec: dict) -> list[dict[str, str]]:
     raw = branch_spec.get("selected_inputs")
     if not isinstance(raw, list):
         return []
-    return ordered_unique_upper(raw)
+    entries: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in raw:
+        if isinstance(item, dict):
+            node_id = normalize_graph_node_ref(
+                str(item.get("node_id") or item.get("node") or "").strip()
+            )
+            if not node_id:
+                asset = str(item.get("asset") or item.get("ticker") or "").strip()
+                field = str(item.get("field") or "price").strip()
+                node_id = normalize_graph_node_ref(f"{asset}.{field}") if asset else ""
+            role = str(item.get("role") or "graph_input").strip() or "graph_input"
+            source = str(item.get("source") or "frontier").strip() or "frontier"
+            source_reason = str(item.get("source_reason") or "").strip()
+        else:
+            node_id = normalize_graph_node_ref(str(item or "").strip())
+            role = "graph_input"
+            source = "frontier"
+            source_reason = ""
+        if not node_id or node_id in seen:
+            continue
+        entry = {"node_id": node_id, "role": role, "source": source}
+        if source_reason:
+            entry["source_reason"] = source_reason
+        entries.append(entry)
+        seen.add(node_id)
+    return entries
+
+
+def branch_selected_inputs(branch_spec: dict) -> list[str]:
+    return ordered_unique_upper(
+        asset
+        for asset, _field in (
+            split_graph_node_id(entry["node_id"])
+            for entry in branch_selected_input_entries(branch_spec)
+            if entry.get("node_id")
+        )
+    )
+
+
+def branch_selected_graph_nodes(branch_spec: dict) -> list[str]:
+    return ordered_unique_strings(
+        entry["node_id"]
+        for entry in branch_selected_input_entries(branch_spec)
+        if entry.get("node_id")
+    )
+
+
+def normalize_graph_node_list(values: object) -> list[str]:
+    raw = values if isinstance(values, list) else []
+    return ordered_unique_strings(
+        node_id
+        for node_id in (normalize_graph_node_ref(str(item or "")) for item in raw)
+        if node_id
+    )
+
+
+def graph_nodes_by_asset(entries: list[dict[str, str]]) -> dict[str, list[str]]:
+    mapped: dict[str, list[str]] = {}
+    for entry in entries:
+        node_id = normalize_graph_node_ref(str(entry.get("node_id") or ""))
+        if not node_id:
+            continue
+        asset, _field = split_graph_node_id(node_id)
+        mapped.setdefault(asset, []).append(node_id)
+    return {asset: ordered_unique_strings(nodes) for asset, nodes in mapped.items()}
+
+
+def graph_nodes_for_assets(assets: object, entries: list[dict[str, str]]) -> list[str]:
+    mapped = graph_nodes_by_asset(entries)
+    selected: list[str] = []
+    for asset in ordered_unique_upper(assets if isinstance(assets, list) else []):
+        selected.extend(mapped.get(asset, []))
+    return ordered_unique_strings(selected)
 
 
 def ordered_unique_upper(values) -> list[str]:
@@ -125,9 +217,15 @@ def ordered_unique_strings(values) -> list[str]:
 
 def canonicalize_branch_spec_inputs(payload: dict) -> dict:
     branch_spec = dict(payload)
-    selected = branch_selected_inputs(branch_spec)
-    if selected or "selected_inputs" in branch_spec:
-        branch_spec["selected_inputs"] = selected
+    entries = branch_selected_input_entries(branch_spec)
+    if entries or "selected_inputs" in branch_spec:
+        raw = branch_spec.get("selected_inputs")
+        if isinstance(raw, list) and any(isinstance(item, dict) for item in raw):
+            branch_spec["selected_inputs"] = entries
+        else:
+            branch_spec["selected_inputs"] = [
+                split_graph_node_id(entry["node_id"])[0] for entry in entries
+            ]
     branch_spec.pop("selected_drivers", None)
     return branch_spec
 
@@ -140,6 +238,7 @@ def branch_declaration_status(branch_spec: dict) -> dict[str, object]:
     invalidation_condition = str(branch_spec.get("invalidation_condition") or "").strip()
     requested_start = str(branch_spec.get("requested_start") or "").strip()
     selected_inputs = branch_selected_inputs(branch_spec)
+    selected_graph_nodes = branch_selected_graph_nodes(branch_spec)
 
     gaps: list[str] = []
     if not has_explicit_hypothesis(hypothesis):
@@ -172,6 +271,7 @@ def branch_declaration_status(branch_spec: dict) -> dict[str, object]:
         "invalidation_condition": invalidation_condition,
         "requested_start": requested_start,
         "selected_inputs": selected_inputs,
+        "selected_graph_nodes": selected_graph_nodes,
     }
 
 
@@ -193,6 +293,40 @@ def write_branch_spec(branch: Path, payload: dict) -> None:
         yaml.safe_dump(payload, sort_keys=False, allow_unicode=False),
         encoding="utf-8",
     )
+
+
+def graph_frontier_candidate_node_ids(
+    frontier: dict,
+    readiness: dict,
+    *,
+    limit: int,
+) -> list[str]:
+    target_node = normalize_graph_node_ref(str(frontier.get("target_node") or "").strip())
+    usable_assets = set(readiness_usable_tickers(readiness))
+    candidates: list[tuple[int, int, str]] = []
+    for node in frontier.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        node_id = normalize_graph_node_ref(str(node.get("node_id") or "").strip())
+        if not node_id or node_id == target_node:
+            continue
+        roles = {str(role) for role in node.get("discovery_roles") or []}
+        if "target" in roles:
+            continue
+        asset = str(node.get("asset") or split_graph_node_id(node_id)[0]).upper()
+        readiness_rank = 0 if asset in usable_assets else 1
+        depth = int(node.get("depth") or 0)
+        candidates.append((readiness_rank, depth, node_id))
+    return [node_id for _ready, _depth, node_id in sorted(candidates)[:limit]]
+
+
+def graph_input_entry(
+    node_id: str,
+    *,
+    source: str = "frontier",
+    role: str = "graph_input",
+) -> dict[str, str]:
+    return {"node_id": normalize_graph_node_ref(node_id), "role": role, "source": source}
 
 
 def discovery_candidate_tickers(discovery: dict) -> list[str]:
@@ -218,14 +352,25 @@ def suggest_branch_drivers(discovery: dict, readiness: dict, *, limit: int = 5) 
     return (prioritized + fallback)[:limit]
 
 
-def build_default_branch_spec(*, branch: Path, discovery: dict, readiness: dict) -> dict:
-    suggested = suggest_branch_drivers(discovery, readiness, limit=5)
-    selected = suggested[: min(3, len(suggested))]
-    graph_first = bool(selected)
+def build_default_branch_spec(
+    *,
+    branch: Path,
+    discovery: dict,
+    readiness: dict,
+    graph_frontier: dict | None = None,
+) -> dict:
+    frontier = graph_frontier or {}
+    suggested_nodes = graph_frontier_candidate_node_ids(frontier, readiness, limit=5)
+    selected_nodes = suggested_nodes[: min(3, len(suggested_nodes))]
+    graph_first = bool(selected_nodes)
     return {
         "version": 2,
         "branch_id": branch.name,
         "target": discovery.get("ticker", branch.parent.parent.parent.name.upper()),
+        "target_node": normalize_graph_node_ref(str(frontier.get("target_node") or ""))
+        or default_graph_node_id(
+            str(discovery.get("ticker") or branch.parent.parent.parent.name).upper()
+        ),
         "hypothesis": "",
         "evidence_intent": "draft",
         "input_claim": "graph_supported" if graph_first else "target_only",
@@ -238,8 +383,7 @@ def build_default_branch_spec(*, branch: Path, discovery: dict, readiness: dict)
         "requested_start": _get_backtest_start(discovery),
         "resolved_start_policy": "requested",
         "overlap_mode": "target_only",
-        "selected_inputs": selected,
-        "suggested_drivers": suggested,
+        "selected_inputs": [graph_input_entry(node_id) for node_id in selected_nodes],
         "data_requirements": {
             "timeframe": "1d",
             "fields": ["close"],
@@ -256,11 +400,18 @@ def branch_dependencies_payload(
     requested_start: str,
 ) -> dict:
     selected_inputs = ordered_unique_upper(selected_inputs)
+    selected_graph_nodes = graph_nodes_for_assets(
+        selected_inputs,
+        branch_selected_input_entries(branch_spec),
+    )
     return {
         "version": 1,
         "branch_id": branch.name,
         "target": target,
+        "target_node": normalize_graph_node_ref(str(branch_spec.get("target_node") or ""))
+        or default_graph_node_id(target),
         "selected_inputs": selected_inputs,
+        "selected_graph_nodes": selected_graph_nodes,
         "requested_start": requested_start,
         "overlap_mode": branch_spec.get("overlap_mode") or "target_only",
         "data_requirements": branch_spec.get("data_requirements") or {"timeframe": "1d"},
@@ -272,8 +423,13 @@ def canonicalize_dependencies_payload(payload: dict) -> dict:
     dependencies = dict(payload)
     raw = dependencies.get("selected_inputs")
     selected = ordered_unique_upper(raw if isinstance(raw, list) else [])
+    selected_graph_nodes = normalize_graph_node_list(dependencies.get("selected_graph_nodes"))
+    if not selected_graph_nodes:
+        selected_graph_nodes = [default_graph_node_id(asset) for asset in selected]
     if selected or "selected_inputs" in dependencies:
         dependencies["selected_inputs"] = selected
+    if selected_graph_nodes or "selected_graph_nodes" in dependencies:
+        dependencies["selected_graph_nodes"] = selected_graph_nodes
     dependencies.pop("selected_drivers", None)
     return dependencies
 
@@ -300,10 +456,15 @@ def build_data_manifest_payload(
     *,
     target: str,
     selected_inputs: list[str],
+    selected_graph_nodes: list[str] | None = None,
     cache_payload: dict,
     readiness: dict,
 ) -> dict:
     selected_inputs = ordered_unique_upper(selected_inputs)
+    selected_graph_nodes = normalize_graph_node_list(selected_graph_nodes)
+    if not selected_graph_nodes:
+        selected_graph_nodes = [default_graph_node_id(asset) for asset in selected_inputs]
+    graph_by_asset = graph_nodes_by_asset([graph_input_entry(node_id) for node_id in selected_graph_nodes])
     cache_results = {
         str(item.get("symbol") or "").strip().upper(): item
         for item in (cache_payload.get("results") or [])
@@ -328,6 +489,9 @@ def build_data_manifest_payload(
             "name": "primary" if symbol == target else symbol,
             "symbol": symbol,
             "role": "target" if symbol == target else "driver",
+            "graph_node_id": default_graph_node_id(symbol)
+            if symbol == target
+            else (graph_by_asset.get(symbol) or [default_graph_node_id(symbol)])[0],
             "adapter": adapter,
             "timeframe": timeframe,
             "profile": profile,
@@ -345,7 +509,9 @@ def build_data_manifest_payload(
     return {
         "version": 1,
         "target": target,
+        "target_node": default_graph_node_id(target),
         "selected_inputs": selected_inputs,
+        "selected_graph_nodes": selected_graph_nodes,
         "feeds": feeds,
     }
 
@@ -354,6 +520,9 @@ def canonicalize_data_manifest_payload(payload: dict) -> dict:
     manifest = dict(payload)
     raw_selected = manifest.get("selected_inputs")
     selected = ordered_unique_upper(raw_selected if isinstance(raw_selected, list) else [])
+    selected_graph_nodes = normalize_graph_node_list(manifest.get("selected_graph_nodes"))
+    if not selected_graph_nodes:
+        selected_graph_nodes = [default_graph_node_id(asset) for asset in selected]
     feeds: list[dict[str, object]] = []
     seen_feeds: set[str] = set()
     for item in manifest.get("feeds") or []:
@@ -367,11 +536,14 @@ def canonicalize_data_manifest_payload(payload: dict) -> dict:
             continue
         if symbol:
             feed["symbol"] = symbol
+            feed.setdefault("graph_node_id", default_graph_node_id(symbol))
         if name:
             feed["name"] = name
         feeds.append(feed)
         seen_feeds.add(key)
     manifest["selected_inputs"] = selected
+    manifest["target_node"] = normalize_graph_node_ref(str(manifest.get("target_node") or ""))
+    manifest["selected_graph_nodes"] = selected_graph_nodes
     manifest.pop("selected_drivers", None)
     manifest["feeds"] = feeds
     return manifest

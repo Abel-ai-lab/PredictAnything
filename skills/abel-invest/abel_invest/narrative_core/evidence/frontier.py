@@ -39,6 +39,7 @@ def build_frontier(
     complexity_class_counts: dict[str, int] = {}
     exploration_role_counts: dict[str, int] = {}
     driver_reads: set[str] = set()
+    graph_node_reads: set[str] = set()
     candidate_driver_sets: set[str] = set()
     candidate_discovered_drivers: set[str] = set()
     declared_graph_supported_rounds = 0
@@ -105,6 +106,10 @@ def build_frontier(
             value = str(item or "").strip().upper()
             if value:
                 driver_reads.add(value)
+        for item in row.get("actual_graph_node_reads") or []:
+            value = str(item or "").strip()
+            if value:
+                graph_node_reads.add(value)
         if row.get("comparable") and label == "candidate_causal_evidence":
             comparable_candidates += 1
             if verdict == "PASS":
@@ -178,6 +183,8 @@ def build_frontier(
         },
         "driver_read_count": len(driver_reads),
         "driver_reads": sorted(driver_reads),
+        "graph_node_read_count": len(graph_node_reads),
+        "graph_node_reads": sorted(graph_node_reads),
         "workflow_blockers": label_counts.get("workflow_blocker", 0),
         "runtime_invalid": label_counts.get("runtime_invalid", 0),
         "runtime_stage_counts": dict(sorted(window_counts.items())),

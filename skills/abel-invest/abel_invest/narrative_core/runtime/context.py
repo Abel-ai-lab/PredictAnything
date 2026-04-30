@@ -10,6 +10,7 @@ from abel_invest.narrative_core.contracts.branch_spec import (
     _get_backtest_start,
     branch_declaration_status,
     branch_selected_inputs,
+    branch_selected_graph_nodes,
     build_data_manifest_payload,
     build_execution_constraints_payload,
     build_runtime_profile_payload,
@@ -107,11 +108,7 @@ def branch_runtime_advisory_lines(
 
 
 def _branch_input_list(branch_spec: dict) -> list[str]:
-    return [
-        str(item).strip().upper()
-        for item in (branch_spec.get("selected_inputs") or [])
-        if str(item).strip()
-    ]
+    return branch_selected_inputs(branch_spec)
 
 
 def branch_context_summary_lines(
@@ -354,6 +351,7 @@ def build_branch_context(
     data_manifest = build_data_manifest_payload(
         target=str(runtime_profile.get("target") or discovery.get("ticker") or "").strip().upper(),
         selected_inputs=branch_selected_inputs(branch_spec),
+        selected_graph_nodes=branch_selected_graph_nodes(branch_spec),
         cache_payload=(dependencies.get("cache") or {}) if isinstance(dependencies, dict) else {},
         readiness=readiness,
     )

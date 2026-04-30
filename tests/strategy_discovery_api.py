@@ -7,6 +7,8 @@ compact call sites during the refactor.
 from __future__ import annotations
 
 from abel_invest.narrative_core.contracts.branch_spec import (
+    branch_selected_graph_nodes,
+    branch_selected_inputs,
     branch_declaration_status,
     build_context_guide_markdown,
     build_data_manifest_payload,
@@ -25,11 +27,16 @@ from abel_invest.narrative_core.contracts.constants import (
     JOURNAL_GENERATED_HEADER_END,
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
+    GRAPH_FRONTIER_FILENAME,
 )
 from abel_invest.narrative_core.runtime.context import build_branch_context
 from abel_invest.narrative_core.dashboard import (
     build_skill_dashboard_bundle,
+    build_skill_dashboard_session_bundle,
     post_skill_dashboard_bundle,
+    post_skill_dashboard_session,
+    render_skill_dashboard_session_upload_result,
+    resolve_skill_dashboard_base_url,
 )
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts
 from abel_invest.narrative_core.io import append_tsv_row
@@ -55,9 +62,18 @@ from abel_invest.narrative_core.rendering.renderers import render_round_note
 from abel_invest.narrative_core.session_lifecycle import (
     init_branch_dir,
     init_session_dir,
+    refresh_data_readiness,
     render_breadth_first_start_lines,
     write_discovery,
     write_readiness,
+)
+from abel_invest.narrative_core.evidence.graph_frontier import (
+    fetch_live_graph_expansion,
+    fetch_live_graph_frontier,
+    graph_frontier_from_discovery_payload,
+    load_graph_frontier,
+    print_graph_frontier_status,
+    write_graph_frontier_from_discovery_payload,
 )
 from abel_invest.narrative_core.rendering.session_rendering import (
     check_session,
@@ -68,6 +84,7 @@ from abel_invest.narrative_core.rendering.session_rendering import (
 )
 from abel_invest.narrative_core.state import (
     branch_inputs_ready,
+    load_discovery,
     persist_debug_snapshot,
     round_experiment_metadata,
     write_branch_state,

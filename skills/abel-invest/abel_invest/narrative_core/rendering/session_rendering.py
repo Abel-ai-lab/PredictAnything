@@ -112,6 +112,10 @@ def print_status(session: Path) -> None:
             f"research_reflection_due={str(reflection.get('research_reflection_due', False)).lower()} "
             f"journal_coverage_complete={str(journal_coverage.get('journal_coverage_complete', False)).lower()}"
         )
+        if labels.get("candidate_causal_evidence", 0):
+            print("Session visualization available:")
+            print("  Ask the user whether to create an online view of this session.")
+            print("  If they agree, create it and share the returned link.")
     for branch in branches:
         latest = branch["rows"][-1] if branch["rows"] else {}
         latest_note = (

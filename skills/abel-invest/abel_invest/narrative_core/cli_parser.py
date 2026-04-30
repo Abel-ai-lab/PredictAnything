@@ -147,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="discover",
         action="store_true",
         default=True,
-        help="Run live Abel discovery and persist it into discovery.json (default)",
+        help="Run live Abel discovery and persist it into graph_frontier.json (default)",
     )
     discovery_group.add_argument(
         "--no-discover",
@@ -194,6 +194,26 @@ def build_parser() -> argparse.ArgumentParser:
     init_branch = sub.add_parser("init-branch", help="Create a branch under a session")
     init_branch.add_argument("--session", required=True)
     init_branch.add_argument("--branch-id", required=True)
+
+    frontier = sub.add_parser("frontier", help="Inspect or expand the session graph frontier")
+    frontier_sub = frontier.add_subparsers(dest="frontier_command", required=True)
+    frontier_status = frontier_sub.add_parser("status", help="Show graph frontier status")
+    frontier_status.add_argument("--session", required=True)
+    frontier_expand = frontier_sub.add_parser("expand", help="Expand a graph frontier node")
+    frontier_expand.add_argument("--session", required=True)
+    frontier_expand.add_argument("--node", "--anchor", dest="node", required=True)
+    frontier_expand.add_argument(
+        "--mode",
+        default="all",
+        choices=["all", "parents", "children", "blanket"],
+        help="Graph expansion mode",
+    )
+    frontier_expand.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum Abel nodes to record for the expansion",
+    )
 
     prepare_branch = sub.add_parser(
         "prepare-branch",
@@ -256,11 +276,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     upload_dashboard.add_argument("--branch", required=True)
     upload_dashboard.add_argument(
-        "--base-url",
-        default="",
-        help="Abel router base URL. Defaults to ABEL_ROUTER_BASE_URL or CAP_ROUTER_BASE_URL.",
-    )
-    upload_dashboard.add_argument(
         "--api-key",
         default="",
         help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
@@ -271,6 +286,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional path to write the upload payload before sending.",
     )
     upload_dashboard.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Build and print the payload without sending it.",
+    )
+
+    visualize_session = sub.add_parser(
+        "visualize-session",
+        help="Create an online Abel skill dashboard view for a session",
+    )
+    visualize_session.add_argument("--session", required=True)
+    visualize_session.add_argument(
+        "--api-key",
+        default="",
+        help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
+    )
+    visualize_session.add_argument(
+        "--output-json",
+        default=None,
+        help="Optional path to write the upload payload before sending.",
+    )
+    visualize_session.add_argument(
         "--dry-run",
         action="store_true",
         help="Build and print the payload without sending it.",
