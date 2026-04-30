@@ -5,25 +5,25 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from abel_invest.branch_spec import (
+from abel_invest.narrative_core.contracts.branch_spec import (
     branch_declaration_status,
     load_branch_spec,
     ordered_unique_strings,
     ordered_unique_upper,
 )
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.constants import (
     BROAD_CHANGED_DIMENSIONS,
     CHANGED_DIMENSIONS,
     EVIDENCE_LEDGER_FILENAME,
     LOCAL_CHANGED_DIMENSIONS,
 )
-from abel_invest.frontier import (
+from abel_invest.narrative_core.evidence.frontier import (
     branch_family_key,
     discovered_driver_tickers,
     exploration_neighborhood_key,
 )
-from abel_invest.io import _now, write_json_file
-from abel_invest.state import (
+from abel_invest.narrative_core.io import _now, write_json_file
+from abel_invest.narrative_core.state import (
     context_experiment_metadata,
     latest_debug_snapshot,
     read_round_note,

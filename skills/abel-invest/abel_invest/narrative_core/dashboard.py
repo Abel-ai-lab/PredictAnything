@@ -10,34 +10,34 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from abel_invest.branch_spec import (
+from abel_invest.narrative_core.contracts.branch_spec import (
     branch_requested_start,
     branch_selected_inputs,
     load_branch_spec,
     ordered_unique_upper,
 )
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.constants import (
     EVIDENCE_LEDGER_FILENAME,
     FRONTIER_JSON_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
 )
 from abel_invest.edge_runtime import resolve_runtime_auth_env_file
-from abel_invest.evidence import (
+from abel_invest.narrative_core.evidence.evidence import (
     build_evidence_ledger,
     load_json_object,
     parse_changed_dimensions,
 )
-from abel_invest.frontier import build_frontier
-from abel_invest.io import _now, read_env_file_values, read_tsv_rows
-from abel_invest.journal import (
+from abel_invest.narrative_core.evidence.frontier import build_frontier
+from abel_invest.narrative_core.io import _now, read_env_file_values, read_tsv_rows
+from abel_invest.narrative_core.evidence.journal import (
     build_research_journal_status,
     extract_journal_evidence_refs,
     journal_note_line_items,
     resolve_journal_reference,
 )
-from abel_invest.session_lifecycle import resolve_workspace_arg_path
-from abel_invest.session_rendering import render_session
-from abel_invest.state import (
+from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
+from abel_invest.narrative_core.rendering.session_rendering import render_session
+from abel_invest.narrative_core.state import (
     current_branch_hypothesis,
     load_branch_state,
     load_branches,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.constants import (
     BRANCH_SPEC_FILENAME,
     BRANCH_STATE_FILENAME,
     CONTEXT_GUIDE_FILENAME,

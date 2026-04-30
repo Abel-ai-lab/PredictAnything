@@ -7,12 +7,12 @@ import os
 import subprocess
 from pathlib import Path
 
-from abel_invest.branch_spec import (
+from abel_invest.narrative_core.contracts.branch_spec import (
     has_explicit_hypothesis,
     load_branch_spec,
     write_branch_spec,
 )
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.constants import (
     CONTEXT_GUIDE_FILENAME,
     DATA_MANIFEST_FILENAME,
     DEPENDENCIES_FILENAME,
@@ -23,13 +23,13 @@ from abel_invest.constants import (
     READINESS_FILENAME,
     RUNTIME_PROFILE_FILENAME,
 )
-from abel_invest.io import (
+from abel_invest.narrative_core.io import (
     SessionLock,
     _now,
     append_tsv_row,
     read_tsv_rows,
 )
-from abel_invest.paths import (
+from abel_invest.narrative_core.contracts.paths import (
     branch_state_path,
     context_guide_path,
     data_manifest_path,
@@ -39,12 +39,12 @@ from abel_invest.paths import (
     runtime_profile_path,
     session_state_path,
 )
-from abel_invest.readiness import (
+from abel_invest.narrative_core.readiness import (
     build_readiness_warning,
     format_data_readiness_summary,
     readiness_coverage_hint_lines,
 )
-from abel_invest.templates import ENGINE_TEMPLATE
+from abel_invest.narrative_core.contracts.templates import ENGINE_TEMPLATE
 
 
 def _narrative():

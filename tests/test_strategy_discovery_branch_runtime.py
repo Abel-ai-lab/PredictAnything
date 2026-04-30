@@ -6,7 +6,7 @@ import sys
 from argparse import Namespace
 from pathlib import Path
 
-from abel_invest import session_lifecycle
+from abel_invest.narrative_core import session_lifecycle
 import strategy_discovery_api as ni
 
 

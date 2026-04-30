@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abel_invest.branch_spec import ordered_unique_strings
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.branch_spec import ordered_unique_strings
+from abel_invest.narrative_core.contracts.constants import (
     EVIDENCE_LEDGER_FILENAME,
     FRONTIER_MARKDOWN_FILENAME,
     JOURNAL_GENERATED_HEADER_END,

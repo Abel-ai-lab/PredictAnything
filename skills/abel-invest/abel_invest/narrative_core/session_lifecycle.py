@@ -7,11 +7,11 @@ import os
 import tempfile
 from pathlib import Path
 
-from abel_invest.branch_spec import (
+from abel_invest.narrative_core.contracts.branch_spec import (
     build_default_branch_spec,
     write_branch_spec,
 )
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.constants import (
     DEFAULT_BACKTEST_START,
     EVENTS_HEADER,
     READINESS_FILENAME,
@@ -19,18 +19,18 @@ from abel_invest.constants import (
     RESULTS_HEADER,
 )
 from abel_invest.doctor import build_auth_recovery_instruction
-from abel_invest.edge_commands import run_edge_verify_data
+from abel_invest.narrative_core.runtime.edge_commands import run_edge_verify_data
 from abel_invest.edge_runtime import resolve_runtime_auth_env_file
-from abel_invest.io import (
+from abel_invest.narrative_core.io import (
     SessionLock,
     _now,
     append_tsv_row,
     write_tsv_header,
 )
-from abel_invest.journal import ensure_research_journal
-from abel_invest.paths import branch_spec_path, branch_state_path, session_state_path
-from abel_invest.readiness import format_data_readiness_summary
-from abel_invest.state import (
+from abel_invest.narrative_core.evidence.journal import ensure_research_journal
+from abel_invest.narrative_core.contracts.paths import branch_spec_path, branch_state_path, session_state_path
+from abel_invest.narrative_core.readiness import format_data_readiness_summary
+from abel_invest.narrative_core.state import (
     load_branch_state,
     load_discovery,
     load_readiness,

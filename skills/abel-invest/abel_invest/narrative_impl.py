@@ -14,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from abel_invest.branch_spec import (
+from abel_invest.narrative_core.contracts.branch_spec import (
     _get_backtest_start,
     branch_requested_start,
     branch_dependencies_payload,
@@ -27,8 +27,8 @@ from abel_invest.branch_spec import (
     has_explicit_hypothesis,
     load_branch_spec,
 )
-from abel_invest.cli_parser import build_parser
-from abel_invest.dashboard import (
+from abel_invest.narrative_core.cli_parser import build_parser
+from abel_invest.narrative_core.dashboard import (
     upload_skill_dashboard_bundle,
 )
 from abel_invest.doctor import (
@@ -39,7 +39,7 @@ from abel_invest.doctor import (
 from abel_invest.edge_runtime import (
     build_workspace_runtime_env,
 )
-from abel_invest.edge_commands import (
+from abel_invest.narrative_core.runtime.edge_commands import (
     resolve_default_python_bin,
 )
 from abel_invest.env import init_workspace_env
@@ -57,10 +57,10 @@ from abel_invest.workspace import (
     resolve_workspace_paths,
     scaffold_workspace,
 )
-from abel_invest.workflow_blockers import (
+from abel_invest.narrative_core.runtime.workflow_blockers import (
     record_workflow_blocker_round,
 )
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.constants import (
     BRANCH_SPEC_FILENAME,
     BRANCH_STATE_FILENAME,
     CONTEXT_GUIDE_FILENAME,
@@ -74,20 +74,20 @@ from abel_invest.constants import (
     RESULTS_HEADER,
     RUNTIME_PROFILE_FILENAME,
 )
-from abel_invest.context import (
+from abel_invest.narrative_core.runtime.context import (
     alpha_decision,
     branch_context_summary_lines,
     branch_runtime_advisory_lines,
     build_branch_context,
     classify_result_frame,
 )
-from abel_invest.io import (
+from abel_invest.narrative_core.io import (
     SessionLock,
     _now,
     append_tsv_row,
     read_tsv_rows,
 )
-from abel_invest.paths import (
+from abel_invest.narrative_core.contracts.paths import (
     branch_spec_path,
     context_guide_path,
     data_manifest_path,
@@ -96,23 +96,23 @@ from abel_invest.paths import (
     probe_samples_path,
     runtime_profile_path,
 )
-from abel_invest.readiness import (
+from abel_invest.narrative_core.readiness import (
     build_readiness_warning,
     format_data_readiness_summary,
     readiness_coverage_hint_lines,
 )
-from abel_invest.renderers import (
+from abel_invest.narrative_core.rendering.renderers import (
     build_promotion_bundle_readme,
     render_round_note,
 )
-from abel_invest.session_lifecycle import (
+from abel_invest.narrative_core.session_lifecycle import (
     init_branch_dir,
     init_session_dir,
     render_breadth_first_start_lines,
     resolve_session_root,
     resolve_workspace_arg_path,
 )
-from abel_invest.session_rendering import (
+from abel_invest.narrative_core.rendering.session_rendering import (
     check_session,
     graph_priority_warning_lines,
     journal_coverage_missing_rounds,
@@ -121,7 +121,7 @@ from abel_invest.session_rendering import (
     render_section,
     render_session,
 )
-from abel_invest.state import (
+from abel_invest.narrative_core.state import (
     branch_inputs_ready,
     branch_uses_default_scaffold,
     build_debug_snapshot,

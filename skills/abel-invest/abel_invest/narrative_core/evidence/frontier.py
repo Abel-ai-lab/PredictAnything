@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from abel_invest.branch_spec import ordered_unique_upper
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.branch_spec import ordered_unique_upper
+from abel_invest.narrative_core.contracts.constants import (
     GRAPH_PRIORITY_ROUND_MINIMUM,
     INPUT_BREADTH_ROUND_THRESHOLD,
 )
-from abel_invest.io import _now
-from abel_invest.journal import build_journal_coverage, compact_research_journal_status
+from abel_invest.narrative_core.io import _now
+from abel_invest.narrative_core.evidence.journal import build_journal_coverage, compact_research_journal_status
 
 
 def build_frontier(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from abel_invest.branch_spec import (
+from abel_invest.narrative_core.contracts.branch_spec import (
     _get_backtest_start,
     branch_declaration_status,
     branch_selected_inputs,
@@ -16,9 +16,9 @@ from abel_invest.branch_spec import (
     canonicalize_dependencies_payload,
     load_branch_spec,
 )
-from abel_invest.constants import READINESS_FILENAME
-from abel_invest.edge_commands import validate_edge_handoff_with_runtime
-from abel_invest.paths import (
+from abel_invest.narrative_core.contracts.constants import READINESS_FILENAME
+from abel_invest.narrative_core.runtime.edge_commands import validate_edge_handoff_with_runtime
+from abel_invest.narrative_core.contracts.paths import (
     branch_spec_path,
     context_guide_path,
     data_manifest_path,
@@ -27,7 +27,7 @@ from abel_invest.paths import (
     probe_samples_path,
     runtime_profile_path,
 )
-from abel_invest.state import (
+from abel_invest.narrative_core.state import (
     branch_inputs_ready,
     branch_uses_default_scaffold,
     current_experiment_metadata,

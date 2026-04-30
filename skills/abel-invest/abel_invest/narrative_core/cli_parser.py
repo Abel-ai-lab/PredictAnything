@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from abel_invest.constants import CHANGED_DIMENSIONS, DEFAULT_BACKTEST_START
+from abel_invest.narrative_core.contracts.constants import CHANGED_DIMENSIONS, DEFAULT_BACKTEST_START
 from abel_invest.workspace import DEFAULT_WORKSPACE_NAME
 
 

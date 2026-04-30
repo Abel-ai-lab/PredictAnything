@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abel_invest.branch_spec import (
+from abel_invest.narrative_core.contracts.branch_spec import (
     _get_backtest_start,
     branch_declaration_status_for_branch,
     branch_selected_inputs,
@@ -13,7 +13,7 @@ from abel_invest.branch_spec import (
     normalize_hypothesis_text,
     ordered_unique_strings,
 )
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.constants import (
     AGENT_CONTEXT_FILENAME,
     BRANCH_SPEC_FILENAME,
     CONTEXT_GUIDE_FILENAME,
@@ -28,28 +28,28 @@ from abel_invest.constants import (
     RESEARCH_JOURNAL_FILENAME,
     RUNTIME_PROFILE_FILENAME,
 )
-from abel_invest.context import (
+from abel_invest.narrative_core.runtime.context import (
     branch_parent_branch_id,
     format_discovery_nodes,
     format_simple_nodes,
 )
-from abel_invest.evidence import load_json_object
-from abel_invest.frontier import render_inline_counts, render_session_frontier_summary
-from abel_invest.io import _today, read_tsv_rows
-from abel_invest.journal import build_research_journal_status
-from abel_invest.paths import (
+from abel_invest.narrative_core.evidence.evidence import load_json_object
+from abel_invest.narrative_core.evidence.frontier import render_inline_counts, render_session_frontier_summary
+from abel_invest.narrative_core.io import _today, read_tsv_rows
+from abel_invest.narrative_core.evidence.journal import build_research_journal_status
+from abel_invest.narrative_core.contracts.paths import (
     context_guide_path,
     data_manifest_path,
     execution_constraints_path,
     probe_samples_path,
     runtime_profile_path,
 )
-from abel_invest.readiness import (
+from abel_invest.narrative_core.readiness import (
     readiness_start_covered_tickers,
     readiness_usable_tickers,
     render_discovery_readiness_section,
 )
-from abel_invest.state import (
+from abel_invest.narrative_core.state import (
     branch_inputs_ready,
     branch_progression,
     build_branch_snapshot_line,

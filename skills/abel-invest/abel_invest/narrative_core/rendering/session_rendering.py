@@ -4,31 +4,31 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abel_invest.branch_spec import has_explicit_hypothesis
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.branch_spec import has_explicit_hypothesis
+from abel_invest.narrative_core.contracts.constants import (
     AGENT_CONTEXT_FILENAME,
     EVIDENCE_LEDGER_FILENAME,
     FRONTIER_JSON_FILENAME,
     FRONTIER_MARKDOWN_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
 )
-from abel_invest.context import validate_edge_handoff
-from abel_invest.evidence import load_json_object, write_evidence_ledger
-from abel_invest.frontier import build_frontier, render_frontier_markdown
-from abel_invest.io import write_json_file
-from abel_invest.journal import build_research_journal_status, ensure_research_journal
-from abel_invest.readiness import (
+from abel_invest.narrative_core.runtime.context import validate_edge_handoff
+from abel_invest.narrative_core.evidence.evidence import load_json_object, write_evidence_ledger
+from abel_invest.narrative_core.evidence.frontier import build_frontier, render_frontier_markdown
+from abel_invest.narrative_core.io import write_json_file
+from abel_invest.narrative_core.evidence.journal import build_research_journal_status, ensure_research_journal
+from abel_invest.narrative_core.readiness import (
     build_readiness_warning,
     format_data_readiness_summary,
     readiness_coverage_hint_lines,
 )
-from abel_invest.renderers import (
+from abel_invest.narrative_core.rendering.renderers import (
     build_branch_readme,
     build_session_readme,
     build_thesis,
     render_agent_context,
 )
-from abel_invest.state import (
+from abel_invest.narrative_core.state import (
     current_branch_hypothesis,
     latest_debug_snapshot,
     load_branches,

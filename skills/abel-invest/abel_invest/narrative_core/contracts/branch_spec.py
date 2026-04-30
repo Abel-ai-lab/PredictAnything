@@ -5,7 +5,7 @@ from __future__ import annotations
 import yaml
 from pathlib import Path
 
-from abel_invest.constants import (
+from abel_invest.narrative_core.contracts.constants import (
     COMPLEXITY_CLASSES,
     DECLARATION_PLACEHOLDER_VALUES,
     DEFAULT_BACKTEST_START,
@@ -15,9 +15,9 @@ from abel_invest.constants import (
     INPUT_CLAIMS,
     MODEL_FAMILIES,
 )
-from abel_invest.io import _now
-from abel_invest.paths import branch_spec_path
-from abel_invest.readiness import readiness_usable_tickers
+from abel_invest.narrative_core.io import _now
+from abel_invest.narrative_core.contracts.paths import branch_spec_path
+from abel_invest.narrative_core.readiness import readiness_usable_tickers
 
 
 def normalize_hypothesis_text(value: str) -> str:
