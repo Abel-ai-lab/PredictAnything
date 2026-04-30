@@ -86,10 +86,10 @@ Always start by resolving workspace state before strategy work.
     source as a fact rather than overstating edge-native field-level proof.
 14. Do not create an online session view automatically. If a candidate round
     passes, ask the user whether to create an online visualization of this
-    session. If the user agrees, or if the user explicitly asks to visualize
-    the session, run
-    `abel-invest visualize-session --session <session>`. Pass the session folder; the command builds
-    the online view from local session evidence.
+    session. Do not print a command for the user to run. If the user agrees,
+    or if the user explicitly asks to visualize the session, run
+    `abel-invest visualize-session --session <session>` yourself, then share
+    the returned Markdown link with the user.
 15. The default Abel router base URL is `https://api.abel.ai/router/`.
     `abel-auth` owns API key setup. Do not ask the user or agent to provide a
     router URL unless they are intentionally testing another router.

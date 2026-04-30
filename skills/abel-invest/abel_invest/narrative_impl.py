@@ -2678,8 +2678,15 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
     base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
     result = post_skill_dashboard_session(base_url=base_url, api_key=api_key, bundle=bundle)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    print(render_skill_dashboard_session_upload_result(result))
     return 0
+
+
+def render_skill_dashboard_session_upload_result(result: dict) -> str:
+    data = result["data"]
+    open_url = str(data["openUrl"]).strip()
+    session_id = str(data["sessionId"]).strip()
+    return f"Online session view: [Open {session_id}]({open_url})"
 
 
 def resolve_skill_dashboard_base_url(value: str | None = None) -> str:
@@ -3261,11 +3268,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
             "  Candidate PASS recorded. Ask the user whether to create "
             "an online view of this session."
         )
-        print("  If the user agrees, run:")
-        print(
-            "  "
-            f"abel-invest visualize-session --session {session}"
-        )
+        print("  If the user agrees, create it and share the returned link.")
     return 0
 
 
