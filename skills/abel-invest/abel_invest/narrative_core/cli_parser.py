@@ -78,6 +78,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Directory to inspect for the nearest workspace root",
     )
+    workspace_context = workspace_sub.add_parser(
+        "context",
+        help="Show resolved workspace context for agent re-entry",
+    )
+    workspace_context.add_argument(
+        "--path",
+        default=".",
+        help="Directory to inspect for the nearest workspace root",
+    )
+    workspace_context.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON output",
+    )
 
     env_parser = sub.add_parser("env", help="Manage the local workspace Python environment")
     env_sub = env_parser.add_subparsers(dest="env_command", required=True)
@@ -136,6 +151,11 @@ def build_parser() -> argparse.ArgumentParser:
     init_session.add_argument("--ticker", required=True)
     init_session.add_argument("--exp-id", required=True)
     init_session.add_argument("--root", default=None)
+    init_session.add_argument(
+        "--allow-outside-workspace",
+        action="store_true",
+        help="Allow explicit --root session creation outside an Abel workspace",
+    )
     init_session.add_argument(
         "--backtest-start",
         default=DEFAULT_BACKTEST_START,

@@ -3,6 +3,21 @@
 `abel-invest` is workspace-first. Do not start strategy research
 until you know which workspace root owns the run.
 
+## Fresh Install Bootstrap
+
+When `abel-invest` is not installed yet, do not try to import `abel_invest`
+with the system interpreter. Use the stdlib first-run shim from the installed
+skill files:
+
+```bash
+python3 <abel-invest-skill-root>/scripts/bootstrap_workspace.py --path abel-invest-workspace
+```
+
+The shim creates or reuses the workspace, prepares the workspace runtime,
+installs `abel-invest` there, and then runs doctor from that runtime.
+
+After the CLI is installed, use normal `abel-invest` commands.
+
 ## Preflight
 
 From the user's current directory:
@@ -10,15 +25,16 @@ From the user's current directory:
 1. If `alpha.workspace.yaml` exists here, this directory is the workspace root.
 2. Else if `abel-invest-workspace/alpha.workspace.yaml` exists here,
    reuse that child workspace.
-3. Else run:
+3. Else bootstrap a workspace:
 
 ```bash
 abel-invest workspace bootstrap --path abel-invest-workspace
 ```
 
-4. Then run:
+4. Then resolve context and run doctor:
 
 ```bash
+abel-invest workspace context --path . --json
 abel-invest doctor --path <workspace-root>
 ```
 
@@ -41,14 +57,18 @@ doctor is ready.
 - Keep research under the workspace `research/` directory.
 - Do not create a nested workspace when `alpha.workspace.yaml` already exists.
 - Do not create a standalone `abel-edge init` sidecar for this flow.
-- Use `workspace status` and `doctor` to inspect setup instead of guessing from
-  directory names.
+- Use `workspace context`, `workspace status`, and `doctor` to inspect setup
+  instead of guessing from directory names.
+- Create sessions only after the workspace context resolves. Avoid `--root`
+  unless intentionally creating a legacy/offline session outside a workspace;
+  then pass `--allow-outside-workspace`.
 - Bootstrap creates the workspace and runtime base; branch-specific market data
   is resolved later by `prepare-branch`.
 
 ## Common Commands
 
 ```bash
+abel-invest workspace context --path . --json
 abel-invest workspace status --path <workspace-root>
 abel-invest doctor --path <workspace-root>
 abel-invest env init

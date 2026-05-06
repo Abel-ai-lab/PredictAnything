@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from argparse import Namespace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import strategy_discovery_api as ni
@@ -493,10 +494,11 @@ def test_build_skill_dashboard_session_bundle_aggregates_branches_and_rounds(tmp
             },
         )
     ni.render_session(session)
+    uploaded_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
 
     bundle = ni.build_skill_dashboard_session_bundle(
         session,
-        uploaded_at="2026-05-01T01:30:00+00:00",
+        uploaded_at=uploaded_at,
     )
 
     assert bundle["sessionId"] == "tsla-session-dashboard"

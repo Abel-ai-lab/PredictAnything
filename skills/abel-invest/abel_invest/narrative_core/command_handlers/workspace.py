@@ -22,6 +22,7 @@ from abel_invest.workspace_core.workspace import (
     load_workspace_manifest,
     resolve_workspace_entry,
     render_workspace_status,
+    resolve_runtime_python,
     resolve_workspace_paths,
     scaffold_workspace,
 )
@@ -179,7 +180,78 @@ def handle_workspace_command(args: argparse.Namespace) -> int:
             print("")
         print(render_workspace_status(root, manifest))
         return 0
+    if args.workspace_command == "context":
+        context = build_workspace_context(Path(args.path).expanduser())
+        if args.json_output:
+            print(json.dumps(context, indent=2, sort_keys=True))
+        else:
+            print(render_workspace_context(context))
+        return 0 if context.get("workspace_root") else 1
     return 1
+
+
+def build_workspace_context(start: Path) -> dict[str, object]:
+    """Build a compact workspace context payload for agent re-entry."""
+    entry_path = start.resolve()
+    root, resolution_mode = resolve_workspace_entry(entry_path)
+    if root is None:
+        default_path = default_workspace_path(entry_path)
+        return {
+            "entry_path": str(entry_path),
+            "workspace_resolution": resolution_mode,
+            "workspace_root": None,
+            "research_root": None,
+            "runtime_python": None,
+            "doctor_status": "workspace_missing",
+            "default_workspace_path": str(default_path),
+            "session_command_prefix": None,
+            "next_step": f"abel-invest workspace bootstrap --path {default_path}",
+        }
+
+    manifest = load_workspace_manifest(root)
+    resolved = resolve_workspace_paths(root, manifest)
+    doctor_result = run_doctor(root)
+    return {
+        "entry_path": str(entry_path),
+        "workspace_resolution": resolution_mode,
+        "workspace_root": str(root),
+        "research_root": str(resolved["research_root"]),
+        "runtime_python": str(resolve_runtime_python(root, manifest)),
+        "doctor_status": str(doctor_result.get("status") or "unknown"),
+        "workspace_mode": doctor_result.get("workspace_mode"),
+        "default_workspace_path": str(default_workspace_path(entry_path)),
+        "session_command_prefix": "abel-invest init-session",
+        "next_step": doctor_result.get("next_step"),
+    }
+
+
+def render_workspace_context(context: dict[str, object]) -> str:
+    """Render workspace context for humans while preserving the JSON contract."""
+    lines = [
+        f"Entry path: {context.get('entry_path')}",
+        f"Workspace resolution: {context.get('workspace_resolution')}",
+    ]
+    workspace_root = context.get("workspace_root")
+    if workspace_root:
+        lines.extend(
+            [
+                f"Workspace root: {workspace_root}",
+                f"Research root: {context.get('research_root')}",
+                f"Runtime python: {context.get('runtime_python')}",
+                f"Doctor status: {context.get('doctor_status')}",
+                f"Session command prefix: {context.get('session_command_prefix')}",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "Workspace root: <missing>",
+                f"Default workspace path: {context.get('default_workspace_path')}",
+                f"Doctor status: {context.get('doctor_status')}",
+            ]
+        )
+    lines.append(f"Next step: {context.get('next_step')}")
+    return "\n".join(lines)
 
 
 def handle_env_command(args: argparse.Namespace) -> int:

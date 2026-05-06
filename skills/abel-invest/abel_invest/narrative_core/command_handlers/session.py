@@ -44,7 +44,10 @@ def handle_init_session(args: argparse.Namespace) -> int:
     session = init_session_dir(
         args.ticker,
         args.exp_id,
-        resolve_session_root(args.root),
+        resolve_session_root(
+            args.root,
+            allow_outside_workspace=args.allow_outside_workspace,
+        ),
         discover=args.discover,
         discover_limit=args.discover_limit,
         backtest_start=args.backtest_start,
