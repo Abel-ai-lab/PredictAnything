@@ -5,7 +5,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from abel_invest import cli
+from abel_invest.workspace_core.workspace import scaffold_workspace
 import strategy_discovery_api as ni
 
 
@@ -31,6 +34,7 @@ def test_public_cli_session_branch_render_status_check_smoke(
             "cli-smoke",
             "--root",
             str(root),
+            "--allow-outside-workspace",
             "--no-discover",
         ],
     ) == 0
@@ -60,6 +64,116 @@ def test_public_cli_session_branch_render_status_check_smoke(
     assert "Created Abel strategy discovery branch" in output
     assert "Session:" in output
     assert "Narrative check passed for" in output
+
+
+def test_init_session_without_root_uses_current_workspace_research_root(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = scaffold_workspace("trial-lab", target_root=tmp_path / "trial-lab")
+    monkeypatch.chdir(workspace)
+
+    assert _run_cli(
+        monkeypatch,
+        [
+            "init-session",
+            "--ticker",
+            "TSLA",
+            "--exp-id",
+            "workspace-owned",
+            "--no-discover",
+        ],
+    ) == 0
+
+    assert (workspace / "research" / "tsla" / "workspace-owned").exists()
+
+
+def test_init_session_from_launch_root_uses_default_child_workspace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = scaffold_workspace(
+        "abel-invest-workspace",
+        target_root=tmp_path / "abel-invest-workspace",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert _run_cli(
+        monkeypatch,
+        [
+            "init-session",
+            "--ticker",
+            "MSFT",
+            "--exp-id",
+            "child-owned",
+            "--no-discover",
+        ],
+    ) == 0
+
+    assert (workspace / "research" / "msft" / "child-owned").exists()
+
+
+def test_init_session_without_workspace_refuses_local_research_fallback(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(RuntimeError, match="No Abel strategy discovery workspace"):
+        _run_cli(
+            monkeypatch,
+            [
+                "init-session",
+                "--ticker",
+                "TSLA",
+                "--exp-id",
+                "misplaced",
+                "--no-discover",
+            ],
+        )
+
+    assert not (tmp_path / "research").exists()
+
+
+def test_init_session_explicit_outside_root_requires_escape_hatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = scaffold_workspace("trial-lab", target_root=tmp_path / "trial-lab")
+    outside_root = tmp_path / "outside-research"
+    monkeypatch.chdir(workspace)
+
+    with pytest.raises(RuntimeError, match="outside the resolved workspace root"):
+        _run_cli(
+            monkeypatch,
+            [
+                "init-session",
+                "--ticker",
+                "TSLA",
+                "--exp-id",
+                "outside",
+                "--root",
+                str(outside_root),
+                "--no-discover",
+            ],
+        )
+
+    assert _run_cli(
+        monkeypatch,
+        [
+            "init-session",
+            "--ticker",
+            "TSLA",
+            "--exp-id",
+            "outside",
+            "--root",
+            str(outside_root),
+            "--allow-outside-workspace",
+            "--no-discover",
+        ],
+    ) == 0
+
+    assert (outside_root / "tsla" / "outside").exists()
 
 
 def test_public_cli_prepare_branch_smoke(

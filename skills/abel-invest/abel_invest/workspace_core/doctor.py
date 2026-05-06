@@ -15,7 +15,6 @@ from abel_invest.workspace_core.workspace import (
     default_workspace_path,
     load_workspace_manifest,
     resolve_workspace_entry,
-    resolve_edge_spec,
     resolve_workspace_env_file,
     resolve_runtime_python,
 )
@@ -100,7 +99,6 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
         "workspace_mode": WORKSPACE_MODE,
         "python_path": str(python_path),
         "workspace_env_file": str(resolve_workspace_env_file(root)),
-        "edge_install_target": resolve_edge_spec(root, manifest),
         "checks": checks,
     }
 
@@ -148,7 +146,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
                     "Workspace Python can import Abel-edge, but the installed runtime is missing "
                     "required alpha contracts such as structured discovery or `--context-json`."
                 ),
-                "next_step": "abel-invest env init  # or install a newer Abel-edge into the workspace runtime",
+                "next_step": "abel-invest env init  # reinstall the workspace runtime dependencies",
             }
         )
         return result
@@ -234,9 +232,6 @@ def render_doctor_report(result: dict[str, object]) -> str:
     python_path = result.get("python_path")
     if python_path:
         lines.append(f"Python path: {python_path}")
-    edge_install_target = result.get("edge_install_target")
-    if edge_install_target:
-        lines.append(f"Edge install target: {edge_install_target}")
     workspace_env_file = result.get("workspace_env_file")
     if workspace_env_file:
         lines.append(f"Workspace env file: {workspace_env_file}")

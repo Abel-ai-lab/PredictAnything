@@ -42,21 +42,61 @@ from abel_invest.narrative_core.state import (
     write_session_state,
 )
 from abel_invest.workspace_core.workspace import (
+    default_workspace_path,
+    find_workspace_root,
     load_workspace_manifest,
     resolve_workspace_entry,
     resolve_workspace_paths,
 )
 
 
-def resolve_session_root(root_arg: str | None) -> Path:
+def resolve_session_root(
+    root_arg: str | None,
+    *,
+    allow_outside_workspace: bool = False,
+) -> Path:
     """Resolve the session root from an explicit argument or current workspace."""
-    if root_arg:
-        return resolve_workspace_arg_path(root_arg)
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:
         manifest = load_workspace_manifest(workspace_root)
-        return resolve_workspace_paths(workspace_root, manifest)["research_root"]
-    return Path("research")
+        workspace_research_root = resolve_workspace_paths(workspace_root, manifest)[
+            "research_root"
+        ]
+        if not root_arg:
+            return workspace_research_root
+
+        explicit_root = resolve_workspace_arg_path(root_arg)
+        explicit_workspace_root = find_workspace_root(explicit_root)
+        if explicit_workspace_root == workspace_root:
+            return explicit_root
+        if _path_is_relative_to(explicit_root.resolve(), workspace_root.resolve()):
+            return explicit_root
+        if allow_outside_workspace:
+            return explicit_root
+        raise RuntimeError(
+            "Refusing to create an Abel strategy discovery session outside the "
+            f"resolved workspace root {workspace_root}. "
+            "Use plain `abel-invest init-session --ticker ... --exp-id ...` to "
+            f"create under {workspace_research_root}, or add "
+            "`--allow-outside-workspace` when this is an intentional offline or "
+            "legacy session."
+        )
+
+    if root_arg and allow_outside_workspace:
+        return resolve_workspace_arg_path(root_arg)
+
+    entry_path = Path.cwd().resolve()
+    target = default_workspace_path(entry_path)
+    raise RuntimeError(
+        "No Abel strategy discovery workspace was resolved for session creation. "
+        f"Entry path: {entry_path}. "
+        f"Default workspace path: {target}. "
+        "Run `abel-invest workspace context --path . --json` to inspect the "
+        "current workspace, or bootstrap one with "
+        f"`abel-invest workspace bootstrap --path {target}`. "
+        "For an intentional offline or legacy session, pass both `--root` and "
+        "`--allow-outside-workspace`."
+    )
 
 
 def render_breadth_first_start_lines(session: Path) -> list[str]:
@@ -75,10 +115,21 @@ def resolve_workspace_arg_path(value: str) -> Path:
     path = Path(value).expanduser()
     if path.is_absolute():
         return path
+    cwd_relative = (Path.cwd() / path).resolve(strict=False)
+    if cwd_relative.exists():
+        return cwd_relative
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:
         return workspace_root / path
     return path
+
+
+def _path_is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
 
 
 def init_session_dir(
@@ -187,7 +238,7 @@ def fetch_live_discovery(ticker: str, *, limit: int) -> dict:
     except ImportError as exc:
         raise RuntimeError(
             "Live Abel discovery requires abel-edge with the Abel plugin installed. "
-            "Create a virtual environment, install abel-edge, then retry."
+            "Run `abel-invest env init` in the workspace, then retry."
         ) from exc
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:

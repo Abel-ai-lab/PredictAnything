@@ -565,6 +565,7 @@ def test_init_session_cli_runs_live_discovery_by_default(
             "tsla-cli-default",
             "--root",
             str(tmp_path / "research"),
+            "--allow-outside-workspace",
         ],
     )
 
@@ -604,6 +605,7 @@ def test_init_session_cli_no_discover_is_explicit_pending_fallback(
             "tsla-cli-pending",
             "--root",
             str(tmp_path / "research"),
+            "--allow-outside-workspace",
             "--no-discover",
         ],
     )

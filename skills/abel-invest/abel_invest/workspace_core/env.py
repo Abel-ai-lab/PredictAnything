@@ -13,7 +13,6 @@ from abel_invest.workspace_core.workspace import (
     default_workspace_path,
     resolve_workspace_entry,
     load_workspace_manifest,
-    resolve_edge_spec,
     resolve_runtime_python,
     resolve_workspace_paths,
     write_workspace_manifest,
@@ -28,8 +27,6 @@ class EnvInitResult:
     venv_path: Path
     python_path: Path
     alpha_source: Path
-    edge_install_target: str
-    edge_install_mode: str
     edge_discovery_payload_capable: bool | None
     edge_context_json_capable: bool | None
     alpha_editable: bool
@@ -43,8 +40,6 @@ def init_workspace_env(
     start: Path | None = None,
     base_python: str | None = None,
     alpha_source: str | Path | None = None,
-    edge_spec: str | None = None,
-    edge_source: str | Path | None = None,
     runtime_python: str | Path | None = None,
     alpha_editable: bool = True,
 ) -> EnvInitResult:
@@ -95,39 +90,9 @@ def init_workspace_env(
             created_venv = True
 
     resolved_alpha_source = resolve_alpha_source(alpha_source)
-    resolved_edge_source = resolve_edge_source(explicit=edge_source)
-    resolved_edge_spec = resolve_edge_install_target(
-        workspace_root,
-        manifest,
-        explicit=edge_spec,
-    )
 
     run_command(
         [str(python_path), "-m", "pip", "install", "--upgrade", "pip"],
-        cwd=workspace_root,
-    )
-
-    if resolved_edge_source is not None:
-        run_command(
-            build_local_install_command(
-                python_path,
-                resolved_edge_source,
-                editable=True,
-            ),
-            cwd=workspace_root,
-        )
-        edge_install_target = str(resolved_edge_source)
-        edge_install_mode = "local_source"
-    else:
-        run_command(
-            [str(python_path), "-m", "pip", "install", resolved_edge_spec],
-            cwd=workspace_root,
-        )
-        edge_install_target = resolved_edge_spec
-        edge_install_mode = "pip_spec"
-
-    run_command(
-        [str(python_path), "-m", "pip", "install", "PyYAML>=6.0"],
         cwd=workspace_root,
     )
     run_command(
@@ -135,16 +100,8 @@ def init_workspace_env(
             python_path,
             resolved_alpha_source,
             editable=alpha_editable,
-            no_deps=True,
         ),
         cwd=workspace_root,
-    )
-
-    record_edge_install_target(
-        workspace_root,
-        manifest,
-        edge_install_target=edge_install_target,
-        edge_install_mode=edge_install_mode,
     )
 
     edge_discovery_payload_capable = probe_edge_discovery_payload(python_path, workspace_root)
@@ -155,8 +112,6 @@ def init_workspace_env(
         venv_path=venv_path,
         python_path=python_path,
         alpha_source=resolved_alpha_source,
-        edge_install_target=edge_install_target,
-        edge_install_mode=edge_install_mode,
         edge_discovery_payload_capable=edge_discovery_payload_capable,
         edge_context_json_capable=edge_context_json_capable,
         alpha_editable=alpha_editable,
@@ -171,7 +126,6 @@ def build_local_install_command(
     source: Path,
     *,
     editable: bool,
-    no_deps: bool = False,
 ) -> list[str]:
     """Build the pip install command for a local source tree."""
     command = [str(python_path), "-m", "pip", "install"]
@@ -179,8 +133,6 @@ def build_local_install_command(
         command.extend(["-e", str(source)])
     else:
         command.append(str(source))
-    if no_deps:
-        command.append("--no-deps")
     return command
 
 
@@ -219,40 +171,6 @@ def resolve_alpha_source(explicit: str | Path | None = None) -> Path:
         "Could not resolve a local Abel strategy discovery source tree. "
         "Pass `--alpha-source /path/to/skills/abel-invest`."
     )
-
-
-def resolve_edge_source(*, explicit: str | Path | None = None) -> Path | None:
-    """Resolve an explicit local Abel-edge source tree override."""
-    if explicit is not None:
-        return validate_source_tree(Path(explicit).expanduser().resolve(), "Abel-edge")
-    return None
-
-
-def resolve_edge_install_target(
-    root: Path,
-    manifest: dict,
-    *,
-    explicit: str | None = None,
-) -> str:
-    """Resolve the default non-local Abel-edge install target."""
-    configured = (explicit or "").strip()
-    if configured:
-        return configured
-    return resolve_edge_spec(root, manifest)
-
-
-def record_edge_install_target(
-    workspace_root: Path,
-    manifest: dict,
-    *,
-    edge_install_target: str,
-    edge_install_mode: str,
-) -> None:
-    """Persist the selected Abel-edge install target back into the manifest."""
-    runtime = manifest.setdefault("runtime", {})
-    runtime["edge_spec"] = edge_install_target
-    runtime["edge_install_mode"] = edge_install_mode
-    write_workspace_manifest(workspace_root, manifest)
 
 
 def record_existing_runtime_python(

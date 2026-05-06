@@ -52,16 +52,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Local Abel strategy discovery source tree used for installation",
     )
     workspace_bootstrap.add_argument(
-        "--edge-spec",
-        default=None,
-        help="Pip-installable Abel-edge target (defaults to the workspace GitHub main spec)",
-    )
-    workspace_bootstrap.add_argument(
-        "--edge-source",
-        default=None,
-        help="Optional local Abel-edge source tree override for development",
-    )
-    workspace_bootstrap.add_argument(
         "--runtime-python",
         default=None,
         help="Use an existing interpreter instead of creating the workspace venv",
@@ -77,6 +67,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--path",
         default=".",
         help="Directory to inspect for the nearest workspace root",
+    )
+    workspace_context = workspace_sub.add_parser(
+        "context",
+        help="Show resolved workspace context for agent re-entry",
+    )
+    workspace_context.add_argument(
+        "--path",
+        default=".",
+        help="Directory to inspect for the nearest workspace root",
+    )
+    workspace_context.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable JSON output",
     )
 
     env_parser = sub.add_parser("env", help="Manage the local workspace Python environment")
@@ -97,16 +102,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--alpha-source",
         default=None,
         help="Local Abel strategy discovery source tree used for installation",
-    )
-    env_init.add_argument(
-        "--edge-spec",
-        default=None,
-        help="Pip-installable Abel-edge target (defaults to the workspace GitHub main spec)",
-    )
-    env_init.add_argument(
-        "--edge-source",
-        default=None,
-        help="Optional local Abel-edge source tree override for development",
     )
     env_init.add_argument(
         "--runtime-python",
@@ -136,6 +131,11 @@ def build_parser() -> argparse.ArgumentParser:
     init_session.add_argument("--ticker", required=True)
     init_session.add_argument("--exp-id", required=True)
     init_session.add_argument("--root", default=None)
+    init_session.add_argument(
+        "--allow-outside-workspace",
+        action="store_true",
+        help="Allow explicit --root session creation outside an Abel workspace",
+    )
     init_session.add_argument(
         "--backtest-start",
         default=DEFAULT_BACKTEST_START,

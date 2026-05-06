@@ -3,6 +3,16 @@
 Use this reference after workspace preflight is complete and
 `abel-invest doctor` is ready.
 
+Before creating a new session, confirm the workspace context:
+
+```bash
+abel-invest workspace context --path . --json
+```
+
+Use the resolved workspace `research_root`. Do not pass `--root` unless this
+is an intentional legacy/offline session outside a workspace; in that case pass
+`--allow-outside-workspace` too.
+
 ## Standard Path
 
 ```bash

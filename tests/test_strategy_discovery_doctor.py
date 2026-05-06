@@ -23,7 +23,6 @@ def test_run_doctor_ready_reports_alpha_managed_branch_research(
     monkeypatch.setattr(doctor, "load_workspace_manifest", lambda _root: {"runtime": {}})
     monkeypatch.setattr(doctor, "resolve_runtime_python", lambda _root, manifest=None: python_path)
     monkeypatch.setattr(doctor, "resolve_workspace_env_file", lambda _root: root / ".env")
-    monkeypatch.setattr(doctor, "resolve_edge_spec", lambda _root, manifest=None: "abel-edge @ local")
     monkeypatch.setattr(doctor, "probe_abel_edge_import", lambda *_args, **_kwargs: {"ok": True})
     monkeypatch.setattr(doctor, "probe_abel_edge_cli", lambda *_args, **_kwargs: {"ok": True})
     monkeypatch.setattr(doctor, "probe_edge_discovery_payload", lambda *_args, **_kwargs: True)
@@ -48,6 +47,7 @@ def test_run_doctor_ready_reports_alpha_managed_branch_research(
 
     report = doctor.render_doctor_report(result)
     assert "Workspace mode: alpha-managed branch research" in report
+    assert "Edge install target:" not in report
 
 
 def test_run_doctor_auth_missing_routes_to_abel_auth(
@@ -68,7 +68,6 @@ def test_run_doctor_auth_missing_routes_to_abel_auth(
     monkeypatch.setattr(doctor, "load_workspace_manifest", lambda _root: {"runtime": {}})
     monkeypatch.setattr(doctor, "resolve_runtime_python", lambda _root, manifest=None: python_path)
     monkeypatch.setattr(doctor, "resolve_workspace_env_file", lambda _root: root / ".env")
-    monkeypatch.setattr(doctor, "resolve_edge_spec", lambda _root, manifest=None: "abel-edge @ local")
     monkeypatch.setattr(doctor, "probe_abel_edge_import", lambda *_args, **_kwargs: {"ok": True})
     monkeypatch.setattr(doctor, "probe_abel_edge_cli", lambda *_args, **_kwargs: {"ok": True})
     monkeypatch.setattr(doctor, "probe_edge_discovery_payload", lambda *_args, **_kwargs: True)

@@ -39,7 +39,7 @@ def fetch_live_graph_frontier(
     except ImportError as exc:
         raise RuntimeError(
             "Live Abel discovery requires abel-edge with the Abel plugin installed. "
-            "Create a virtual environment, install abel-edge, then retry."
+            "Run `abel-invest env init` in the workspace, then retry."
         ) from exc
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:
@@ -82,7 +82,7 @@ def fetch_live_graph_expansion(
     except ImportError as exc:
         raise RuntimeError(
             "Live Abel frontier expansion requires abel-edge with the Abel plugin installed. "
-            "Create a virtual environment, install abel-edge, then retry."
+            "Run `abel-invest env init` in the workspace, then retry."
         ) from exc
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:
