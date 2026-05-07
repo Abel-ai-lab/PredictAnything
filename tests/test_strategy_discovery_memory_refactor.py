@@ -125,6 +125,9 @@ def _write_strategy_artifact_inputs(
         }
     )
     ni.write_branch_spec(branch, spec)
+    (branch / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (branch / "__pycache__").mkdir(exist_ok=True)
+    (branch / "__pycache__" / "helper.pyc").write_bytes(b"denylisted")
 
     inputs_dir = ni.dependencies_path(branch).parent
     inputs_dir.mkdir(parents=True, exist_ok=True)
@@ -914,6 +917,7 @@ def test_build_strategy_artifact_manifest_uses_router_contract_fields(
     file_paths = [item["path"] for item in manifest["files"]]
     assert file_paths == [
         "strategy/strategy.py",
+        "strategy/helper.py",
         "edge/edge-result.json",
         "edge/trade-log.csv",
         "edge/edge-validation.md",
@@ -1017,6 +1021,7 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
     assert [item["path"] for item in manifest["files"]] == [
         "strategy/strategy.py",
+        "strategy/helper.py",
         "edge/edge-result.json",
         "edge/trade-log.csv",
         "edge/edge-validation.md",

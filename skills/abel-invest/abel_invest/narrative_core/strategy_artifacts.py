@@ -39,6 +39,44 @@ SELECTION_MODE_AUTO_BEST_PASS = "auto_best_pass_by_metric_order"
 SELECTION_SCOPE_SESSION = "session"
 SELECTION_METRIC_ORDER = ("sharpe", "lo_adjusted", "max_dd")
 DEFAULT_STRATEGY_ARTIFACTS_DIRNAME = "strategy_artifacts"
+DENYLISTED_STRATEGY_PARTS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "inputs",
+    "outputs",
+    "rounds",
+    "strategy_artifacts",
+    "venv",
+}
+DENYLISTED_STRATEGY_FILENAMES = {
+    ".env",
+    "branch_state.json",
+    "id_rsa",
+    "id_rsa.pub",
+    "results.tsv",
+}
+DENYLISTED_STRATEGY_SUFFIXES = {
+    ".key",
+    ".pem",
+    ".pyc",
+    ".pyo",
+}
+STRATEGY_EXTRA_FILE_SUFFIXES = {
+    ".csv",
+    ".json",
+    ".joblib",
+    ".npy",
+    ".npz",
+    ".pkl",
+    ".py",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
 
 
 @dataclass(frozen=True)
@@ -635,10 +673,10 @@ def _required_artifact_source_files(
     trade_log_path: Path,
 ) -> list[tuple[str, Path]]:
     files = [
-        (STRATEGY_ARTIFACT_ENTRYPOINT, candidate.strategy_source_path),
         ("edge/edge-result.json", candidate.edge_result_path),
         ("edge/trade-log.csv", trade_log_path),
     ]
+    strategy_files = _strategy_source_files(candidate)
     if candidate.edge_report_path is not None:
         files.append(("edge/edge-validation.md", candidate.edge_report_path))
     files.extend(
@@ -649,12 +687,41 @@ def _required_artifact_source_files(
         ]
     )
 
+    files = strategy_files + files
+    seen_paths: set[str] = set()
     for artifact_path, source_path in files:
+        if artifact_path in seen_paths:
+            raise RuntimeError(f"duplicate strategy artifact path: {artifact_path}")
+        seen_paths.add(artifact_path)
         if not source_path.is_file():
             raise RuntimeError(
                 f"strategy artifact source file is missing for {artifact_path}: {source_path}"
             )
     return files
+
+
+def _strategy_source_files(candidate: StrategyArtifactCandidate) -> list[tuple[str, Path]]:
+    files = [(STRATEGY_ARTIFACT_ENTRYPOINT, candidate.strategy_source_path)]
+    for source_path in sorted(path for path in candidate.branch.rglob("*") if path.is_file()):
+        if source_path == candidate.strategy_source_path:
+            continue
+        relative = source_path.relative_to(candidate.branch)
+        if _is_denylisted_strategy_source(relative):
+            continue
+        files.append((f"strategy/{relative.as_posix()}", source_path))
+    return files
+
+
+def _is_denylisted_strategy_source(relative: Path) -> bool:
+    if any(part in DENYLISTED_STRATEGY_PARTS for part in relative.parts):
+        return True
+    if relative.name in DENYLISTED_STRATEGY_FILENAMES:
+        return True
+    if relative.suffix in DENYLISTED_STRATEGY_SUFFIXES:
+        return True
+    if relative.name == "branch.yaml":
+        return True
+    return relative.suffix not in STRATEGY_EXTRA_FILE_SUFFIXES
 
 
 def _artifact_file_entry(*, artifact_path: str, source_path: Path) -> dict[str, Any]:
