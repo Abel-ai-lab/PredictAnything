@@ -29,6 +29,7 @@ from abel_invest.narrative_core.contracts.paths import (
     probe_samples_path,
     runtime_profile_path,
 )
+from abel_invest.narrative_core.io import read_tsv_rows
 from abel_invest.narrative_core.state import (
     branch_inputs_ready,
     branch_uses_default_scaffold,
@@ -163,6 +164,144 @@ def branch_context_summary_lines(
     else:
         lines.append("recorded_round_boundary=branch_specific_engine_present")
     return lines
+
+
+def build_validation_context(
+    *,
+    session: Path,
+    branch: Path,
+    round_id: str,
+    selection_trials: int = 1,
+) -> dict:
+    return {
+        "dsr_trials": build_dsr_trials_context(
+            session=session,
+            branch=branch,
+            round_id=round_id,
+            selection_trials=selection_trials,
+        )
+    }
+
+
+def build_dsr_trials_context(
+    *,
+    session: Path,
+    branch: Path,
+    round_id: str,
+    selection_trials: int = 1,
+) -> dict:
+    branches_root = session / "branches"
+    raw_recorded_rounds = 0
+    prior_validation_rounds = 0
+    prior_effective_trials = 0
+    historical_context_fallback_rounds = 0
+    validation_branch_ids: set[str] = set()
+    branch_family_keys: set[str] = {_branch_family_key(branch)}
+    current_round_trials = _positive_trial_count(selection_trials) or 1
+
+    if branches_root.is_dir():
+        for branch_dir in branches_root.iterdir():
+            if not branch_dir.is_dir():
+                continue
+            rows = read_tsv_rows(branch_dir / "results.tsv")
+            if not rows:
+                continue
+            raw_recorded_rounds += len(rows)
+            completed_rows = [
+                row
+                for row in rows
+                if str(row.get("verdict") or "").upper() in {"PASS", "FAIL"}
+            ]
+            if completed_rows:
+                prior_validation_rounds += len(completed_rows)
+                validation_branch_ids.add(branch_dir.name)
+                branch_family_keys.add(_branch_family_key(branch_dir))
+                for row in completed_rows:
+                    row_trials, used_fallback = _historical_round_effective_trials(
+                        branch_dir,
+                        row,
+                    )
+                    prior_effective_trials += row_trials
+                    if used_fallback:
+                        historical_context_fallback_rounds += 1
+
+    return {
+        "count": max(prior_effective_trials + current_round_trials, 1),
+        "source": "abel-invest.session/v1",
+        "method": "session_effective_exploration_trials_v1",
+        "scope": "ticker_session_requested_window",
+        "components": {
+            "prior_validation_rounds": prior_validation_rounds,
+            "prior_effective_trials": prior_effective_trials,
+            "current_round_trials": current_round_trials,
+            "raw_recorded_rounds": raw_recorded_rounds,
+            "validation_branch_count": len(validation_branch_ids),
+            "unique_branch_families": len(branch_family_keys),
+            "historical_context_fallback_rounds": historical_context_fallback_rounds,
+        },
+        "current_branch_id": branch.name,
+        "current_round_id": round_id,
+    }
+
+
+def _historical_round_effective_trials(branch_dir: Path, row: dict[str, str]) -> tuple[int, bool]:
+    round_id = str(row.get("round_id") or "").strip()
+    if not round_id:
+        return 1, True
+    context = _read_json_object(branch_dir / "outputs" / f"{round_id}-alpha-context.json")
+    validation_context = context.get("validation_context")
+    if not isinstance(validation_context, dict):
+        return 1, True
+    dsr_trials = validation_context.get("dsr_trials")
+    if not isinstance(dsr_trials, dict):
+        return 1, True
+    components = dsr_trials.get("components")
+    if not isinstance(components, dict):
+        return 1, True
+    count = _positive_trial_count(components.get("current_round_trials"))
+    return (count, False) if count is not None else (1, True)
+
+
+def _positive_trial_count(value) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 1 else None
+    if isinstance(value, str) and value.strip().isdigit():
+        parsed = int(value.strip())
+        return parsed if parsed >= 1 else None
+    return None
+
+
+def _read_json_object(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _branch_family_key(branch: Path) -> str:
+    declaration = branch_declaration_status(load_branch_spec(branch))
+    selected_inputs = declaration.get("selected_inputs") or []
+    if selected_inputs:
+        driver_set = ",".join(str(item).upper() for item in selected_inputs)
+    elif declaration.get("input_claim") == "target_only":
+        driver_set = "target_only"
+    else:
+        driver_set = "none"
+    return "|".join(
+        [
+            str(declaration.get("mechanism_family") or "unknown"),
+            str(declaration.get("input_claim") or "unknown"),
+            driver_set,
+            str(declaration.get("model_family") or "unspecified"),
+            str(declaration.get("complexity_class") or "unspecified"),
+            str(declaration.get("exploration_role") or "unspecified"),
+        ]
+    )
 
 
 def classify_result_frame(result: dict[str, object]) -> tuple[str, str]:
@@ -329,6 +468,7 @@ def build_branch_context(
     readiness: dict,
     round_id: str,
     backtest_start: str,
+    selection_trials: int = 1,
 ) -> dict:
     """Build the structured context passed into abel-edge evaluate."""
     workspace_root = find_workspace_root(branch)
@@ -414,6 +554,12 @@ def build_branch_context(
         "backtest_start": backtest_start,
         "branch_spec": branch_spec,
         "branch_declaration": branch_declaration_status(branch_spec),
+        "validation_context": build_validation_context(
+            session=session,
+            branch=branch,
+            round_id=round_id,
+            selection_trials=selection_trials,
+        ),
         "engine_scaffold_status": (
             "starter_scaffold"
             if branch_uses_default_scaffold(branch, discovery, readiness, session)

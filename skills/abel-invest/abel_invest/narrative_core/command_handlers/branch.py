@@ -439,6 +439,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
                 readiness=readiness,
                 round_id=round_id,
                 backtest_start=backtest_start,
+                selection_trials=getattr(args, "selection_trials", 1),
             ),
             indent=2,
         ),

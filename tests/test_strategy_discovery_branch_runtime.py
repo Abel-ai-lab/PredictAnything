@@ -1891,6 +1891,190 @@ def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
     assert context["branch_declaration"]["evidence_intent"] == "draft"
 
 
+def test_build_branch_context_declares_session_dsr_trials(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-dsr-context", tmp_path / "research")
+    discovery = _sample_discovery()
+    readiness = _sample_readiness()
+    ni.write_graph_frontier_from_discovery_payload(session, discovery)
+    ni.write_readiness(session, readiness)
+
+    prior_candidate = ni.init_branch_dir(session, "graph-v1")
+    prior_control = ni.init_branch_dir(session, "target-control")
+    prior_error = ni.init_branch_dir(session, "workflow-error")
+    current = ni.init_branch_dir(session, "graph-v2")
+
+    candidate_spec = ni.load_branch_spec(prior_candidate)
+    candidate_spec.update(
+        {
+            "hypothesis": "AAPL leads TSLA risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "selected_inputs": ["AAPL"],
+        }
+    )
+    _record_synthetic_round(
+        session,
+        prior_candidate,
+        spec=candidate_spec,
+        result=_edge_result(verdict="PASS"),
+    )
+
+    control_spec = ni.load_branch_spec(prior_control)
+    control_spec.update(
+        {
+            "hypothesis": "TSLA target-only control.",
+            "evidence_intent": "control",
+            "input_claim": "target_only",
+            "mechanism_family": "target_momentum",
+            "selected_inputs": [],
+        }
+    )
+    _record_synthetic_round(
+        session,
+        prior_control,
+        spec=control_spec,
+        result=_edge_result(verdict="FAIL"),
+        decision="discard",
+    )
+
+    error_spec = ni.load_branch_spec(prior_error)
+    error_spec.update({"hypothesis": "Workflow blocker branch."})
+    _record_synthetic_round(
+        session,
+        prior_error,
+        spec=error_spec,
+        result=_edge_result(verdict="ERROR"),
+        decision="blocked",
+    )
+
+    current_spec = ni.load_branch_spec(current)
+    current_spec.update(
+        {
+            "hypothesis": "MSFT leads TSLA risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "selected_inputs": ["MSFT"],
+        }
+    )
+    ni.write_branch_spec(current, current_spec)
+    _write_runtime_files(current)
+
+    context = ni.build_branch_context(
+        branch=current,
+        session=session,
+        discovery=discovery,
+        readiness=readiness,
+        round_id="round-001",
+        backtest_start="2020-01-01",
+    )
+
+    dsr_trials = context["validation_context"]["dsr_trials"]
+    assert dsr_trials["count"] == 3
+    assert dsr_trials["source"] == "abel-invest.session/v1"
+    assert dsr_trials["method"] == "session_effective_exploration_trials_v1"
+    assert dsr_trials["scope"] == "ticker_session_requested_window"
+    assert dsr_trials["components"]["prior_validation_rounds"] == 2
+    assert dsr_trials["components"]["prior_effective_trials"] == 2
+    assert dsr_trials["components"]["current_round_trials"] == 1
+    assert dsr_trials["components"]["raw_recorded_rounds"] == 3
+
+
+def test_build_branch_context_accumulates_parameter_selection_trials(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-dsr-selection-trials", tmp_path / "research")
+    discovery = _sample_discovery()
+    readiness = _sample_readiness()
+    ni.write_graph_frontier_from_discovery_payload(session, discovery)
+    ni.write_readiness(session, readiness)
+
+    prior_sweep = ni.init_branch_dir(session, "threshold-sweep")
+    prior_default = ni.init_branch_dir(session, "graph-v1")
+    current = ni.init_branch_dir(session, "window-sweep")
+
+    sweep_spec = ni.load_branch_spec(prior_sweep)
+    sweep_spec.update(
+        {
+            "hypothesis": "AAPL threshold sweep leads TSLA risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "selected_inputs": ["AAPL"],
+        }
+    )
+    _record_synthetic_round(
+        session,
+        prior_sweep,
+        spec=sweep_spec,
+        result=_edge_result(verdict="PASS"),
+    )
+    (prior_sweep / "outputs" / "round-001-alpha-context.json").write_text(
+        json.dumps(
+            {
+                "branch_spec": sweep_spec,
+                "validation_context": {
+                    "dsr_trials": {
+                        "count": 12,
+                        "source": "abel-invest.session/v1",
+                        "method": "session_effective_exploration_trials_v1",
+                        "components": {"current_round_trials": 12},
+                    }
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    default_spec = ni.load_branch_spec(prior_default)
+    default_spec.update(
+        {
+            "hypothesis": "MSFT leads TSLA risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "selected_inputs": ["MSFT"],
+        }
+    )
+    _record_synthetic_round(
+        session,
+        prior_default,
+        spec=default_spec,
+        result=_edge_result(verdict="FAIL"),
+        decision="discard",
+    )
+
+    current_spec = ni.load_branch_spec(current)
+    current_spec.update(
+        {
+            "hypothesis": "NVDA window sweep leads TSLA risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "selected_inputs": ["NVDA"],
+        }
+    )
+    ni.write_branch_spec(current, current_spec)
+    _write_runtime_files(current)
+
+    context = ni.build_branch_context(
+        branch=current,
+        session=session,
+        discovery=discovery,
+        readiness=readiness,
+        round_id="round-001",
+        backtest_start="2020-01-01",
+        selection_trials=4,
+    )
+
+    dsr_trials = context["validation_context"]["dsr_trials"]
+    assert dsr_trials["count"] == 17
+    assert dsr_trials["components"]["prior_validation_rounds"] == 2
+    assert dsr_trials["components"]["prior_effective_trials"] == 13
+    assert dsr_trials["components"]["current_round_trials"] == 4
+    assert dsr_trials["components"]["historical_context_fallback_rounds"] == 1
+
+
 def test_build_branch_context_preserves_csv_feed_path(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v2-csv", tmp_path / "research")
     discovery = _sample_discovery()

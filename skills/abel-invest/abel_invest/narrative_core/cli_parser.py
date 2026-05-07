@@ -8,6 +8,13 @@ from abel_invest.narrative_core.contracts.constants import CHANGED_DIMENSIONS, D
 from abel_invest.workspace_core.workspace import DEFAULT_WORKSPACE_NAME
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be >= 1")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Abel strategy discovery workspace CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -253,6 +260,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         choices=sorted(CHANGED_DIMENSIONS),
         help="Factual dimension changed in this round; repeat for multiple dimensions",
+    )
+    run_branch.add_argument(
+        "--selection-trials",
+        type=_positive_int,
+        default=1,
+        help="Effective strategy or parameter configurations tried before selecting this round output",
     )
     run_branch.add_argument(
         "--python-bin",

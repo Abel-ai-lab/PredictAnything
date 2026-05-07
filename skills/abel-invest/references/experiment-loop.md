@@ -77,11 +77,18 @@ Each round should answer a mechanism question, not just consume compute.
 - edge cache: market data reuse
 - prepare step: branch input resolution and runtime contract materialization
 - debug step: semantic preflight
-- run step: evaluation and evidence recording
+- run step: evaluation, DSR trial-count declaration, and evidence recording
 
 Session `backtest_start` is the default exploration target. When
 `branch.yaml.requested_start` is explicit, that branch start should drive
 prepare/debug/run for the branch.
+
+`run-branch` writes `validation_context.dsr_trials.count` into the Alpha context
+passed to `abel-edge evaluate`. The count is effective exploration trials:
+prior PASS/FAIL rounds contribute their recorded trial count, and the current
+round defaults to `1`. If one submitted strategy was selected from a parameter,
+threshold, filter, sizing, or window sweep, pass `--selection-trials N` so DSR
+reflects the Alpha search width instead of only the final `engine.py` shape.
 
 ## Evidence Reading
 
