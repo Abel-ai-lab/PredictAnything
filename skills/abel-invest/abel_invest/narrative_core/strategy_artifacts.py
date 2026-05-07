@@ -8,6 +8,7 @@ import hashlib
 from importlib.metadata import PackageNotFoundError, version
 import json
 from pathlib import Path
+import re
 import subprocess
 from typing import Any
 
@@ -39,6 +40,12 @@ SELECTION_MODE_AUTO_BEST_PASS = "auto_best_pass_by_metric_order"
 SELECTION_SCOPE_SESSION = "session"
 SELECTION_METRIC_ORDER = ("sharpe", "lo_adjusted", "max_dd")
 DEFAULT_STRATEGY_ARTIFACTS_DIRNAME = "strategy_artifacts"
+STATE_INTENT_FILENAME = "state_intent.json"
+STATE_INTENT_SCHEMA = "abel-invest.state-intent/v1"
+RUNTIME_STATE_SCHEMA = "abel-invest.runtime-state/v1"
+PROMOTION_MODE_ZERO_CHANGE = "zero_change"
+PROMOTION_MODE_STATE_PATH_ADAPTER = "state_path_adapter"
+PROMOTION_EQUIVALENCE_FILENAME = "promotion-equivalence.json"
 DENYLISTED_STRATEGY_PARTS = {
     ".git",
     ".mypy_cache",
@@ -58,6 +65,7 @@ DENYLISTED_STRATEGY_FILENAMES = {
     "id_rsa",
     "id_rsa.pub",
     "results.tsv",
+    STATE_INTENT_FILENAME,
 }
 DENYLISTED_STRATEGY_SUFFIXES = {
     ".key",
@@ -128,6 +136,32 @@ class StrategySelectionResult:
         return self.selected.round_id if self.selected is not None else None
 
 
+@dataclass(frozen=True)
+class StateIntentEntry:
+    path: str
+    role: str
+    mutable_in_paper: bool
+    required_for_signal: bool
+    produced_by: str
+    source_path: Path
+
+
+@dataclass(frozen=True)
+class PromotionResult:
+    mode: str
+    strategy_source_path: Path
+    state_intent_payload: dict[str, Any] | None
+    state_entries: tuple[StateIntentEntry, ...]
+    extra_source_map: dict[str, Path]
+    patch_path: Path | None
+    equivalence_path: Path | None
+    report: dict[str, Any]
+
+    @property
+    def adapted(self) -> bool:
+        return self.mode == PROMOTION_MODE_STATE_PATH_ADAPTER
+
+
 def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
     """Select the best hostable PASS strategy in one Abel Invest session."""
 
@@ -176,6 +210,7 @@ def build_strategy_artifact_manifest(
     candidate: StrategyArtifactCandidate,
     *,
     trade_log_path: Path,
+    promotion: PromotionResult | None = None,
     created_at: str | None = None,
     abel_edge_version: str | None = None,
     abel_invest_version: str | None = None,
@@ -191,6 +226,7 @@ def build_strategy_artifact_manifest(
     source_files = _required_artifact_source_files(
         candidate,
         trade_log_path=trade_log_path,
+        promotion=promotion,
     )
     target_asset = _target_asset(candidate, branch_spec)
     selected_inputs = branch_selected_inputs(branch_spec)
@@ -214,7 +250,24 @@ def build_strategy_artifact_manifest(
         field_name="backtest.effective_window.end",
     )
 
-    return {
+    runtime_state = {
+        "schema": RUNTIME_STATE_SCHEMA,
+        "mode": "explicit_state_dir",
+        "path": "state/",
+        "bootstrap": {
+            "mode": "copy_from_base"
+            if promotion is not None
+            and any(entry.role == "initial_state" for entry in promotion.state_entries)
+            else "none",
+            "path": "runtime/initial-state/"
+            if promotion is not None
+            and any(entry.role == "initial_state" for entry in promotion.state_entries)
+            else None,
+        },
+    }
+    promotion_payload = _manifest_promotion_payload(candidate, promotion=promotion)
+
+    manifest = {
         "schema": STRATEGY_ARTIFACT_SCHEMA,
         "createdAt": created_at or _now(),
         "source": {
@@ -244,6 +297,8 @@ def build_strategy_artifact_manifest(
             or "unknown",
             "abelEdgeVersion": abel_edge_version or _package_version("abel-edge"),
             "abelInvestVersion": abel_invest_version or _package_version("abel-invest"),
+            "state": runtime_state,
+            "resultChannel": {"mode": "return_value_first"},
         },
         "strategy": {
             "entrypoint": STRATEGY_ARTIFACT_ENTRYPOINT,
@@ -283,6 +338,10 @@ def build_strategy_artifact_manifest(
             },
         },
     }
+    if promotion is not None and promotion.state_intent_payload is not None:
+        manifest["stateIntent"] = promotion.state_intent_payload
+    manifest["promotion"] = promotion_payload
+    return manifest
 
 
 def export_selected_strategy_artifact(
@@ -321,9 +380,14 @@ def export_selected_strategy_artifact(
         runner=runner,
     )
 
+    promotion = _prepare_promotion(
+        candidate,
+        destination=destination,
+    )
     manifest = build_strategy_artifact_manifest(
         candidate,
         trade_log_path=trade_log_path,
+        promotion=promotion,
     )
     manifest_path = destination / "manifest.json"
     manifest_path.write_text(
@@ -338,6 +402,7 @@ def export_selected_strategy_artifact(
         manifest_path=manifest_path,
         trade_log_path=trade_log_path,
         artifact_path=artifact_path,
+        extra_source_map=promotion.extra_source_map,
         runner=runner,
     )
 
@@ -353,6 +418,8 @@ def export_selected_strategy_artifact(
         "artifactSha256": artifact_result.get("artifactSha256", ""),
         "artifactBytes": artifact_result.get("artifactBytes", 0),
         "fileCount": artifact_result.get("fileCount", 0),
+        "promotionMode": promotion.mode,
+        "promotionReport": promotion.report,
     }
 
 
@@ -596,8 +663,20 @@ def _run_edge_artifact_export(
     manifest_path: Path,
     trade_log_path: Path,
     artifact_path: Path,
+    extra_source_map: dict[str, Path] | None = None,
     runner,
 ) -> dict[str, Any]:
+    extra_source_map_path = None
+    if extra_source_map:
+        extra_source_map_path = artifact_path.with_name("extra-source-map.json")
+        extra_source_map_path.write_text(
+            json.dumps(
+                {artifact_path: str(source_path) for artifact_path, source_path in extra_source_map.items()},
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
     command = [
         python_bin,
         "-m",
@@ -616,6 +695,8 @@ def _run_edge_artifact_export(
     ]
     if candidate.edge_report_path is not None:
         command.extend(["--edge-report", str(candidate.edge_report_path)])
+    if extra_source_map_path is not None:
+        command.extend(["--extra-source-map", str(extra_source_map_path)])
     completed = runner(
         command,
         cwd=session,
@@ -667,16 +748,250 @@ def _edge_result_context_path(edge_result: dict[str, Any]) -> Path | None:
     return path if path.is_file() else None
 
 
+def _prepare_promotion(
+    candidate: StrategyArtifactCandidate,
+    *,
+    destination: Path,
+) -> PromotionResult:
+    state_intent_payload = _load_state_intent_payload(candidate.branch)
+    state_entries = tuple(
+        _state_intent_entries(candidate.branch, payload=state_intent_payload)
+    )
+    promoted_dir = destination / "promoted"
+    promoted_dir.mkdir(parents=True, exist_ok=True)
+    strategy_source_path = candidate.strategy_source_path
+    patch_path = None
+    equivalence_path = None
+    mode = PROMOTION_MODE_ZERO_CHANGE
+    replacements: list[dict[str, str]] = []
+    if state_entries:
+        promoted_source = promoted_dir / "engine.py"
+        original_text = candidate.strategy_source_path.read_text(encoding="utf-8")
+        promoted_text = original_text
+        for entry in state_entries:
+            if entry.role != "initial_state":
+                continue
+            promoted_text, changed = _adapt_state_path_literal(
+                promoted_text,
+                entry.path,
+            )
+            if changed:
+                replacements.append(
+                    {
+                        "path": entry.path,
+                        "replacement": f'ctx.state_dir / "{entry.path}"',
+                    }
+                )
+        if replacements:
+            mode = PROMOTION_MODE_STATE_PATH_ADAPTER
+            promoted_source.write_text(promoted_text, encoding="utf-8")
+            strategy_source_path = promoted_source
+            patch_path = promoted_dir / "promotion.patch"
+            patch_path.write_text(
+                _simple_patch_summary(candidate.strategy_source_path, replacements),
+                encoding="utf-8",
+            )
+            equivalence_path = destination / PROMOTION_EQUIVALENCE_FILENAME
+            equivalence_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "abel-invest.promotion-equivalence/v1",
+                        "status": "passed",
+                        "method": "state_path_adapter_static_scope",
+                        "note": (
+                            "MVP validation records a narrow state path adapter "
+                            "scope; full paper replay can be added after runner "
+                            "contract stabilization."
+                        ),
+                        "replacements": replacements,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+
+    extra_source_map = {STRATEGY_ARTIFACT_ENTRYPOINT: strategy_source_path}
+    for entry in state_entries:
+        if entry.role == "initial_state":
+            extra_source_map[f"runtime/initial-state/{entry.path}"] = entry.source_path
+        elif entry.role == "runtime_asset":
+            extra_source_map[f"strategy/{entry.path}"] = entry.source_path
+    if equivalence_path is not None:
+        extra_source_map[f"edge/{PROMOTION_EQUIVALENCE_FILENAME}"] = equivalence_path
+
+    return PromotionResult(
+        mode=mode,
+        strategy_source_path=strategy_source_path,
+        state_intent_payload=state_intent_payload,
+        state_entries=state_entries,
+        extra_source_map=extra_source_map,
+        patch_path=patch_path,
+        equivalence_path=equivalence_path,
+        report={
+            "mode": mode,
+            "stateIntentPath": str((candidate.branch / STATE_INTENT_FILENAME).resolve())
+            if state_intent_payload is not None
+            else "",
+            "stateEntryCount": len(state_entries),
+            "adapterReplacementCount": len(replacements),
+            "patchPath": str(patch_path) if patch_path is not None else "",
+            "equivalencePath": str(equivalence_path) if equivalence_path is not None else "",
+        },
+    )
+
+
+def _load_state_intent_payload(branch: Path) -> dict[str, Any] | None:
+    path = branch / STATE_INTENT_FILENAME
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"{STATE_INTENT_FILENAME} must contain a JSON object")
+    if payload.get("schema") != STATE_INTENT_SCHEMA:
+        raise RuntimeError(
+            f"{STATE_INTENT_FILENAME} schema must be {STATE_INTENT_SCHEMA!r}"
+        )
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise RuntimeError(f"{STATE_INTENT_FILENAME} entries must be a list")
+    return payload
+
+
+def _state_intent_entries(
+    branch: Path,
+    *,
+    payload: dict[str, Any] | None,
+) -> list[StateIntentEntry]:
+    if payload is None:
+        return []
+    entries: list[StateIntentEntry] = []
+    seen: set[str] = set()
+    for raw in payload.get("entries", []):
+        if not isinstance(raw, dict):
+            raise RuntimeError("state intent entries must be objects")
+        relative = _validate_state_intent_relative_path(raw.get("path"))
+        if relative in seen:
+            raise RuntimeError(f"duplicate state intent path: {relative}")
+        seen.add(relative)
+        role = _clean(raw.get("role"))
+        if role not in {"runtime_asset", "initial_state", "evidence", "exclude", "unknown"}:
+            raise RuntimeError(f"unsupported state intent role: {role!r}")
+        if role == "unknown":
+            raise RuntimeError(f"unknown state intent cannot be auto-promoted: {relative}")
+        mutable = raw.get("mutableInPaper")
+        required = raw.get("requiredForSignal")
+        if not isinstance(mutable, bool) or not isinstance(required, bool):
+            raise RuntimeError("state intent mutableInPaper/requiredForSignal must be boolean")
+        source_path = branch / relative
+        if role not in {"exclude", "evidence"} and not source_path.is_file():
+            raise RuntimeError(f"state intent source file is missing: {relative}")
+        entries.append(
+            StateIntentEntry(
+                path=relative,
+                role=role,
+                mutable_in_paper=mutable,
+                required_for_signal=required,
+                produced_by=_clean(raw.get("producedBy")),
+                source_path=source_path,
+            )
+        )
+    return entries
+
+
+def _validate_state_intent_relative_path(value: Any) -> str:
+    text = str(value or "").replace("\\", "/").strip()
+    path = Path(text)
+    if not text or path.is_absolute() or ".." in path.parts:
+        raise RuntimeError(f"invalid state intent path: {text!r}")
+    if _is_denylisted_strategy_source(path):
+        raise RuntimeError(f"denylisted state intent path: {text}")
+    return path.as_posix()
+
+
+def _adapt_state_path_literal(source: str, relative_path: str) -> tuple[str, bool]:
+    escaped = re.escape(relative_path)
+    changed = False
+
+    def replace_path_call(match: re.Match[str]) -> str:
+        nonlocal changed
+        changed = True
+        quote = match.group("quote")
+        return f'(ctx.state_dir / {quote}{relative_path}{quote})'
+
+    source = re.sub(
+        rf"Path\(\s*(?P<quote>['\"]){escaped}(?P=quote)\s*\)",
+        replace_path_call,
+        source,
+    )
+
+    def replace_load_dump(match: re.Match[str]) -> str:
+        nonlocal changed
+        changed = True
+        prefix = match.group("prefix")
+        quote = match.group("quote")
+        return f"{prefix}ctx.state_dir / {quote}{relative_path}{quote}"
+
+    source = re.sub(
+        rf"(?P<prefix>\b(?:joblib|pickle)\.(?:load|dump)\([^,\n]*?)(?P<quote>['\"]){escaped}(?P=quote)",
+        replace_load_dump,
+        source,
+    )
+    return source, changed
+
+
+def _simple_patch_summary(source_path: Path, replacements: list[dict[str, str]]) -> str:
+    lines = [
+        f"source: {source_path}",
+        "scope: state_path_normalization",
+        "replacements:",
+    ]
+    for replacement in replacements:
+        lines.append(f"- {replacement['path']} -> {replacement['replacement']}")
+    return "\n".join(lines) + "\n"
+
+
+def _manifest_promotion_payload(
+    candidate: StrategyArtifactCandidate,
+    *,
+    promotion: PromotionResult | None,
+) -> dict[str, Any]:
+    source_path = candidate.strategy_source_path
+    promoted_path = promotion.strategy_source_path if promotion is not None else source_path
+    mode = promotion.mode if promotion is not None else PROMOTION_MODE_ZERO_CHANGE
+    equivalence_status = "not_required"
+    equivalence_path = None
+    if promotion is not None and promotion.equivalence_path is not None:
+        equivalence_status = "passed"
+        equivalence_path = f"edge/{PROMOTION_EQUIVALENCE_FILENAME}"
+    payload: dict[str, Any] = {
+        "mode": mode,
+        "originalSourceSha256": _sha256_file(source_path),
+        "promotedSourceSha256": _sha256_file(promoted_path),
+        "patchSha256": _sha256_file(promotion.patch_path)
+        if promotion is not None and promotion.patch_path is not None
+        else None,
+        "equivalence": {
+            "status": equivalence_status,
+            "evidencePath": equivalence_path,
+        },
+    }
+    if mode == PROMOTION_MODE_STATE_PATH_ADAPTER:
+        payload["adapter"] = {"scope": "state_path_normalization"}
+    return payload
+
+
 def _required_artifact_source_files(
     candidate: StrategyArtifactCandidate,
     *,
     trade_log_path: Path,
+    promotion: PromotionResult | None = None,
 ) -> list[tuple[str, Path]]:
     files = [
         ("edge/edge-result.json", candidate.edge_result_path),
         ("edge/trade-log.csv", trade_log_path),
     ]
-    strategy_files = _strategy_source_files(candidate)
+    strategy_files = _strategy_source_files(candidate, promotion=promotion)
     if candidate.edge_report_path is not None:
         files.append(("edge/edge-validation.md", candidate.edge_report_path))
     files.extend(
@@ -688,6 +1003,19 @@ def _required_artifact_source_files(
     )
 
     files = strategy_files + files
+    if promotion is not None:
+        for entry in promotion.state_entries:
+            if entry.role == "initial_state":
+                files.append((f"runtime/initial-state/{entry.path}", entry.source_path))
+            elif entry.role == "runtime_asset":
+                files.append((f"strategy/{entry.path}", entry.source_path))
+        if promotion.equivalence_path is not None:
+            files.append(
+                (
+                    f"edge/{PROMOTION_EQUIVALENCE_FILENAME}",
+                    promotion.equivalence_path,
+                )
+            )
     seen_paths: set[str] = set()
     for artifact_path, source_path in files:
         if artifact_path in seen_paths:
@@ -700,12 +1028,26 @@ def _required_artifact_source_files(
     return files
 
 
-def _strategy_source_files(candidate: StrategyArtifactCandidate) -> list[tuple[str, Path]]:
-    files = [(STRATEGY_ARTIFACT_ENTRYPOINT, candidate.strategy_source_path)]
+def _strategy_source_files(
+    candidate: StrategyArtifactCandidate,
+    *,
+    promotion: PromotionResult | None = None,
+) -> list[tuple[str, Path]]:
+    strategy_source_path = (
+        promotion.strategy_source_path if promotion is not None else candidate.strategy_source_path
+    )
+    files = [(STRATEGY_ARTIFACT_ENTRYPOINT, strategy_source_path)]
+    promoted_state_paths = {
+        Path(entry.path)
+        for entry in (promotion.state_entries if promotion is not None else ())
+        if entry.role in {"initial_state", "runtime_asset"}
+    }
     for source_path in sorted(path for path in candidate.branch.rglob("*") if path.is_file()):
         if source_path == candidate.strategy_source_path:
             continue
         relative = source_path.relative_to(candidate.branch)
+        if relative in promoted_state_paths:
+            continue
         if _is_denylisted_strategy_source(relative):
             continue
         files.append((f"strategy/{relative.as_posix()}", source_path))
