@@ -6,6 +6,7 @@ from argparse import Namespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 import strategy_discovery_api as ni
 
 
@@ -16,6 +17,7 @@ def _candidate_result_payload() -> dict:
         "failures": [],
         "warnings": [],
         "profile": "equity_daily",
+        "implementation_contract": "decision_context",
         "K": 1,
         "metrics": {
             "sharpe": 2.1,
@@ -104,6 +106,62 @@ def _write_strategy_result_row(
             "handoff_path": str(handoff_path.relative_to(session)),
         },
     )
+
+
+def _write_strategy_artifact_inputs(
+    branch: Path,
+    *,
+    target: str = "TSLA",
+    selected_inputs: list[str] | None = None,
+) -> Path:
+    selected_inputs = selected_inputs or ["AAPL", "MSFT"]
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "target": target,
+            "target_node": f"{target}.price",
+            "selected_inputs": selected_inputs,
+            "data_requirements": {"timeframe": "1d", "fields": ["close"]},
+        }
+    )
+    ni.write_branch_spec(branch, spec)
+
+    inputs_dir = ni.dependencies_path(branch).parent
+    inputs_dir.mkdir(parents=True, exist_ok=True)
+    dependencies = {
+        "version": 1,
+        "branch_id": branch.name,
+        "target": target,
+        "target_node": f"{target}.price",
+        "selected_inputs": selected_inputs,
+        "selected_graph_nodes": [f"{ticker}.price" for ticker in selected_inputs],
+        "requested_start": "2020-01-01",
+        "data_requirements": {"timeframe": "1d"},
+    }
+    ni.dependencies_path(branch).write_text(json.dumps(dependencies), encoding="utf-8")
+    ni.runtime_profile_path(branch).write_text(
+        json.dumps(ni.build_runtime_profile_payload(target=target)),
+        encoding="utf-8",
+    )
+    data_manifest = {
+        "version": 1,
+        "target": target,
+        "target_node": f"{target}.price",
+        "selected_inputs": selected_inputs,
+        "selected_graph_nodes": [f"{ticker}.price" for ticker in selected_inputs],
+        "feeds": [],
+    }
+    ni.data_manifest_path(branch).write_text(json.dumps(data_manifest), encoding="utf-8")
+
+    trade_log_path = branch / "outputs" / "round-006-trade-log.csv"
+    trade_log_path.parent.mkdir(parents=True, exist_ok=True)
+    trade_log_path.write_text(
+        "date,asset_return,pnl,position,cum_return,source\n"
+        "2020-01-01,0,0,0,0,backtest\n"
+        "2020-01-02,0.01,0.01,1,0.01,backtest\n",
+        encoding="utf-8",
+    )
+    return trade_log_path
 
 
 def test_render_writes_agent_context_with_journal_view(tmp_path: Path) -> None:
@@ -761,6 +819,119 @@ def test_select_best_pass_strategy_skips_unhostable_pass_rounds(tmp_path: Path) 
     assert result.skip_reason == "no_hostable_pass_strategy"
     assert result.pass_round_count == 1
     assert result.eligible_count == 0
+
+
+def test_build_strategy_artifact_manifest_uses_router_contract_fields(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    trade_log_path = _write_strategy_artifact_inputs(branch)
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+
+    selection = ni.select_best_pass_strategy(session)
+    assert selection.selected is not None
+    manifest = ni.build_strategy_artifact_manifest(
+        selection.selected,
+        trade_log_path=trade_log_path,
+        created_at="2026-05-07T00:00:00Z",
+        abel_edge_version="0.8.test",
+        abel_invest_version="3.5.test",
+    )
+
+    assert manifest["schema"] == "abel-invest.strategy-artifact/v1"
+    assert manifest["createdAt"] == "2026-05-07T00:00:00Z"
+    assert manifest["source"] == {
+        "workspaceKind": "abel-invest",
+        "sourceSessionId": "tsla-v1",
+        "ticker": "TSLA",
+        "branchId": "momentum_lead",
+        "roundId": "round-006",
+        "selectionMode": "auto_best_pass_by_metric_order",
+        "selectionScope": "session",
+        "selectionMetricOrder": ["sharpe", "lo_adjusted", "max_dd"],
+        "selectionMetricValues": {
+            "sharpe": 0.967,
+            "lo_adjusted": 1.056,
+            "max_dd": -0.1278,
+        },
+        "selectionRank": 1,
+    }
+    assert manifest["runtime"] == {
+        "profile": "equity_daily",
+        "timeframe": "1d",
+        "decisionEvent": "bar_close",
+        "executionDelayBars": 1,
+        "returnBasis": "close_to_close",
+        "implementationContract": "decision_context",
+        "abelEdgeVersion": "0.8.test",
+        "abelInvestVersion": "3.5.test",
+    }
+    assert manifest["strategy"] == {
+        "entrypoint": "strategy/strategy.py",
+        "className": "BranchEngine",
+        "targetAsset": "TSLA",
+        "targetNode": "TSLA.price",
+        "selectedInputs": ["AAPL", "MSFT"],
+        "selectedGraphNodes": ["AAPL.price", "MSFT.price"],
+        "paperMode": "paper_signal",
+    }
+    assert manifest["backtest"] == {
+        "verdict": "PASS",
+        "startAt": "2020-01-01T00:00:00Z",
+        "endAt": "2020-12-31T00:00:00Z",
+        "metrics": {
+            "sharpe": 0.967,
+            "loAdjusted": 1.056,
+            "maxDrawdown": -0.1278,
+            "totalReturn": 0.42,
+        },
+    }
+    file_paths = [item["path"] for item in manifest["files"]]
+    assert file_paths == [
+        "strategy/strategy.py",
+        "edge/edge-result.json",
+        "edge/trade-log.csv",
+        "edge/edge-validation.md",
+        "runtime/strategy.yaml",
+        "runtime/dependencies.json",
+        "runtime/data_manifest.json",
+    ]
+    assert all(len(item["sha256"]) == 64 for item in manifest["files"])
+    assert all(item["bytes"] > 0 for item in manifest["files"])
+
+
+def test_build_strategy_artifact_manifest_requires_trade_log(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_artifact_inputs(branch)
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+
+    selection = ni.select_best_pass_strategy(session)
+    assert selection.selected is not None
+    with pytest.raises(RuntimeError, match="edge/trade-log.csv"):
+        ni.build_strategy_artifact_manifest(
+            selection.selected,
+            trade_log_path=branch / "outputs" / "missing-trade-log.csv",
+        )
 
 
 def test_render_skill_dashboard_session_upload_result_returns_markdown_link() -> None:

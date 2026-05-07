@@ -38,7 +38,10 @@ from abel_invest.narrative_core.dashboard import (
     render_skill_dashboard_session_upload_result,
     resolve_skill_dashboard_base_url,
 )
-from abel_invest.narrative_core.strategy_artifacts import select_best_pass_strategy
+from abel_invest.narrative_core.strategy_artifacts import (
+    build_strategy_artifact_manifest,
+    select_best_pass_strategy,
+)
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts
 from abel_invest.narrative_core.io import append_tsv_row
 from abel_invest.narrative_core.evidence.journal import build_research_journal_status
