@@ -312,6 +312,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build and print the payload without sending it.",
     )
 
+    export_strategy_artifact = sub.add_parser(
+        "export-strategy-artifact",
+        help="Export the best PASS strategy artifact for a session without uploading it",
+    )
+    export_strategy_artifact.add_argument("--session", required=True)
+    export_strategy_artifact.add_argument(
+        "--output-dir",
+        default=None,
+        help="Destination directory for manifest.json, trade-log.csv, and artifact.zip",
+    )
+    export_strategy_artifact.add_argument(
+        "--python-bin",
+        default=None,
+        help="Interpreter used to run Abel-edge export helpers (defaults to workspace python)",
+    )
+
     debug_branch = sub.add_parser(
         "debug-branch",
         help="Run edge debug-evaluate without recording a narrative round",

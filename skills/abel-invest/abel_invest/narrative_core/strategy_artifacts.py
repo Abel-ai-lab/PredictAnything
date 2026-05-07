@@ -8,6 +8,7 @@ import hashlib
 from importlib.metadata import PackageNotFoundError, version
 import json
 from pathlib import Path
+import subprocess
 from typing import Any
 
 from abel_invest.narrative_core.contracts.branch_spec import (
@@ -23,7 +24,10 @@ from abel_invest.narrative_core.contracts.paths import (
     runtime_profile_path,
 )
 from abel_invest.narrative_core.io import _now, read_tsv_rows
+from abel_invest.narrative_core.runtime.edge_commands import resolve_default_python_bin
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
+from abel_invest.workspace_core.edge_runtime import build_workspace_runtime_env
+from abel_invest.workspace_core.workspace import find_workspace_root
 
 
 STRATEGY_ARTIFACT_SCHEMA = "abel-invest.strategy-artifact/v1"
@@ -34,6 +38,7 @@ STRATEGY_ARTIFACT_WORKSPACE_KIND = "abel-invest"
 SELECTION_MODE_AUTO_BEST_PASS = "auto_best_pass_by_metric_order"
 SELECTION_SCOPE_SESSION = "session"
 SELECTION_METRIC_ORDER = ("sharpe", "lo_adjusted", "max_dd")
+DEFAULT_STRATEGY_ARTIFACTS_DIRNAME = "strategy_artifacts"
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,7 @@ class StrategyArtifactCandidate:
     edge_result_path: Path
     edge_report_path: Path | None
     edge_handoff_path: Path | None
+    edge_metric_input_path: Path | None
     source_session_id: str
     ticker: str
     branch_id: str
@@ -241,6 +247,91 @@ def build_strategy_artifact_manifest(
     }
 
 
+def export_selected_strategy_artifact(
+    session: Path,
+    *,
+    output_dir: Path | None = None,
+    python_bin: str | None = None,
+    runner=subprocess.run,
+) -> dict[str, Any]:
+    """Export the selected hosted strategy artifact locally without uploading it."""
+
+    selection = select_best_pass_strategy(session)
+    if selection.selected is None:
+        return _artifact_skip_result(selection.skip_reason)
+
+    candidate = selection.selected
+    destination = _artifact_output_dir(candidate, output_dir=output_dir)
+    python_bin = python_bin or resolve_default_python_bin(candidate.branch)
+
+    candidate = _ensure_metric_input_for_artifact(
+        candidate,
+        destination=destination,
+        python_bin=python_bin,
+        runner=runner,
+    )
+    if candidate is None:
+        return _artifact_skip_result("artifact_metric_input_unavailable", selection=selection)
+
+    assert candidate.edge_metric_input_path is not None
+    trade_log_path = destination / "trade-log.csv"
+    _run_edge_trade_log_export(
+        python_bin=python_bin,
+        session=candidate.session,
+        metric_input_path=candidate.edge_metric_input_path,
+        trade_log_path=trade_log_path,
+        runner=runner,
+    )
+
+    manifest = build_strategy_artifact_manifest(
+        candidate,
+        trade_log_path=trade_log_path,
+    )
+    manifest_path = destination / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    artifact_path = destination / "artifact.zip"
+    artifact_result = _run_edge_artifact_export(
+        python_bin=python_bin,
+        session=candidate.session,
+        candidate=candidate,
+        manifest_path=manifest_path,
+        trade_log_path=trade_log_path,
+        artifact_path=artifact_path,
+        runner=runner,
+    )
+
+    return {
+        "artifactExported": True,
+        "artifactUploadSkipped": False,
+        "skipReason": "",
+        "selectedBranchId": candidate.branch_id,
+        "selectedRoundId": candidate.round_id,
+        "manifestPath": str(manifest_path),
+        "artifactPath": str(artifact_path),
+        "tradeLogPath": str(trade_log_path),
+        "artifactSha256": artifact_result.get("artifactSha256", ""),
+        "artifactBytes": artifact_result.get("artifactBytes", 0),
+        "fileCount": artifact_result.get("fileCount", 0),
+    }
+
+
+def export_strategy_artifact_command(args) -> int:
+    """CLI adapter for local strategy artifact export."""
+
+    session = resolve_workspace_arg_path(args.session).resolve()
+    output_dir = Path(args.output_dir) if args.output_dir else None
+    result = export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin=args.python_bin,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
 def _iter_session_result_rows(session: Path) -> list[tuple[Path, dict[str, str]]]:
     branch_root = session / "branches"
     if not branch_root.exists():
@@ -282,6 +373,7 @@ def _candidate_from_row(
 
     report_path = _existing_optional_path(session, row.get("report_path"))
     handoff_path = _existing_optional_path(session, row.get("handoff_path"))
+    metric_input_path = _infer_metric_input_path(result_path)
     return StrategyArtifactCandidate(
         session=session,
         branch=branch,
@@ -289,6 +381,7 @@ def _candidate_from_row(
         edge_result_path=result_path,
         edge_report_path=report_path,
         edge_handoff_path=handoff_path,
+        edge_metric_input_path=metric_input_path if metric_input_path.is_file() else None,
         source_session_id=_clean(row.get("exp_id")) or session.name,
         ticker=_clean(row.get("ticker")) or session.parent.name.upper(),
         branch_id=_clean(row.get("branch_id")) or branch.name,
@@ -312,6 +405,228 @@ def _with_rank(
     selection_rank: int,
 ) -> StrategyArtifactCandidate:
     return replace(candidate, selection_rank=selection_rank)
+
+
+def _artifact_skip_result(
+    skip_reason: str,
+    *,
+    selection: StrategySelectionResult | None = None,
+) -> dict[str, Any]:
+    return {
+        "artifactExported": False,
+        "artifactUploadSkipped": True,
+        "skipReason": skip_reason,
+        "selectedBranchId": selection.selected_branch_id if selection else None,
+        "selectedRoundId": selection.selected_round_id if selection else None,
+    }
+
+
+def _artifact_output_dir(
+    candidate: StrategyArtifactCandidate,
+    *,
+    output_dir: Path | None,
+) -> Path:
+    if output_dir is not None:
+        destination = resolve_workspace_arg_path(output_dir).resolve()
+    else:
+        destination = (
+            candidate.session
+            / DEFAULT_STRATEGY_ARTIFACTS_DIRNAME
+            / f"{candidate.branch_id}-{candidate.round_id}"
+        )
+    destination.mkdir(parents=True, exist_ok=True)
+    return destination
+
+
+def _ensure_metric_input_for_artifact(
+    candidate: StrategyArtifactCandidate,
+    *,
+    destination: Path,
+    python_bin: str,
+    runner,
+) -> StrategyArtifactCandidate | None:
+    if (
+        candidate.edge_metric_input_path is not None
+        and candidate.edge_metric_input_path.is_file()
+    ):
+        return candidate
+
+    result_path = destination / "edge-result.json"
+    report_path = destination / "edge-validation.md"
+    metric_input_path = destination / "metric-input.csv"
+    result = _run_edge_metric_input_export(
+        python_bin=python_bin,
+        candidate=candidate,
+        result_path=result_path,
+        report_path=report_path,
+        metric_input_path=metric_input_path,
+        runner=runner,
+    )
+    if _clean(result.get("verdict")).upper() != "PASS" or not metric_input_path.is_file():
+        return None
+    return replace(
+        candidate,
+        edge_result_path=result_path,
+        edge_report_path=report_path if report_path.is_file() else None,
+        edge_result=result,
+        edge_metric_input_path=metric_input_path,
+    )
+
+
+def _run_edge_metric_input_export(
+    *,
+    python_bin: str,
+    candidate: StrategyArtifactCandidate,
+    result_path: Path,
+    report_path: Path,
+    metric_input_path: Path,
+    runner,
+) -> dict[str, Any]:
+    command = [
+        python_bin,
+        "-m",
+        "abel_edge.cli",
+        "evaluate",
+        "--workdir",
+        str(candidate.branch),
+        "--output-json",
+        str(result_path),
+        "--output-md",
+        str(report_path),
+        "--output-csv",
+        str(metric_input_path),
+    ]
+    start = _edge_result_requested_start(candidate.edge_result)
+    if start:
+        command.extend(["--start", start])
+    context_path = _edge_result_context_path(candidate.edge_result)
+    if context_path is not None:
+        command.extend(["--context-json", str(context_path)])
+
+    completed = runner(
+        command,
+        cwd=candidate.session,
+        capture_output=True,
+        text=True,
+        env=_runtime_env(candidate.branch),
+    )
+    if not result_path.exists():
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(f"Abel-edge evaluate did not export metric input: {detail}")
+    return _load_json_object(result_path)
+
+
+def _run_edge_trade_log_export(
+    *,
+    python_bin: str,
+    session: Path,
+    metric_input_path: Path,
+    trade_log_path: Path,
+    runner,
+) -> dict[str, Any]:
+    script = (
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "from abel_edge.research.artifact_export import "
+        "write_backtest_trade_log_from_metric_input\n"
+        "result = write_backtest_trade_log_from_metric_input("
+        "Path(sys.argv[1]), Path(sys.argv[2]))\n"
+        "print(json.dumps(result, sort_keys=True))\n"
+    )
+    completed = runner(
+        [python_bin, "-c", script, str(metric_input_path), str(trade_log_path)],
+        cwd=session,
+        capture_output=True,
+        text=True,
+        env=_runtime_env(session),
+    )
+    if completed.returncode != 0 or not trade_log_path.is_file():
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(f"Abel-edge trade log export failed: {detail}")
+    try:
+        payload = json.loads(completed.stdout.strip() or "{}")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Abel-edge trade log export returned invalid JSON: {exc}") from exc
+    return payload if isinstance(payload, dict) else {}
+
+
+def _run_edge_artifact_export(
+    *,
+    python_bin: str,
+    session: Path,
+    candidate: StrategyArtifactCandidate,
+    manifest_path: Path,
+    trade_log_path: Path,
+    artifact_path: Path,
+    runner,
+) -> dict[str, Any]:
+    command = [
+        python_bin,
+        "-m",
+        "abel_edge.cli",
+        "export-artifact",
+        "--workdir",
+        str(candidate.branch),
+        "--manifest-json",
+        str(manifest_path),
+        "--edge-result",
+        str(candidate.edge_result_path),
+        "--trade-log",
+        str(trade_log_path),
+        "--output-zip",
+        str(artifact_path),
+    ]
+    if candidate.edge_report_path is not None:
+        command.extend(["--edge-report", str(candidate.edge_report_path)])
+    completed = runner(
+        command,
+        cwd=session,
+        capture_output=True,
+        text=True,
+        env=_runtime_env(candidate.branch),
+    )
+    if completed.returncode != 0 or not artifact_path.is_file():
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(f"Abel-edge artifact export failed: {detail}")
+    try:
+        payload = json.loads(completed.stdout.strip() or "{}")
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Abel-edge artifact export returned invalid JSON: {exc}") from exc
+    return payload if isinstance(payload, dict) else {}
+
+
+def _runtime_env(path: Path) -> dict[str, str] | None:
+    workspace_root = find_workspace_root(path)
+    return build_workspace_runtime_env(workspace_root) if workspace_root is not None else None
+
+
+def _infer_metric_input_path(result_path: Path) -> Path:
+    name = result_path.name
+    if name.endswith("-edge-result.json"):
+        return result_path.with_name(
+            name.removesuffix("-edge-result.json") + "-metric-input.csv"
+        )
+    return result_path.with_name(result_path.stem + "-metric-input.csv")
+
+
+def _edge_result_requested_start(edge_result: dict[str, Any]) -> str:
+    requested = edge_result.get("requested_window")
+    if isinstance(requested, dict):
+        value = _clean(requested.get("start"))
+        if value:
+            return value
+    effective = edge_result.get("effective_window")
+    if isinstance(effective, dict):
+        return _clean(effective.get("start"))
+    return ""
+
+
+def _edge_result_context_path(edge_result: dict[str, Any]) -> Path | None:
+    value = _clean(edge_result.get("context_path"))
+    if not value:
+        return None
+    path = Path(value)
+    return path if path.is_file() else None
 
 
 def _required_artifact_source_files(

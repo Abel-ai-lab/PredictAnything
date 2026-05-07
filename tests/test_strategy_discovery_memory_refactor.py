@@ -164,6 +164,18 @@ def _write_strategy_artifact_inputs(
     return trade_log_path
 
 
+def _write_metric_input(branch: Path, *, round_id: str) -> Path:
+    metric_input_path = branch / "outputs" / f"{round_id}-metric-input.csv"
+    metric_input_path.parent.mkdir(parents=True, exist_ok=True)
+    metric_input_path.write_text(
+        "date,asset_return,pnl,position,gross_pnl,turnover,execution_cost,next_position\n"
+        "2020-01-01,0,0,0,0,0,0,0\n"
+        "2020-01-02,0.01,0.01,1,0.01,1,0,1\n",
+        encoding="utf-8",
+    )
+    return metric_input_path
+
+
 def test_render_writes_agent_context_with_journal_view(tmp_path: Path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
     branch = ni.init_branch_dir(session, "graph-v1")
@@ -317,6 +329,10 @@ def test_run_branch_round_updates_ledger_and_agent_context(
             result_path.write_text(json.dumps(payload), encoding="utf-8")
             report_path.write_text("# validation\n", encoding="utf-8")
             handoff_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+            if "--output-csv" in command:
+                metric_input_path = Path(command[command.index("--output-csv") + 1])
+                round_id = metric_input_path.name.removesuffix("-metric-input.csv")
+                _write_metric_input(metric_input_path.parent.parent, round_id=round_id)
             return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {command}")
 
@@ -932,6 +948,195 @@ def test_build_strategy_artifact_manifest_requires_trade_log(
             selection.selected,
             trade_log_path=branch / "outputs" / "missing-trade-log.csv",
         )
+
+
+def test_export_selected_strategy_artifact_writes_local_bundle(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_artifact_inputs(branch)
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+    output_dir = tmp_path / "exported-artifact"
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 8,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert result["artifactExported"] is True
+    assert result["artifactUploadSkipped"] is False
+    assert result["selectedBranchId"] == "momentum_lead"
+    assert result["selectedRoundId"] == "round-006"
+    assert result["artifactSha256"] == "abc123"
+    assert Path(result["manifestPath"]).exists()
+    assert Path(result["tradeLogPath"]).exists()
+    assert Path(result["artifactPath"]).exists()
+    manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
+    assert [item["path"] for item in manifest["files"]] == [
+        "strategy/strategy.py",
+        "edge/edge-result.json",
+        "edge/trade-log.csv",
+        "edge/edge-validation.md",
+        "runtime/strategy.yaml",
+        "runtime/dependencies.json",
+        "runtime/data_manifest.json",
+    ]
+
+
+def test_export_selected_strategy_artifact_regenerates_missing_metric_input(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_artifact_inputs(branch)
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    output_dir = tmp_path / "exported-artifact"
+    commands_seen = []
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        commands_seen.append(command)
+        if "evaluate" in command:
+            result_path = Path(command[command.index("--output-json") + 1])
+            report_path = Path(command[command.index("--output-md") + 1])
+            metric_input_path = Path(command[command.index("--output-csv") + 1])
+            payload = _candidate_result_payload()
+            payload["implementation_contract"] = "decision_context"
+            payload["metrics"]["sharpe"] = 0.967
+            payload["metrics"]["lo_adjusted"] = 1.056
+            payload["metrics"]["max_dd"] = -0.1278
+            result_path.write_text(json.dumps(payload), encoding="utf-8")
+            report_path.write_text("# validation\n", encoding="utf-8")
+            metric_input_path.write_text(
+                "date,asset_return,pnl,position,gross_pnl,turnover,execution_cost,next_position\n"
+                "2020-01-01,0,0,0,0,0,0,0\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 8,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert result["artifactExported"] is True
+    assert any("evaluate" in command for command in commands_seen)
+    assert (output_dir / "metric-input.csv").exists()
+
+
+def test_export_selected_strategy_artifact_skips_without_pass(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-001",
+        verdict="FAIL",
+        sharpe=0.1,
+        lo_adj=0.2,
+        max_dd=-0.3,
+    )
+
+    def unexpected_runner(*args, **kwargs):
+        raise AssertionError("unexpected")
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=tmp_path / "exported-artifact",
+        python_bin="python-test",
+        runner=unexpected_runner,
+    )
+
+    assert result == {
+        "artifactExported": False,
+        "artifactUploadSkipped": True,
+        "skipReason": "no_pass_strategy",
+        "selectedBranchId": None,
+        "selectedRoundId": None,
+    }
 
 
 def test_render_skill_dashboard_session_upload_result_returns_markdown_link() -> None:
