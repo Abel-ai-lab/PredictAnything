@@ -56,6 +56,56 @@ def _candidate_result_payload() -> dict:
     }
 
 
+def _write_strategy_result_row(
+    session: Path,
+    branch: Path,
+    *,
+    round_id: str,
+    verdict: str,
+    sharpe: float,
+    lo_adj: float,
+    max_dd: float,
+    decision: str = "keep",
+) -> None:
+    result_path = branch / "outputs" / f"{round_id}-edge-result.json"
+    report_path = branch / "outputs" / f"{round_id}-edge-validation.md"
+    handoff_path = branch / "outputs" / f"{round_id}-edge-handoff.json"
+    payload = _candidate_result_payload()
+    payload["verdict"] = verdict
+    payload["metrics"]["sharpe"] = sharpe
+    payload["metrics"]["lo_adjusted"] = lo_adj
+    payload["metrics"]["max_dd"] = max_dd
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(json.dumps(payload), encoding="utf-8")
+    report_path.write_text("# validation\n", encoding="utf-8")
+    handoff_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+    ni.append_tsv_row(
+        branch / "results.tsv",
+        ni.RESULTS_HEADER,
+        {
+            "exp_id": session.name,
+            "ticker": "TSLA",
+            "branch_id": branch.name,
+            "round_id": round_id,
+            "decision": decision,
+            "lo_adj": f"{lo_adj:.3f}",
+            "ic": "0.0300",
+            "omega": "1.500",
+            "sharpe": f"{sharpe:.3f}",
+            "max_dd": f"{max_dd:.4f}",
+            "pnl": "42.0",
+            "K": "1",
+            "score": "9/9",
+            "verdict": verdict,
+            "mode": "explore",
+            "description": f"{branch.name} {round_id}",
+            "result_path": str(result_path.relative_to(session)),
+            "report_path": str(report_path.relative_to(session)),
+            "handoff_path": str(handoff_path.relative_to(session)),
+        },
+    )
+
+
 def test_render_writes_agent_context_with_journal_view(tmp_path: Path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
     branch = ni.init_branch_dir(session, "graph-v1")
@@ -592,6 +642,125 @@ def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
     assert request.get_header("Api-key") == "secret-key"
     assert request.get_header("Content-type") == "application/json"
     assert timeout == 60
+
+
+def test_select_best_pass_strategy_sorts_session_pass_rounds(tmp_path: Path) -> None:
+    session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
+    branch_a = ni.init_branch_dir(session, "driver_explore")
+    branch_b = ni.init_branch_dir(session, "momentum_lead")
+    branch_c = ni.init_branch_dir(session, "regime_switch")
+    _write_strategy_result_row(
+        session,
+        branch_a,
+        round_id="round-003",
+        verdict="PASS",
+        sharpe=0.674,
+        lo_adj=0.695,
+        max_dd=-0.1440,
+    )
+    _write_strategy_result_row(
+        session,
+        branch_b,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_strategy_result_row(
+        session,
+        branch_b,
+        round_id="round-010",
+        verdict="PASS",
+        sharpe=0.945,
+        lo_adj=1.041,
+        max_dd=-0.1340,
+        decision="discard",
+    )
+    _write_strategy_result_row(
+        session,
+        branch_c,
+        round_id="round-002",
+        verdict="FAIL",
+        sharpe=0.808,
+        lo_adj=0.866,
+        max_dd=-0.1805,
+        decision="discard",
+    )
+
+    result = ni.select_best_pass_strategy(session)
+
+    assert result.skip_reason == ""
+    assert result.pass_round_count == 3
+    assert result.eligible_count == 3
+    assert result.selected_branch_id == "momentum_lead"
+    assert result.selected_round_id == "round-006"
+    assert result.selected is not None
+    assert result.selected.selection_rank == 1
+    assert result.selected.selection_metric_values == {
+        "sharpe": 0.967,
+        "lo_adjusted": 1.056,
+        "max_dd": -0.1278,
+    }
+
+
+def test_select_best_pass_strategy_returns_skip_when_no_pass(tmp_path: Path) -> None:
+    session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "regime_switch")
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-001",
+        verdict="FAIL",
+        sharpe=0.685,
+        lo_adj=0.831,
+        max_dd=-0.1654,
+        decision="discard",
+    )
+
+    result = ni.select_best_pass_strategy(session)
+
+    assert result.selected is None
+    assert result.skip_reason == "no_pass_strategy"
+    assert result.pass_round_count == 0
+    assert result.eligible_count == 0
+
+
+def test_select_best_pass_strategy_skips_unhostable_pass_rounds(tmp_path: Path) -> None:
+    session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    ni.append_tsv_row(
+        branch / "results.tsv",
+        ni.RESULTS_HEADER,
+        {
+            "exp_id": session.name,
+            "ticker": "MSFT",
+            "branch_id": branch.name,
+            "round_id": "round-001",
+            "decision": "keep",
+            "lo_adj": "1.000",
+            "ic": "0.0300",
+            "omega": "1.500",
+            "sharpe": "1.000",
+            "max_dd": "-0.1000",
+            "pnl": "42.0",
+            "K": "1",
+            "score": "9/9",
+            "verdict": "PASS",
+            "mode": "explore",
+            "description": "missing result",
+            "result_path": "branches/momentum_lead/outputs/missing-edge-result.json",
+            "report_path": "",
+            "handoff_path": "",
+        },
+    )
+
+    result = ni.select_best_pass_strategy(session)
+
+    assert result.selected is None
+    assert result.skip_reason == "no_hostable_pass_strategy"
+    assert result.pass_round_count == 1
+    assert result.eligible_count == 0
 
 
 def test_render_skill_dashboard_session_upload_result_returns_markdown_link() -> None:
