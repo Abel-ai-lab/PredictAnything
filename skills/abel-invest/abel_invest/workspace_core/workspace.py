@@ -397,7 +397,7 @@ separate directory.
 ```bash
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
-abel-invest promote-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+abel-invest promote-strategy --branch research/tsla/tsla-v1/branches/<chosen-branch> --round <round-id>
 ```
 
 ### Understand the workspace layout
