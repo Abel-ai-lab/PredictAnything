@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 from abel_invest.narrative_core.contracts.constants import EVENTS_HEADER, RESULTS_HEADER
+from abel_invest.narrative_core.evidence.exploration_path import append_exploration_path_round
 from abel_invest.narrative_core.io import _now, append_tsv_row
 from abel_invest.narrative_core.runtime.dsr_accounting import (
     append_dsr_accounting_record,
@@ -145,6 +146,21 @@ def record_workflow_blocker_round(
         },
     )
     append_dsr_accounting_record(session, dsr_accounting)
+    append_exploration_path_round(
+        session=session,
+        branch=branch,
+        round_id=round_id,
+        mode=args.mode,
+        decision="blocked",
+        description=args.description,
+        result=result,
+        result_path=result_path,
+        report_path=report_path,
+        hypothesis=effective_hypothesis,
+        change_summary=args.change_summary,
+        next_step=getattr(args, "next_step", ""),
+        changed_dimensions=getattr(args, "changed_dimension", []),
+    )
     render_session(session)
 
 

@@ -9,6 +9,7 @@ from abel_invest.narrative_core.contracts.constants import (
     BRANCH_SPEC_FILENAME,
     BRANCH_STATE_FILENAME,
     EVENTS_HEADER,
+    EXPLORATION_PATH_FILENAME,
     GRAPH_FRONTIER_FILENAME,
     READINESS_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
@@ -57,6 +58,7 @@ def handle_init_session(args: argparse.Namespace) -> int:
     print(f"Created Abel strategy discovery session at {session}")
     print(f"  ticker: {discovery.get('ticker', args.ticker.upper())}")
     print(f"  graph_frontier: {session / GRAPH_FRONTIER_FILENAME}")
+    print(f"  exploration_path: {session / EXPLORATION_PATH_FILENAME}")
     print(f"  journal: {session / RESEARCH_JOURNAL_FILENAME}")
     print(f"  events: {session / 'events.tsv'}")
     if readiness:
@@ -177,6 +179,7 @@ def handle_init_branch(args: argparse.Namespace) -> int:
     )
     print("")
     print("What matters now:")
+    print(f"  Read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing this branch's next Edge run.")
     print("  branch.yaml is where target, start, drivers, and overlap become explicit.")
     print("  The generated engine is only a starter path check; it helps you verify the branch wiring before you encode a branch-specific mechanism.")
     print("  If you fetch bars, keep `limit=...` explicit and avoid blanket `dropna()` before confirming the target column survives.")

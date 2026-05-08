@@ -840,6 +840,10 @@ def test_run_branch_round_records_network_failure_as_workflow_blocker(tmp_path, 
     assert row["evidence_label"] == "workflow_blocker"
     assert row["runtime_stage"] == "data_access"
     assert row["workflow_status"] == "not_completed"
+    path_text = (session / "exploration_path.md").read_text(encoding="utf-8")
+    assert "ledger:graph-v1:round-001" in path_text
+    assert "network failure round" in path_text
+    assert "ERROR" in path_text
 
 
 def test_starter_scaffold_round_is_diagnostic_only_not_candidate(tmp_path, monkeypatch) -> None:
@@ -1388,6 +1392,99 @@ def test_init_session_creates_research_journal(tmp_path) -> None:
     assert "- evidence_reference_count: `0`" in context_text
     assert "- has_evidence_linked_update: `false`" in context_text
     assert "- recent_excerpt: `none`" in context_text
+
+
+def test_init_session_creates_exploration_path_prompt(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-path-init", tmp_path / "research")
+
+    path = session / "exploration_path.md"
+    assert path.exists()
+    text = path.read_text(encoding="utf-8")
+    assert "# Exploration Path" in text
+    assert "Before choosing the next Edge run" in text
+    assert "strategy choice" in text
+    assert "Edge feedback" in text
+
+    agent_context = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+    assert "exploration_path.md" in agent_context
+    assert "read `exploration_path.md`" in agent_context
+
+
+def test_run_branch_round_appends_exploration_path_edge_feedback(tmp_path, monkeypatch) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-path-update", tmp_path / "research")
+    ni.write_graph_frontier_from_discovery_payload(session, _sample_discovery())
+    ni.write_readiness(session, _sample_readiness())
+    branch = ni.init_branch_dir(session, "graph-v1")
+    _write_runtime_files(branch)
+    ni.write_branch_spec(branch, _complete_candidate_spec(branch))
+
+    metric_failures = [
+        {
+            "metric": "position_ic",
+            "message": "PositionIC 0.000 < 0.02",
+            "observed": 0.0,
+            "threshold": 0.02,
+        },
+        {
+            "metric": "max_dd",
+            "message": "T15 MaxDD 28.3% > 15%",
+            "observed": 0.283,
+            "threshold": 0.15,
+        },
+    ]
+
+    def fake_subprocess_run(command, cwd=None, capture_output=None, text=None, env=None):
+        result_path = Path(command[command.index("--output-json") + 1])
+        report_path = Path(command[command.index("--output-md") + 1])
+        handoff_path = Path(command[command.index("--output-handoff") + 1])
+        result_path.write_text(
+            json.dumps(
+                _edge_result(
+                    verdict="FAIL",
+                    traced_inputs=["AAPL"],
+                    sharpe=0.72,
+                    metric_failures=metric_failures,
+                    k=2,
+                    current_round_trials=2,
+                )
+            ),
+            encoding="utf-8",
+        )
+        report_path.write_text("# validation\n", encoding="utf-8")
+        handoff_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(ni.subprocess, "run", fake_subprocess_run)
+
+    result = ni.run_branch_round(
+        Namespace(
+            branch=str(branch),
+            mode="explore",
+            description="test AAPL graph momentum timing",
+            input_note="",
+            hypothesis="AAPL driver strength leads TSLA next-day risk appetite.",
+            expected_signal="",
+            trigger="test",
+            change_summary="switch to graph-supported AAPL momentum timing",
+            changed_dimension=["drivers", "mechanism"],
+            selection_trials=2,
+            time_spent_min="1",
+            summary="",
+            next_step="try a broader graph driver if PositionIC remains weak",
+            action=[],
+            python_bin=None,
+        )
+    )
+
+    assert result == 0
+    path_text = (session / "exploration_path.md").read_text(encoding="utf-8")
+    assert "ledger:graph-v1:round-001" in path_text
+    assert "test AAPL graph momentum timing" in path_text
+    assert "AAPL driver strength leads TSLA next-day risk appetite." in path_text
+    assert "Edge feedback" in path_text
+    assert "FAIL" in path_text
+    assert "PositionIC 0.000 < 0.02" in path_text
+    assert "try a broader graph driver if PositionIC remains weak" in path_text
 
 
 def test_agent_context_reads_evidence_linked_research_journal(tmp_path) -> None:

@@ -256,6 +256,7 @@ abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-br
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
 edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
 edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
+read research/tsla/tsla-v1/exploration_path.md before choosing the next Edge run
 edit research/tsla/tsla-v1/research_journal.md
 edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
 abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
@@ -277,6 +278,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
   parameters
 - every recorded round requires an agent-written `research_journal.md` entry
   with the round ledger ref before the next recorded round
+- every next Edge run should be chosen after reading `exploration_path.md` and
+  the latest Edge result; `run-branch` appends the new Edge feedback there
 
 ## Re-entry
 
@@ -291,8 +294,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 ## What This Workspace Makes Explicit
 
 - session owns `graph_frontier.json` and `readiness.json`
-- session owns `evidence_ledger.json`, `frontier.md`, `agent_context.md`, and
-  `research_journal.md` after rendering
+- session owns `evidence_ledger.json`, `frontier.md`, `agent_context.md`,
+  `exploration_path.md`, and `research_journal.md` after rendering
 - branch owns `branch.yaml`
 - edge owns the market-data cache
 - `prepare-branch` should run before a recorded round
@@ -358,6 +361,7 @@ abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-br
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
 edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
 edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
+read research/tsla/tsla-v1/exploration_path.md before choosing the next Edge run
 edit research/tsla/tsla-v1/research_journal.md
 edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
 abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
@@ -383,7 +387,8 @@ is the runtime start when it is set. Treat this workspace `.venv` as the
 canonical runtime for daily work. Treat branch count as a file-organization
 fact, not as proof of graph breadth. Use `research_journal.md` to record your
 own evidence-linked insight and continue/pivot reasoning after each recorded
-round. Check journal coverage before starting another round. Check input
+round. Read `exploration_path.md` and the latest Edge result before choosing
+the next Edge run; after Edge feedback, keep the path updated. Check journal coverage before starting another round. Check input
 realization before treating a declared graph-supported branch as graph-supported
 evidence. Do not create the online session view automatically; after a
 candidate PASS, ask the user first. If the user agrees or explicitly asks to

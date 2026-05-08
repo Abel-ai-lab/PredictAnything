@@ -8,6 +8,7 @@ from abel_invest.narrative_core.contracts.branch_spec import has_explicit_hypoth
 from abel_invest.narrative_core.contracts.constants import (
     AGENT_CONTEXT_FILENAME,
     EVIDENCE_LEDGER_FILENAME,
+    EXPLORATION_PATH_FILENAME,
     FRONTIER_JSON_FILENAME,
     FRONTIER_MARKDOWN_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
@@ -17,6 +18,7 @@ from abel_invest.narrative_core.evidence.evidence import load_json_object, write
 from abel_invest.narrative_core.evidence.frontier import build_frontier, render_frontier_markdown
 from abel_invest.narrative_core.io import write_json_file
 from abel_invest.narrative_core.evidence.journal import build_research_journal_status, ensure_research_journal
+from abel_invest.narrative_core.evidence.exploration_path import ensure_exploration_path
 from abel_invest.narrative_core.readiness import (
     build_readiness_warning,
     format_data_readiness_summary,
@@ -40,6 +42,7 @@ from abel_invest.narrative_core.state import (
 
 def render_session(session: Path) -> None:
     ensure_research_journal(session)
+    ensure_exploration_path(session)
     discovery = load_discovery(session)
     readiness = load_readiness(session)
     branches = load_branches(session)
@@ -149,6 +152,7 @@ def check_session(session: Path, *, strict: bool) -> int:
         FRONTIER_JSON_FILENAME,
         FRONTIER_MARKDOWN_FILENAME,
         AGENT_CONTEXT_FILENAME,
+        EXPLORATION_PATH_FILENAME,
     ):
         if not (session / required).exists():
             failures.append(f"Missing {required}")

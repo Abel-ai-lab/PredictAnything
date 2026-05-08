@@ -45,6 +45,7 @@ from abel_invest.narrative_core.contracts.constants import (
     DATA_MANIFEST_FILENAME,
     DEPENDENCIES_FILENAME,
     EVENTS_HEADER,
+    EXPLORATION_PATH_FILENAME,
     EXECUTION_CONSTRAINTS_FILENAME,
     PROBE_SAMPLES_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
@@ -58,6 +59,7 @@ from abel_invest.narrative_core.runtime.context import (
     build_branch_context,
     classify_result_frame,
 )
+from abel_invest.narrative_core.evidence.exploration_path import append_exploration_path_round
 from abel_invest.narrative_core.io import (
     SessionLock,
     _now,
@@ -632,6 +634,21 @@ def run_branch_round(args: argparse.Namespace) -> int:
                 "artifact_path": str(result_path.relative_to(session)),
             },
         )
+        append_exploration_path_round(
+            session=session,
+            branch=branch,
+            round_id=round_id,
+            mode=args.mode,
+            decision=decision,
+            description=args.description,
+            result=result,
+            result_path=result_path,
+            report_path=report_path,
+            hypothesis=effective_hypothesis,
+            change_summary=args.change_summary,
+            next_step=args.next_step,
+            changed_dimensions=getattr(args, "changed_dimension", []),
+        )
         render_session(session)
     for line in graph_priority_warning_lines(session):
         print(f"Exploration protocol: {line}")
@@ -641,6 +658,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
     print(f"Edge result: {result_path.relative_to(session)}")
     print(f"Edge validation: {report_path.relative_to(session)}")
     print(f"Edge handoff: {handoff_path.relative_to(session)}")
+    print(f"Exploration path: {session / EXPLORATION_PATH_FILENAME}")
     semantic = result.get("semantic") or {}
     if isinstance(semantic, dict) and semantic:
         render_section(
