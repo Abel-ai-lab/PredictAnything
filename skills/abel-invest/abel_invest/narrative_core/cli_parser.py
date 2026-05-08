@@ -343,6 +343,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Interpreter used to run Abel-edge export helpers (defaults to workspace python)",
     )
 
+    promote_strategy = sub.add_parser(
+        "promote-strategy",
+        help="Promote an explicit branch/round into a paper-ready artifact",
+    )
+    promote_strategy.add_argument("--branch", required=True)
+    promote_strategy.add_argument(
+        "--round",
+        default=None,
+        help="Promotion source round. Required when the branch has multiple PASS rounds.",
+    )
+    promote_strategy.add_argument(
+        "--output-dir",
+        default=None,
+        help="Destination directory for manifest.json, trade-log.csv, and artifact.zip",
+    )
+    promote_strategy.add_argument(
+        "--python-bin",
+        default=None,
+        help="Interpreter used to run Abel-edge export helpers (defaults to workspace python)",
+    )
+
     debug_branch = sub.add_parser(
         "debug-branch",
         help="Run edge debug-evaluate without recording a narrative round",

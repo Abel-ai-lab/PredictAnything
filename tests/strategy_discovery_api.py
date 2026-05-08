@@ -46,6 +46,8 @@ from abel_invest.narrative_core.dashboard import (
 from abel_invest.narrative_core.strategy_artifacts import (
     build_strategy_artifact_manifest,
     export_selected_strategy_artifact,
+    promote_branch_strategy,
+    select_branch_promotion_candidate,
     select_best_pass_strategy,
 )
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts

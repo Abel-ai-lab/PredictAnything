@@ -31,7 +31,10 @@ from abel_invest.narrative_core.rendering.session_rendering import (
     render_session,
 )
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
-from abel_invest.narrative_core.strategy_artifacts import export_strategy_artifact_command
+from abel_invest.narrative_core.strategy_artifacts import (
+    export_strategy_artifact_command,
+    promote_strategy_command,
+)
 
 
 def main() -> int:
@@ -66,6 +69,8 @@ def main() -> int:
         return upload_skill_dashboard_session(args)
     if args.command == "export-strategy-artifact":
         return export_strategy_artifact_command(args)
+    if args.command == "promote-strategy":
+        return promote_strategy_command(args)
     if args.command == "debug-branch":
         return debug_branch_run(args)
     if args.command == "render":
