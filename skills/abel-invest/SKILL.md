@@ -96,9 +96,15 @@ Always start by resolving workspace state before strategy work.
 16. Do not create an online session view automatically. If a candidate round
     passes, ask the user whether to create an online visualization of this
     session. Do not print a command for the user to run. If the user agrees,
-    or if the user explicitly asks to visualize the session, run
-    `abel-invest visualize-session --session <session>` yourself, then share
-    the returned Markdown link with the user.
+    or if the user explicitly asks to visualize a paper-ready session, run
+    `abel-invest visualize-session --session <session> --with-strategy-artifact`
+    yourself, then share the returned Markdown link. Use narrative-only
+    `visualize-session` when the user asks for a session view without strategy
+    artifact upload.
+    If that command reports `needs_agent_refactor`, read the emitted
+    `refactor-request.json`, edit only the promoted copy named there, write
+    `refactor-report.json`, and rerun the same command. Do not start a separate
+    agent process or ask the user to trigger a second publish attempt.
 17. The default Abel router base URL is `https://api.abel.ai/router/`.
     `abel-auth` owns API key setup. Do not ask the user or agent to provide a
     router URL unless they are intentionally testing another router.

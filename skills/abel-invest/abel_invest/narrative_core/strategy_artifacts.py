@@ -487,25 +487,14 @@ def _export_strategy_artifact_candidate(
         runner=runner,
     )
 
-    try:
-        promotion = prepare_promotion(
-            candidate,
-            destination=destination,
-            strategy_entrypoint=STRATEGY_ARTIFACT_ENTRYPOINT,
-            is_denylisted_source=_is_denylisted_strategy_source,
-            sha256_file=_sha256_file,
-        )
-    except PromotionNeedsAgentRefactor as exc:
-        result = _artifact_skip_result(
-            PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
-            selection=selection,
-        )
-        result["promotionMode"] = PROMOTION_MODE_NEEDS_AGENT_REFACTOR
-        result["promotionReport"] = {
-            "mode": PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
-            "reason": str(exc),
-        }
-        return result
+    promotion_or_result = _prepare_promotion_for_export(
+        candidate,
+        destination=destination,
+        selection=selection,
+    )
+    if isinstance(promotion_or_result, dict):
+        return promotion_or_result
+    promotion = promotion_or_result
     manifest = build_strategy_artifact_manifest(
         candidate,
         trade_log_path=trade_log_path,
@@ -543,6 +532,40 @@ def _export_strategy_artifact_candidate(
         "promotionMode": promotion.mode,
         "promotionReport": promotion.report,
     }
+
+
+def _prepare_promotion_for_export(
+    candidate: StrategyArtifactCandidate,
+    *,
+    destination: Path,
+    selection: StrategySelectionResult,
+) -> PromotionResult | dict[str, Any]:
+    try:
+        return prepare_promotion(
+            candidate,
+            destination=destination,
+            strategy_entrypoint=STRATEGY_ARTIFACT_ENTRYPOINT,
+            is_denylisted_source=_is_denylisted_strategy_source,
+            sha256_file=_sha256_file,
+        )
+    except PromotionNeedsAgentRefactor as exc:
+        request_path = _promotion_refactor_request_path(destination)
+        result = _artifact_skip_result(
+            PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
+            selection=selection,
+        )
+        result["promotionMode"] = PROMOTION_MODE_NEEDS_AGENT_REFACTOR
+        result["promotionReport"] = {
+            "mode": PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
+            "reason": str(exc),
+        }
+        if request_path.is_file():
+            result["promotionReport"]["requestPath"] = str(request_path)
+        return result
+
+
+def _promotion_refactor_request_path(destination: Path) -> Path:
+    return destination / "promoted" / "refactor-request.json"
 
 
 def export_strategy_artifact_command(args) -> int:

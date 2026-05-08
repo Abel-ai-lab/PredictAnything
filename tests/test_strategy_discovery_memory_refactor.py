@@ -1691,9 +1691,55 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
             )
         raise AssertionError(f"unexpected command: {command}")
 
+    output_dir = tmp_path / "exported-artifact"
+    first_result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert first_result["artifactExported"] is False
+    assert first_result["skipReason"] == "needs_agent_refactor"
+    request_path = Path(first_result["promotionReport"]["requestPath"])
+    assert request_path.exists()
+
+    promoted_dir = request_path.parent
+    promoted_engine = promoted_dir / "engine.py"
+    promoted_engine.write_text(
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        model_path = ctx.state_dir / \"model/latest.joblib\"\n"
+        "        scaler_path = ctx.state_dir / \"model/feature_scaler.json\"\n"
+        "        return ctx.decisions(1)\n",
+        encoding="utf-8",
+    )
+    (promoted_dir / "refactor-report.json").write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.agent-refactor-report/v1",
+                "kind": "agent_assisted",
+                "summary": "Agent moved model paths onto ctx.state_dir.",
+                "scope": "state_path_normalization",
+                "replacements": [
+                    {
+                        "path": "model/latest.joblib",
+                        "replacement": "ctx.state_dir / \"model/latest.joblib\"",
+                    },
+                    {
+                        "path": "model/feature_scaler.json",
+                        "replacement": "ctx.state_dir / \"model/feature_scaler.json\"",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
     result = ni.export_selected_strategy_artifact(
         session,
-        output_dir=tmp_path / "exported-artifact",
+        output_dir=output_dir,
         python_bin="python-test",
         runner=fake_runner,
     )
@@ -1714,7 +1760,7 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
     assert "edge/refactor-report.json" in file_paths
     assert "runtime/initial-state/model/latest.joblib" in file_paths
     assert "runtime/initial-state/model/feature_scaler.json" in file_paths
-    promoted_engine = tmp_path / "exported-artifact" / "promoted" / "engine.py"
+    promoted_engine = output_dir / "promoted" / "engine.py"
     promoted_source = promoted_engine.read_text(encoding="utf-8")
     assert 'ctx.state_dir / "model/latest.joblib"' in promoted_source
     assert 'ctx.state_dir / "model/feature_scaler.json"' in promoted_source
@@ -1967,6 +2013,172 @@ def test_upload_strategy_artifact_for_session_returns_upload_summary(
     assert result["artifactUploadId"] == "upload_1"
     assert result["admissionStatus"] == "queued"
     assert result["selectedBranchId"] == "momentum_lead"
+
+
+def test_visualize_session_uploads_narrative_only_by_default(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    artifact_calls = []
+
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "resolve_skill_dashboard_base_url",
+        lambda: "https://router.example",
+    )
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "post_skill_dashboard_session",
+        lambda **kwargs: {
+            "data": {"sessionId": "sess_1", "openUrl": "https://app.example/sess_1"}
+        },
+    )
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "upload_strategy_artifact_for_session",
+        lambda **kwargs: artifact_calls.append(kwargs),
+    )
+
+    ni.upload_skill_dashboard_session(
+        Namespace(
+            session=str(session),
+            api_key="secret-key",
+            output_json=None,
+            dry_run=False,
+            with_strategy_artifact=False,
+            artifact_output_dir=None,
+            python_bin=None,
+        )
+    )
+
+    assert artifact_calls == []
+    assert "Online session view" in capsys.readouterr().out
+
+
+def test_visualize_session_uploads_strategy_artifact_with_flag(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    calls = []
+
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "resolve_skill_dashboard_base_url",
+        lambda: "https://router.example",
+    )
+
+    def fake_export(*args, **kwargs):
+        calls.append("export")
+        return {
+            "artifactExported": True,
+            "artifactUploadSkipped": False,
+            "manifestPath": str(tmp_path / "manifest.json"),
+            "artifactPath": str(tmp_path / "artifact.zip"),
+            "selectedBranchId": "momentum_lead",
+            "selectedRoundId": "round-006",
+        }
+
+    def fake_post_session(**kwargs):
+        calls.append("post_session")
+        return {
+            "data": {"sessionId": "sess_1", "openUrl": "https://app.example/sess_1"}
+        }
+
+    def fake_prepared_upload(**kwargs):
+        calls.append("upload_artifact")
+        assert kwargs["export_result"]["artifactExported"] is True
+        return {"artifactUploadId": "upload_1", "admissionStatus": "queued"}
+
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "export_selected_strategy_artifact",
+        fake_export,
+    )
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "post_skill_dashboard_session",
+        fake_post_session,
+    )
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "upload_prepared_strategy_artifact_for_session",
+        fake_prepared_upload,
+    )
+
+    ni.upload_skill_dashboard_session(
+        Namespace(
+            session=str(session),
+            api_key="secret-key",
+            output_json=None,
+            dry_run=False,
+            with_strategy_artifact=True,
+            artifact_output_dir=None,
+            python_bin=None,
+        )
+    )
+
+    assert calls == ["export", "post_session", "upload_artifact"]
+    output = capsys.readouterr().out
+    assert "Strategy artifact uploaded: upload_1" in output
+    assert "admission=queued" in output
+
+
+def test_visualize_session_aborts_before_upload_when_agent_refactor_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    calls = []
+
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "resolve_skill_dashboard_base_url",
+        lambda: "https://router.example",
+    )
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "export_selected_strategy_artifact",
+        lambda *args, **kwargs: {
+            "artifactExported": False,
+            "artifactUploadSkipped": True,
+            "skipReason": "needs_agent_refactor",
+            "promotionMode": "needs_agent_refactor",
+            "promotionReport": {
+                "mode": "needs_agent_refactor",
+                "reason": "dynamic state path requires refactor",
+                "requestPath": str(tmp_path / "refactor-request.json"),
+            },
+        },
+    )
+
+    def unexpected_post_session(**kwargs):
+        calls.append("post_session")
+        raise AssertionError("narrative upload should not start")
+
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "post_skill_dashboard_session",
+        unexpected_post_session,
+    )
+
+    with pytest.raises(RuntimeError, match="skill-level agent refactor"):
+        ni.upload_skill_dashboard_session(
+            Namespace(
+                session=str(session),
+                api_key="secret-key",
+                output_json=None,
+                dry_run=False,
+                with_strategy_artifact=True,
+                artifact_output_dir=None,
+                python_bin=None,
+            )
+        )
+
+    assert calls == []
 
 
 def test_render_strategy_artifact_upload_result_lines() -> None:

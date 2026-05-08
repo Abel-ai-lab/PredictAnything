@@ -21,6 +21,7 @@ PROMOTION_ADAPTER_STATE_PATH = "state_path_adapter"
 PROMOTION_GATE_FILENAME = "promotion-gate.json"
 PROMOTION_PATCH_FILENAME = "promotion.patch"
 PROMOTION_REFACTOR_REPORT_FILENAME = "refactor-report.json"
+PROMOTION_REFACTOR_REQUEST_FILENAME = "refactor-request.json"
 
 
 @dataclass(frozen=True)
@@ -82,28 +83,41 @@ def prepare_promotion(
 
     if state_entries:
         promoted_source = promoted_dir / "engine.py"
+        existing_refactor_report = promoted_dir / PROMOTION_REFACTOR_REPORT_FILENAME
         original_text = candidate.strategy_source_path.read_text(encoding="utf-8")
-        promoted_text = original_text
-        for entry in state_entries:
-            if entry.role != "initial_state":
-                continue
-            promoted_text, changed = _adapt_state_path_literal(promoted_text, entry.path)
-            if changed:
-                adapter_replacements.append(
-                    {
-                        "path": entry.path,
-                        "replacement": f'ctx.state_dir / "{entry.path}"',
-                    }
+        agent_refactor_ready = (
+            promoted_source.is_file() and existing_refactor_report.is_file()
+        )
+        if agent_refactor_ready:
+            promoted_text = promoted_source.read_text(encoding="utf-8")
+            refactor_report = _load_agent_refactor_report(existing_refactor_report)
+            refactor_replacements = _report_replacements(refactor_report)
+            if not refactor_replacements:
+                raise PromotionNeedsAgentRefactor(
+                    "agent refactor report must include at least one replacement"
                 )
-        for entry in state_entries:
-            if entry.role != "initial_state":
-                continue
-            if not _source_uses_state_path(promoted_text, entry.path):
-                promoted_text, replacements = _agent_refactor_state_path(
+            refactor_summary = _clean(refactor_report.get("summary")) or (
+                "Agent refactored stateful paths to ctx.state_dir."
+            )
+            mode = PROMOTION_MODE_AGENT_REFACTOR
+            strategy_source_path = promoted_source
+            refactor_report_path = existing_refactor_report
+        else:
+            promoted_text = original_text
+            for entry in state_entries:
+                if entry.role != "initial_state":
+                    continue
+                promoted_text, changed = _adapt_state_path_literal(
                     promoted_text,
                     entry.path,
                 )
-                refactor_replacements.extend(replacements)
+                if changed:
+                    adapter_replacements.append(
+                        {
+                            "path": entry.path,
+                            "replacement": f'ctx.state_dir / "{entry.path}"',
+                        }
+                    )
 
         missing_state_paths = [
             entry.path
@@ -112,20 +126,21 @@ def prepare_promotion(
             and not _source_uses_state_path(promoted_text, entry.path)
         ]
         if missing_state_paths:
+            promoted_source.write_text(promoted_text, encoding="utf-8")
+            request_path = _write_agent_refactor_request(
+                promoted_dir,
+                source_path=promoted_source,
+                missing_state_paths=missing_state_paths,
+            )
             raise PromotionNeedsAgentRefactor(
                 "initial_state path is not bound to runtime state path: "
-                f"{', '.join(missing_state_paths)}"
+                f"{', '.join(missing_state_paths)}; "
+                f"agent refactor request written to {request_path}"
             )
 
         replacements = adapter_replacements + refactor_replacements
-        if refactor_replacements:
-            mode = PROMOTION_MODE_AGENT_REFACTOR
-            refactor_summary = (
-                "Refactored dynamic state path construction to ctx.state_dir."
-            )
-            promoted_source.write_text(promoted_text, encoding="utf-8")
-            strategy_source_path = promoted_source
-            patch_path = promoted_dir / "promotion.patch"
+        if mode == PROMOTION_MODE_AGENT_REFACTOR:
+            patch_path = promoted_dir / PROMOTION_PATCH_FILENAME
             patch_path.write_text(
                 _simple_patch_summary(
                     candidate.strategy_source_path,
@@ -134,26 +149,11 @@ def prepare_promotion(
                 ),
                 encoding="utf-8",
             )
-            refactor_report_path = promoted_dir / PROMOTION_REFACTOR_REPORT_FILENAME
-            refactor_report_path.write_text(
-                json.dumps(
-                    {
-                        "schema": "abel-invest.agent-refactor-report/v1",
-                        "kind": "agent_assisted",
-                        "summary": refactor_summary,
-                        "scope": "state_path_normalization",
-                        "replacements": replacements,
-                    },
-                    indent=2,
-                    sort_keys=True,
-                ),
-                encoding="utf-8",
-            )
         elif adapter_replacements:
             mode = PROMOTION_MODE_AUTO_ADAPTER
             promoted_source.write_text(promoted_text, encoding="utf-8")
             strategy_source_path = promoted_source
-            patch_path = promoted_dir / "promotion.patch"
+            patch_path = promoted_dir / PROMOTION_PATCH_FILENAME
             patch_path.write_text(
                 _simple_patch_summary(candidate.strategy_source_path, replacements),
                 encoding="utf-8",
@@ -368,57 +368,6 @@ def _source_uses_state_path(source: str, relative_path: str) -> bool:
     return any(re.search(pattern, source, flags=re.DOTALL) for pattern in checks)
 
 
-def _agent_refactor_state_path(
-    source: str,
-    relative_path: str,
-) -> tuple[str, list[dict[str, str]]]:
-    path = Path(relative_path)
-    if len(path.parts) < 2:
-        return source, []
-    parent = path.parent.as_posix()
-    filename = path.name
-    escaped_parent = re.escape(parent)
-    escaped_filename = re.escape(filename)
-    replacements: list[dict[str, str]] = []
-
-    def replace_path_division(match: re.Match[str]) -> str:
-        quote = match.group("quote")
-        replacements.append(
-            {
-                "path": relative_path,
-                "replacement": f'ctx.state_dir / "{relative_path}"',
-                "reason": "dynamic Path division normalized by agent refactor",
-            }
-        )
-        return f'(ctx.state_dir / {quote}{relative_path}{quote})'
-
-    source = re.sub(
-        rf"Path\(\s*(?P<quote>['\"]){escaped_parent}(?P=quote)\s*\)"
-        rf"\s*/\s*['\"]{escaped_filename}['\"]",
-        replace_path_division,
-        source,
-    )
-
-    def replace_joinpath(match: re.Match[str]) -> str:
-        quote = match.group("quote")
-        replacements.append(
-            {
-                "path": relative_path,
-                "replacement": f'ctx.state_dir / "{relative_path}"',
-                "reason": "Path.joinpath normalized by agent refactor",
-            }
-        )
-        return f'(ctx.state_dir / {quote}{relative_path}{quote})'
-
-    source = re.sub(
-        rf"Path\(\s*(?P<quote>['\"]){escaped_parent}(?P=quote)\s*\)"
-        rf"\.joinpath\(\s*['\"]{escaped_filename}['\"]\s*\)",
-        replace_joinpath,
-        source,
-    )
-    return source, replacements
-
-
 def _simple_patch_summary(
     source_path: Path,
     replacements: list[dict[str, str]],
@@ -435,6 +384,69 @@ def _simple_patch_summary(
         suffix = f" ({reason})" if reason else ""
         lines.append(f"- {replacement['path']} -> {replacement['replacement']}{suffix}")
     return "\n".join(lines) + "\n"
+
+
+def _write_agent_refactor_request(
+    promoted_dir: Path,
+    *,
+    source_path: Path,
+    missing_state_paths: list[str],
+) -> Path:
+    request_path = promoted_dir / PROMOTION_REFACTOR_REQUEST_FILENAME
+    request_path.write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.agent-refactor-request/v1",
+                "kind": "agent_assisted",
+                "sourcePath": str(source_path),
+                "scope": "state_path_normalization",
+                "missingStatePaths": missing_state_paths,
+                "instructions": (
+                    "Refactor only the promoted copy so each missing state path "
+                    "is read or written through ctx.state_dir. Then write "
+                    f"{PROMOTION_REFACTOR_REPORT_FILENAME} beside this request. "
+                    "The report replacements should describe the actual state "
+                    "path normalizations made by the agent."
+                ),
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return request_path
+
+
+def _load_agent_refactor_report(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"{PROMOTION_REFACTOR_REPORT_FILENAME} must be an object")
+    if payload.get("schema") != "abel-invest.agent-refactor-report/v1":
+        raise RuntimeError(
+            f"{PROMOTION_REFACTOR_REPORT_FILENAME} has unsupported schema"
+        )
+    if payload.get("kind") != "agent_assisted":
+        raise RuntimeError(f"{PROMOTION_REFACTOR_REPORT_FILENAME} kind must be agent_assisted")
+    return payload
+
+
+def _report_replacements(report: dict[str, Any]) -> list[dict[str, str]]:
+    raw_replacements = report.get("replacements")
+    if not isinstance(raw_replacements, list):
+        return []
+    replacements: list[dict[str, str]] = []
+    for item in raw_replacements:
+        if not isinstance(item, dict):
+            continue
+        path = _clean(item.get("path"))
+        replacement = _clean(item.get("replacement"))
+        if path and replacement:
+            payload = {"path": path, "replacement": replacement}
+            reason = _clean(item.get("reason"))
+            if reason:
+                payload["reason"] = reason
+            replacements.append(payload)
+    return replacements
 
 
 def _clean(value: Any) -> str:

@@ -342,18 +342,29 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
     workspace_root = find_workspace_root(session)
     base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
-    result = post_skill_dashboard_session(base_url=base_url, api_key=api_key, bundle=bundle)
-    artifact_result = None
-    if not getattr(args, "skip_strategy_artifact", False):
-        artifact_result = upload_strategy_artifact_for_session(
-            local_session=session,
-            narrative_result=result,
-            base_url=base_url,
-            api_key=api_key,
+    artifact_export_result = None
+    if getattr(args, "with_strategy_artifact", False):
+        artifact_export_result = export_selected_strategy_artifact(
+            session,
             output_dir=Path(args.artifact_output_dir)
             if getattr(args, "artifact_output_dir", None)
             else None,
             python_bin=getattr(args, "python_bin", None),
+            runner=subprocess.run,
+        )
+        skipped = artifact_export_result.get("artifactUploadSkipped")
+        skip_reason = artifact_export_result.get("skipReason")
+        if skipped and skip_reason != "no_pass_strategy":
+            raise RuntimeError(_strategy_artifact_preupload_error(artifact_export_result))
+    result = post_skill_dashboard_session(base_url=base_url, api_key=api_key, bundle=bundle)
+    artifact_result = None
+    if artifact_export_result is not None:
+        artifact_result = upload_prepared_strategy_artifact_for_session(
+            local_session=session,
+            narrative_result=result,
+            base_url=base_url,
+            api_key=api_key,
+            export_result=artifact_export_result,
         )
     print(render_skill_dashboard_session_upload_result(result, artifact_result=artifact_result))
     return 0
@@ -385,6 +396,55 @@ def upload_strategy_artifact_for_session(
         python_bin=python_bin,
         runner=runner or subprocess.run,
     )
+    return upload_prepared_strategy_artifact_for_session(
+        local_session=local_session,
+        narrative_result=narrative_result,
+        base_url=base_url,
+        api_key=api_key,
+        export_result=export_result,
+        opener=opener,
+    )
+
+
+def _strategy_artifact_preupload_error(export_result: dict) -> str:
+    skip_reason = str(export_result.get("skipReason") or "unknown").strip()
+    promotion_report = (
+        export_result.get("promotionReport")
+        if isinstance(export_result.get("promotionReport"), dict)
+        else {}
+    )
+    reason = str(promotion_report.get("reason") or "").strip()
+    request_path = str(promotion_report.get("requestPath") or "").strip()
+    message = (
+        "Strategy artifact publish requires skill-level agent refactor before "
+        f"upload: {skip_reason}"
+    )
+    if reason:
+        message += f"; reason={reason}"
+    if request_path:
+        message += f"; requestPath={request_path}"
+    return message
+
+
+def upload_prepared_strategy_artifact_for_session(
+    *,
+    local_session: Path,
+    narrative_result: dict,
+    base_url: str,
+    api_key: str,
+    export_result: dict,
+    opener=urlopen,
+) -> dict:
+    data = narrative_result.get("data") if isinstance(narrative_result.get("data"), dict) else {}
+    hosted_session_id = str(data.get("sessionId") or data.get("id") or "").strip()
+    source_upload_id = str(data.get("uploadId") or data.get("sourceUploadId") or "").strip()
+    if not hosted_session_id:
+        return {
+            **export_result,
+            "artifactExported": False,
+            "artifactUploadSkipped": True,
+            "skipReason": "hosted_session_id_missing",
+        }
     if export_result.get("artifactUploadSkipped"):
         return export_result
     try:

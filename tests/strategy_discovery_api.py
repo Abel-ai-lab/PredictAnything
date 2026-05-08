@@ -41,6 +41,8 @@ from abel_invest.narrative_core.dashboard import (
     render_strategy_artifact_upload_lines,
     resolve_skill_dashboard_base_url,
     strategy_artifact_client_request_id,
+    upload_prepared_strategy_artifact_for_session,
+    upload_skill_dashboard_session,
     upload_strategy_artifact_for_session,
 )
 from abel_invest.narrative_core.strategy_artifacts import (
