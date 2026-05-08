@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -62,6 +63,7 @@ def prepare_promotion(
     strategy_entrypoint: str,
     is_denylisted_source: Callable[[Path], bool],
     sha256_file: Callable[[Path], str],
+    verify_promotion: Callable[..., dict[str, Any]] | None = None,
 ) -> PromotionResult:
     state_intent_payload = _load_state_intent_payload(candidate.branch)
     state_entries = tuple(
@@ -178,15 +180,27 @@ def prepare_promotion(
         if mode == PROMOTION_MODE_AGENT_REFACTOR
         else None
     )
-    behavior_equivalence = {
+    behavior_equivalence = _default_behavior_equivalence(
+        mode=mode,
+        replacements=replacements,
+    )
+    paper_dry_run = {
         "status": "passed",
-        "method": "state_path_adapter_static_scope"
-        if mode == PROMOTION_MODE_AUTO_ADAPTER
-        else "agent_refactor_state_path_scope"
-        if mode == PROMOTION_MODE_AGENT_REFACTOR
-        else "source_hash_identity",
-        "replacements": replacements,
+        "method": "source_round_edge_result",
     }
+    if verify_promotion is not None:
+        verification = verify_promotion(
+            candidate=candidate,
+            promotion_mode=mode,
+            promoted_source_path=strategy_source_path,
+            replacements=replacements,
+            state_entries=state_entries,
+            destination=destination,
+        )
+        if isinstance(verification.get("behavior_equivalence"), dict):
+            behavior_equivalence = verification["behavior_equivalence"]
+        if isinstance(verification.get("paper_dry_run"), dict):
+            paper_dry_run = verification["paper_dry_run"]
     gate_path = destination / PROMOTION_GATE_FILENAME
     gate_report = build_promotion_gate_report(
         promotion_mode=mode,
@@ -197,6 +211,7 @@ def prepare_promotion(
         refactor=refactor_payload,
         state_entries=state_entries,
         behavior_equivalence=behavior_equivalence,
+        paper_dry_run=paper_dry_run,
     )
     if gate_report.get("status") != "passed":
         raise PromotionNeedsAgentRefactor(
@@ -358,6 +373,8 @@ def _adapt_state_path_literal(source: str, relative_path: str) -> tuple[str, boo
 
 
 def _source_uses_state_path(source: str, relative_path: str) -> bool:
+    if _source_uses_state_path_ast(source, relative_path):
+        return True
     escaped = re.escape(relative_path)
     checks = (
         rf"\bctx\.state_dir\s*/\s*['\"]{escaped}['\"]",
@@ -366,6 +383,84 @@ def _source_uses_state_path(source: str, relative_path: str) -> bool:
         rf"\bABEL_STATE_DIR\b.*['\"]{escaped}['\"]",
     )
     return any(re.search(pattern, source, flags=re.DOTALL) for pattern in checks)
+
+
+def _source_uses_state_path_ast(source: str, relative_path: str) -> bool:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    constants = _string_constants(tree)
+    target = Path(relative_path).as_posix()
+    for node in ast.walk(tree):
+        parts = _ctx_state_path_parts(node, constants)
+        if parts and Path("/".join(parts)).as_posix() == target:
+            return True
+    return False
+
+
+def _string_constants(tree: ast.AST) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not isinstance(node.value, ast.Constant) or not isinstance(node.value.value, str):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                values[target.id] = node.value.value
+    return values
+
+
+def _ctx_state_path_parts(node: ast.AST, constants: dict[str, str]) -> list[str] | None:
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left = _ctx_state_path_parts(node.left, constants)
+        right = _path_part(node.right, constants)
+        if left is not None and right:
+            return left + [right]
+    if (
+        isinstance(node, ast.Attribute)
+        and node.attr == "state_dir"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "ctx"
+    ):
+        return []
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "joinpath"
+    ):
+        base = _ctx_state_path_parts(node.func.value, constants)
+        if base is None:
+            return None
+        parts = [_path_part(arg, constants) for arg in node.args]
+        if all(parts):
+            return base + [part for part in parts if part]
+    return None
+
+
+def _path_part(node: ast.AST, constants: dict[str, str]) -> str:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value.strip("/")
+    if isinstance(node, ast.Name):
+        return constants.get(node.id, "").strip("/")
+    return ""
+
+
+def _default_behavior_equivalence(
+    *,
+    mode: str,
+    replacements: list[dict[str, str]],
+) -> dict[str, Any]:
+    return {
+        "status": "passed",
+        "method": "state_path_adapter_static_scope"
+        if mode == PROMOTION_MODE_AUTO_ADAPTER
+        else "agent_refactor_state_path_scope"
+        if mode == PROMOTION_MODE_AGENT_REFACTOR
+        else "source_hash_identity",
+        "replacements": replacements,
+    }
 
 
 def _simple_patch_summary(
@@ -401,12 +496,25 @@ def _write_agent_refactor_request(
                 "sourcePath": str(source_path),
                 "scope": "state_path_normalization",
                 "missingStatePaths": missing_state_paths,
+                "requiredReportTemplate": {
+                    "schema": "abel-invest.agent-refactor-report/v1",
+                    "kind": "agent_assisted",
+                    "summary": "<brief summary of state path normalization>",
+                    "scope": "state_path_normalization",
+                    "replacements": [
+                        {
+                            "path": missing_state_paths[0] if missing_state_paths else "",
+                            "replacement": "ctx.state_dir / \"<same relative path>\"",
+                        }
+                    ],
+                },
                 "instructions": (
                     "Refactor only the promoted copy so each missing state path "
                     "is read or written through ctx.state_dir. Then write "
                     f"{PROMOTION_REFACTOR_REPORT_FILENAME} beside this request. "
-                    "The report replacements should describe the actual state "
-                    "path normalizations made by the agent."
+                    "Use requiredReportTemplate exactly, replacing the placeholder "
+                    "values. The report replacements must describe the actual "
+                    "state path normalizations made by the agent."
                 ),
             },
             indent=2,

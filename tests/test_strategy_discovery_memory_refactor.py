@@ -181,6 +181,24 @@ def _write_metric_input(branch: Path, *, round_id: str) -> Path:
     return metric_input_path
 
 
+def _fake_evaluate_command(command) -> subprocess.CompletedProcess | None:
+    if "evaluate" not in command:
+        return None
+    result_path = Path(command[command.index("--output-json") + 1])
+    metric_input_path = Path(command[command.index("--output-csv") + 1])
+    report_path = Path(command[command.index("--output-md") + 1])
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(json.dumps(_candidate_result_payload()), encoding="utf-8")
+    metric_input_path.write_text(
+        "date,asset_return,pnl,position,gross_pnl,turnover,execution_cost,next_position\n"
+        "2020-01-01,0,0,0,0,0,0,0\n"
+        "2020-01-02,0.01,0.01,1,0.01,1,0,1\n",
+        encoding="utf-8",
+    )
+    report_path.write_text("# replay validation\n", encoding="utf-8")
+    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+
 def test_render_writes_agent_context_with_journal_view(tmp_path: Path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
     branch = ni.init_branch_dir(session, "graph-v1")
@@ -1385,6 +1403,9 @@ def test_export_selected_strategy_artifact_state_path_adapter(
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
         commands_seen.append(command)
+        evaluated = _fake_evaluate_command(command)
+        if evaluated is not None:
+            return evaluated
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
@@ -1556,6 +1577,9 @@ def test_export_selected_strategy_artifact_state_aware_zero_change(
     output_dir = tmp_path / "exported-artifact"
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        evaluated = _fake_evaluate_command(command)
+        if evaluated is not None:
+            return evaluated
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
@@ -1661,6 +1685,9 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
     _write_metric_input(branch, round_id="round-006")
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        evaluated = _fake_evaluate_command(command)
+        if evaluated is not None:
+            return evaluated
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
@@ -1776,6 +1803,19 @@ def test_promotion_state_path_detection_is_path_specific() -> None:
     assert not promotion_helpers._source_uses_state_path(
         source,
         "model/feature_scaler.json",
+    )
+    dynamic_source = (
+        "symbol = \"AAPL\"\n"
+        "registry_path = ctx.state_dir / \"models\" / symbol / \"registry.json\"\n"
+        "checkpoint_path = ctx.state_dir.joinpath(\"models\", symbol, \"checkpoints/regime_latest.npz\")\n"
+    )
+    assert promotion_helpers._source_uses_state_path(
+        dynamic_source,
+        "models/AAPL/registry.json",
+    )
+    assert promotion_helpers._source_uses_state_path(
+        dynamic_source,
+        "models/AAPL/checkpoints/regime_latest.npz",
     )
 
 
