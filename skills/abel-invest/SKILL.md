@@ -65,10 +65,11 @@ Always start by resolving workspace state before strategy work.
 ## Operating Rules
 
 1. Treat this as a workspace-first flow, not a one-shot answer flow.
-2. When the task already names a ticker, workspace, mode, or round count, treat
-   that as the assigned strategy-discovery work. Resolve workspace context and
-   doctor readiness, then continue the requested `abel-invest` flow instead of
-   reframing it as a separate setup or planning task.
+2. When the user explicitly assigns ticker or session research in an existing
+   or resolved workspace, treat it as normal `abel-invest` work. Resolve
+   workspace context and doctor readiness, then use the session/branch workflow;
+   ask only when setup, auth, or an unclear requirement blocks the next safe
+   step.
 3. Reuse the default workspace when it already exists.
 4. Bootstrap the workspace before deep strategy work when it does not exist yet.
 5. Use `abel-invest` commands, not old command aliases.
