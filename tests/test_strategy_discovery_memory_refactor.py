@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import strategy_discovery_api as ni
+from abel_invest.narrative_core.dashboard_adapters.primary_strategy_selector import position_action
 
 
 def _candidate_result_payload() -> dict:
@@ -162,6 +163,7 @@ def test_run_branch_round_updates_ledger_and_agent_context(
             result_path = Path(command[command.index("--output-json") + 1])
             report_path = Path(command[command.index("--output-md") + 1])
             handoff_path = Path(command[command.index("--output-handoff") + 1])
+            frame_path = Path(command[command.index("--output-csv") + 1])
             payload = {
                 "verdict": "PASS",
                 "score": "7/7",
@@ -209,6 +211,12 @@ def test_run_branch_round_updates_ledger_and_agent_context(
             result_path.write_text(json.dumps(payload), encoding="utf-8")
             report_path.write_text("# validation\n", encoding="utf-8")
             handoff_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+            frame_path.write_text(
+                "date,pnl,position,next_position,close\n"
+                "2026-04-30,0.01,0.25,0.50,101.0\n"
+                "2026-05-01,0.02,0.50,0.75,102.0\n",
+                encoding="utf-8",
+            )
             return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {command}")
 
@@ -528,6 +536,178 @@ def test_build_skill_dashboard_session_bundle_aggregates_branches_and_rounds(tmp
         ("target-control", "round-001", 1),
         ("graph-v1", "round-001", 2),
     ]
+
+
+def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_results_tsv(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-primary-dashboard", tmp_path / "research")
+    branch_a = ni.init_branch_dir(session, "graph-v1")
+    branch_b = ni.init_branch_dir(session, "graph-v2")
+    branch_c = ni.init_branch_dir(session, "graph-v3")
+    for branch, round_id, score, pnl, lo_adj, sharpe in [
+        (branch_a, "round-001", "8/9", "90.0", "1.8", "1.4"),
+        (branch_b, "round-001", "9/9", "40.0", "1.2", "1.1"),
+        (branch_b, "round-002", "9/9", "55.0", "1.1", "1.0"),
+        (branch_c, "round-001", "9/9", "55.0", "1.3", "0.9"),
+    ]:
+        result_ref = f"branches/{branch.name}/outputs/{round_id}-edge-result.json"
+        report_ref = f"branches/{branch.name}/outputs/{round_id}-edge-validation.md"
+        result_path = session / result_ref
+        frame_path = session / f"branches/{branch.name}/outputs/{round_id}-edge-frame.csv"
+        frame_path.parent.mkdir(parents=True, exist_ok=True)
+        result_path.write_text(
+            json.dumps(
+                {
+                    "decision_preview": [
+                        {"date": "2026-05-04", "target_close": 16.13},
+                        {"date": "2026-05-05", "target_close": 17.06},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        frame_path.write_text(
+            "date,pnl,position,next_position,close\n"
+            "2026-05-04,0.01,0.75,0.30,16.13\n"
+            "2026-05-05,0.02,0.30,0.60,\n",
+            encoding="utf-8",
+        )
+        ni.append_tsv_row(
+            branch / "results.tsv",
+            ni.RESULTS_HEADER,
+            {
+                "exp_id": session.name,
+                "ticker": "TSLA",
+                "branch_id": branch.name,
+                "round_id": round_id,
+                "decision": "keep",
+                "lo_adj": lo_adj,
+                "ic": "0.0500",
+                "omega": "1.700",
+                "sharpe": sharpe,
+                "max_dd": "-0.1000",
+                "pnl": pnl,
+                "K": "3",
+                "score": score,
+                "verdict": "PASS",
+                "mode": "explore",
+                "description": f"{branch.name} {round_id}",
+                "result_path": result_ref,
+                "report_path": report_ref,
+                "handoff_path": f"branches/{branch.name}/outputs/{round_id}-edge-handoff.json",
+            },
+        )
+        ni.append_tsv_row(
+            session / "events.tsv",
+            ni.EVENTS_HEADER,
+            {
+                "timestamp": "2026-04-24T01:20:00+00:00",
+                "event": "round_recorded",
+                "branch_id": branch.name,
+                "round_id": round_id,
+                "mode": "explore",
+                "verdict": "PASS",
+                "decision": "keep",
+                "description": f"{branch.name} {round_id}",
+                "artifact_path": result_ref,
+            },
+        )
+
+    bundle = ni.build_skill_dashboard_session_bundle(
+        session,
+        uploaded_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    )
+
+    primary = bundle["payload"]["primaryStrategy"]
+    assert primary["branchId"] == "graph-v3"
+    assert primary["roundId"] == "round-001"
+    assert primary["selectionRule"] == "score_desc_total_return_desc_lo_adjusted_desc_sharpe_desc_latest_v1"
+    assert primary["metrics"]["score"] == "9/9"
+    assert primary["metrics"]["totalReturn"] == 0.55
+    assert primary["metrics"]["loAdjusted"] == 1.3
+    assert primary["latestDecision"] == {
+        "tradingDate": "2026-05-05",
+        "previousPosition": 0.75,
+        "currentPosition": 0.3,
+        "position": 0.3,
+        "nextPosition": 0.6,
+        "delta": -0.15,
+        "action": "reduce",
+        "close": 17.06,
+        "source": "abel_invest_edge_frame_csv",
+    }
+
+
+def test_primary_strategy_position_action_maps_previous_to_next_position() -> None:
+    assert position_action(0, 0.3) == "buy/open_long"
+    assert position_action(0.3, 0) == "sell/close"
+    assert position_action(0.3, 0.6) == "increase"
+    assert position_action(0.75, 0.6) == "reduce"
+    assert position_action(0.3, 0.3) == "hold"
+
+
+def test_primary_strategy_selector_uses_only_recorded_kept_pass_rounds(tmp_path: Path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-primary-filter-dashboard", tmp_path / "research")
+    kept_branch = ni.init_branch_dir(session, "kept-branch")
+    discarded_branch = ni.init_branch_dir(session, "discarded-branch")
+    unrecorded_branch = ni.init_branch_dir(session, "unrecorded-branch")
+    rows = [
+        (kept_branch, "round-001", "keep", "PASS", "9/9", "20.0", True),
+        (discarded_branch, "round-001", "discard", "PASS", "9/9", "90.0", True),
+        (unrecorded_branch, "round-001", "keep", "PASS", "9/9", "95.0", False),
+    ]
+    for branch, round_id, decision, verdict, score, pnl, recorded in rows:
+        result_ref = f"branches/{branch.name}/outputs/{round_id}-edge-result.json"
+        ni.append_tsv_row(
+            branch / "results.tsv",
+            ni.RESULTS_HEADER,
+            {
+                "exp_id": session.name,
+                "ticker": "TSLA",
+                "branch_id": branch.name,
+                "round_id": round_id,
+                "decision": decision,
+                "lo_adj": "1.000",
+                "ic": "0.0100",
+                "omega": "1.100",
+                "sharpe": "1.000",
+                "max_dd": "-0.1000",
+                "pnl": pnl,
+                "K": "3",
+                "score": score,
+                "verdict": verdict,
+                "mode": "explore",
+                "description": f"{branch.name} {round_id}",
+                "result_path": result_ref,
+                "report_path": f"branches/{branch.name}/outputs/{round_id}-edge-validation.md",
+                "handoff_path": f"branches/{branch.name}/outputs/{round_id}-edge-handoff.json",
+            },
+        )
+        if recorded:
+            ni.append_tsv_row(
+                session / "events.tsv",
+                ni.EVENTS_HEADER,
+                {
+                    "timestamp": "2026-04-24T01:20:00+00:00",
+                    "event": "round_recorded",
+                    "branch_id": branch.name,
+                    "round_id": round_id,
+                    "mode": "explore",
+                    "verdict": verdict,
+                    "decision": decision,
+                    "description": f"{branch.name} {round_id}",
+                    "artifact_path": result_ref,
+                },
+            )
+
+    bundle = ni.build_skill_dashboard_session_bundle(
+        session,
+        uploaded_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    )
+
+    assert bundle["payload"]["primaryStrategy"]["branchId"] == "kept-branch"
+    assert bundle["payload"]["primaryStrategy"]["metrics"]["totalReturn"] == 0.2
 
 
 def test_post_skill_dashboard_bundle_sends_api_key_header() -> None:

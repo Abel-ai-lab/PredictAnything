@@ -428,6 +428,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
     )
     result_path = branch / "outputs" / f"{round_id}-edge-result.json"
     report_path = branch / "outputs" / f"{round_id}-edge-validation.md"
+    frame_path = branch / "outputs" / f"{round_id}-edge-frame.csv"
     handoff_path = branch / "outputs" / f"{round_id}-edge-handoff.json"
     context_path = branch / "outputs" / f"{round_id}-alpha-context.json"
     context_path.write_text(
@@ -471,6 +472,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
         str(result_path),
         "--output-md",
         str(report_path),
+        "--output-csv",
+        str(frame_path),
         "--output-handoff",
         str(handoff_path),
         "--start",
