@@ -259,17 +259,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Interpreter used to run abel-edge evaluate (defaults to the workspace python when available)",
     )
-    promote_branch = sub.add_parser(
-        "promote-branch",
-        help="Create a promotion bundle from a prepared research branch",
-    )
-    promote_branch.add_argument("--branch", required=True)
-    promote_branch.add_argument(
-        "--output-dir",
-        default=None,
-        help="Optional destination directory (defaults to <session>/promotions/<branch-id>)",
-    )
-
     upload_dashboard = sub.add_parser(
         "upload-dashboard-bundle",
         help="Upload branch evidence to the Abel router skill dashboard",

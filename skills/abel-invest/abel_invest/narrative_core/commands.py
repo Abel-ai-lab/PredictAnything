@@ -5,7 +5,6 @@ from __future__ import annotations
 from abel_invest.narrative_core.command_handlers.branch import (
     debug_branch_run,
     prepare_branch_inputs,
-    promote_branch_bundle,
     run_branch_round,
 )
 from abel_invest.narrative_core.command_handlers.frontier import handle_frontier_command
@@ -61,8 +60,6 @@ def main() -> int:
         return prepare_branch_inputs(args)
     if args.command == "run-branch":
         return run_branch_round(args)
-    if args.command == "promote-branch":
-        return promote_branch_bundle(args)
     if args.command == "upload-dashboard-bundle":
         return upload_skill_dashboard_bundle(args)
     if args.command == "visualize-session":

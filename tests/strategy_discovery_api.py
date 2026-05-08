@@ -56,7 +56,6 @@ from abel_invest.narrative_core.evidence.journal import build_research_journal_s
 from abel_invest.narrative_core.command_handlers.branch import (
     debug_branch_run,
     prepare_branch_inputs,
-    promote_branch_bundle,
     run_branch_round,
     subprocess,
 )
