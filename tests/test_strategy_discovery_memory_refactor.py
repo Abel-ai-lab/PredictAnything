@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 import strategy_discovery_api as ni
+from abel_invest.narrative_core import promotion as promotion_helpers
 
 
 def _candidate_result_payload() -> dict:
@@ -902,8 +903,8 @@ def test_build_strategy_artifact_manifest_uses_router_contract_fields(
         "resultChannel": {"mode": "return_value_first"},
     }
     assert manifest["promotion"]["mode"] == "zero_change"
-    assert manifest["promotion"]["equivalence"] == {
-        "status": "not_required",
+    assert manifest["promotion"]["gate"] == {
+        "status": "passed",
         "evidencePath": None,
     }
     assert manifest["strategy"] == {
@@ -1040,8 +1041,120 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
         "runtime/strategy.yaml",
         "runtime/dependencies.json",
         "runtime/data_manifest.json",
+        "edge/promotion-gate.json",
     ]
+    assert manifest["source"]["selectionMode"] == "auto_best_pass_by_metric_order"
+    assert manifest["source"]["selectionScope"] == "session"
     assert manifest["promotion"]["mode"] == "zero_change"
+
+
+def test_promote_branch_strategy_uses_explicit_branch_round(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_artifact_inputs(branch)
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-003",
+        verdict="PASS",
+        sharpe=0.850,
+        lo_adj=0.910,
+        max_dd=-0.1700,
+    )
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+    output_dir = tmp_path / "promoted-artifact"
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 9,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = ni.promote_branch_strategy(
+        branch,
+        round_id="round-006",
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert result["artifactExported"] is True
+    assert result["selectedBranchId"] == "momentum_lead"
+    assert result["selectedRoundId"] == "round-006"
+    manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
+    assert manifest["source"]["selectionMode"] == "explicit_branch_round"
+    assert manifest["source"]["selectionScope"] == "branch"
+    assert manifest["source"]["selectionMetricOrder"] == []
+    assert manifest["promotion"]["gate"]["evidencePath"] == "edge/promotion-gate.json"
+
+
+def test_promote_branch_strategy_requires_round_when_branch_has_multiple_passes(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_artifact_inputs(branch)
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-003",
+        verdict="PASS",
+        sharpe=0.850,
+        lo_adj=0.910,
+        max_dd=-0.1700,
+    )
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+
+    result = ni.promote_branch_strategy(branch, python_bin="python-test")
+
+    assert result["artifactExported"] is False
+    assert result["skipReason"] == "ambiguous_branch_promotion_round"
+    assert result["selectedBranchId"] == "momentum_lead"
+    assert result["selectedRoundId"] is None
 
 
 def test_export_selected_strategy_artifact_state_path_adapter(
@@ -1131,22 +1244,314 @@ def test_export_selected_strategy_artifact_state_path_adapter(
     )
 
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
-    assert result["promotionMode"] == "state_path_adapter"
+    assert result["promotionMode"] == "auto_adapter"
     assert manifest["runtime"]["state"]["bootstrap"] == {
         "mode": "copy_from_base",
         "path": "runtime/initial-state/",
     }
-    assert manifest["promotion"]["mode"] == "state_path_adapter"
-    assert "adapter" in manifest["promotion"]
+    assert manifest["promotion"]["mode"] == "auto_adapter"
+    assert manifest["promotion"]["adapter"] == {
+        "kind": "state_path_adapter",
+        "scope": "state_path_normalization",
+    }
+    assert manifest["promotion"]["gate"] == {
+        "status": "passed",
+        "evidencePath": "edge/promotion-gate.json",
+    }
     file_paths = [item["path"] for item in manifest["files"]]
     assert "runtime/initial-state/model/latest.joblib" in file_paths
-    assert "edge/promotion-equivalence.json" in file_paths
+    assert "edge/promotion-gate.json" in file_paths
+    assert "edge/promotion.patch" in file_paths
     promoted_engine = output_dir / "promoted" / "engine.py"
     assert 'ctx.state_dir / "model/latest.joblib"' in promoted_engine.read_text(
         encoding="utf-8"
     )
     export_command = next(command for command in commands_seen if "export-artifact" in command)
     assert "--extra-source-map" in export_command
+
+
+def test_export_selected_strategy_artifact_normalizes_relative_python_bin(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_artifact_inputs(branch)
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+    commands_seen = []
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        commands_seen.append(command)
+        assert Path(command[0]).is_absolute()
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 9,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    ni.export_selected_strategy_artifact(
+        session,
+        output_dir=tmp_path / "exported-artifact",
+        python_bin=".venv/bin/python",
+        runner=fake_runner,
+    )
+
+    assert commands_seen[0][0] == str((Path.cwd() / ".venv/bin/python").absolute())
+
+
+def test_export_selected_strategy_artifact_state_aware_zero_change(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "state_aware")
+    _write_strategy_artifact_inputs(branch)
+    (branch / "model").mkdir()
+    (branch / "model" / "latest.joblib").write_text("state\n", encoding="utf-8")
+    (branch / "engine.py").write_text(
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        model_path = ctx.state_dir / \"model/latest.joblib\"\n"
+        "        return ctx.decisions(1)\n",
+        encoding="utf-8",
+    )
+    (branch / "state_intent.json").write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.state-intent/v1",
+                "entries": [
+                    {
+                        "path": "model/latest.joblib",
+                        "role": "initial_state",
+                        "mutableInPaper": True,
+                        "requiredForSignal": True,
+                        "producedBy": "pytest",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+    output_dir = tmp_path / "exported-artifact"
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 10,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
+    assert result["promotionMode"] == "zero_change"
+    assert manifest["runtime"]["state"]["bootstrap"] == {
+        "mode": "copy_from_base",
+        "path": "runtime/initial-state/",
+    }
+    assert manifest["promotion"]["mode"] == "zero_change"
+    assert manifest["promotion"]["gate"]["evidencePath"] == "edge/promotion-gate.json"
+    file_paths = [item["path"] for item in manifest["files"]]
+    assert "runtime/initial-state/model/latest.joblib" in file_paths
+    assert "edge/promotion-gate.json" in file_paths
+
+
+def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "ambiguous_state")
+    _write_strategy_artifact_inputs(branch)
+    (branch / "model").mkdir()
+    (branch / "model" / "latest.joblib").write_text("state\n", encoding="utf-8")
+    (branch / "model" / "feature_scaler.json").write_text("state\n", encoding="utf-8")
+    (branch / "engine.py").write_text(
+        "from pathlib import Path\n"
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        model_path = Path(\"model/latest.joblib\")\n"
+        "        scaler_path = Path(\"model\") / \"feature_scaler.json\"\n"
+        "        return ctx.decisions(1)\n",
+        encoding="utf-8",
+    )
+    (branch / "state_intent.json").write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.state-intent/v1",
+                "entries": [
+                    {
+                        "path": "model/latest.joblib",
+                        "role": "initial_state",
+                        "mutableInPaper": True,
+                        "requiredForSignal": True,
+                        "producedBy": "pytest",
+                    },
+                    {
+                        "path": "model/feature_scaler.json",
+                        "role": "initial_state",
+                        "mutableInPaper": True,
+                        "requiredForSignal": True,
+                        "producedBy": "pytest",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 12,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=tmp_path / "exported-artifact",
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert result["artifactExported"] is True
+    assert result["skipReason"] == ""
+    assert result["promotionMode"] == "agent_refactor"
+    manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
+    assert manifest["promotion"]["mode"] == "agent_refactor"
+    assert manifest["promotion"]["refactor"]["kind"] == "agent_assisted"
+    assert manifest["promotion"]["gate"] == {
+        "status": "passed",
+        "evidencePath": "edge/promotion-gate.json",
+    }
+    file_paths = [item["path"] for item in manifest["files"]]
+    assert "edge/promotion-gate.json" in file_paths
+    assert "edge/promotion.patch" in file_paths
+    assert "edge/refactor-report.json" in file_paths
+    assert "runtime/initial-state/model/latest.joblib" in file_paths
+    assert "runtime/initial-state/model/feature_scaler.json" in file_paths
+    promoted_engine = tmp_path / "exported-artifact" / "promoted" / "engine.py"
+    promoted_source = promoted_engine.read_text(encoding="utf-8")
+    assert 'ctx.state_dir / "model/latest.joblib"' in promoted_source
+    assert 'ctx.state_dir / "model/feature_scaler.json"' in promoted_source
+
+
+def test_promotion_state_path_detection_is_path_specific() -> None:
+    source = (
+        "model_path = ctx.state_dir / \"model/latest.joblib\"\n"
+        "scaler_path = Path(\"model\") / \"feature_scaler.json\"\n"
+    )
+
+    assert promotion_helpers._source_uses_state_path(source, "model/latest.joblib")
+    assert not promotion_helpers._source_uses_state_path(
+        source,
+        "model/feature_scaler.json",
+    )
 
 
 def test_export_selected_strategy_artifact_regenerates_missing_metric_input(
