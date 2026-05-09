@@ -106,6 +106,7 @@ def _round_candidates(
 def _primary_strategy_payload(candidate: RoundCandidate) -> dict[str, Any]:
     result_ref = str(candidate.row.get("result_path") or "").strip()
     report_ref = str(candidate.row.get("report_path") or "").strip()
+    edge_metrics = _edge_result_metrics(candidate.session, result_ref)
     return {
         "branchId": candidate.branch_id,
         "roundId": candidate.round_id,
@@ -124,12 +125,29 @@ def _primary_strategy_payload(candidate: RoundCandidate) -> dict[str, Any]:
             "maxDd": _float_value(candidate.row.get("max_dd", "")),
             "totalReturn": candidate.total_return,
             "k": _int_value(candidate.row.get("K", "")),
+            "positionIcStability": _float_value(edge_metrics.get("position_ic_stability", "")),
+            "dsr": _float_value(edge_metrics.get("dsr", "")),
+            "lossYears": _int_value(edge_metrics.get("loss_years", "")),
         },
         "resultRef": result_ref,
         "reportRef": report_ref,
         "latestDecision": _latest_decision_from_frame(candidate.session, result_ref),
         "backtestTradeLog": _backtest_trade_log_from_frame_csv(candidate.session, result_ref),
     }
+
+
+def _edge_result_metrics(session: Path, result_ref: str) -> dict[str, Any]:
+    if not result_ref:
+        return {}
+    result_path = session / result_ref
+    if not result_path.exists():
+        return {}
+    try:
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    metrics = payload.get("metrics")
+    return metrics if isinstance(metrics, dict) else {}
 
 
 def _backtest_trade_log_from_frame_csv(session: Path, result_ref: str) -> dict[str, Any] | None:

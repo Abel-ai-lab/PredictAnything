@@ -562,7 +562,12 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
                     "decision_preview": [
                         {"date": "2026-05-04", "target_close": 16.13},
                         {"date": "2026-05-05", "target_close": 17.06},
-                    ]
+                    ],
+                    "metrics": {
+                        "position_ic_stability": 0.6,
+                        "dsr": 0.99,
+                        "loss_years": 1,
+                    },
                 }
             ),
             encoding="utf-8",
@@ -626,6 +631,9 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
     assert primary["metrics"]["score"] == "9/9"
     assert primary["metrics"]["totalReturn"] == 0.55
     assert primary["metrics"]["loAdjusted"] == 1.3
+    assert primary["metrics"]["positionIcStability"] == 0.6
+    assert primary["metrics"]["dsr"] == 0.99
+    assert primary["metrics"]["lossYears"] == 1
     assert primary["latestDecision"] == {
         "tradingDate": "2026-05-05",
         "previousPosition": 0.75,
