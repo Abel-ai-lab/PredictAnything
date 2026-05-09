@@ -4,6 +4,19 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.3.0] - 2026-05-09
+
+### Added
+
+- Added Abel Invest graph-frontier strategy discovery flows, session-first dashboard upload support, and primary strategy selection for dashboard sessions.
+- Added primary strategy trade-log CSV generation and upload support so downstream dashboard strategy detail can render backtest time series from stored trade logs.
+- Added DSR accounting audit trail support and expanded primary strategy metrics, including DSR, loss years, and position IC stability.
+
+### Changed
+
+- Refactored Abel Invest narrative implementation into `narrative_core` and workspace support into `workspace_core` while preserving public CLI entrypoints.
+- Updated Abel Invest workspace bootstrap, branch authoring, discovery protocol, and experiment-loop guidance for graph-first strategy discovery.
+
 ## [1.2.1] - 2026-05-10
 
 ### Changed
