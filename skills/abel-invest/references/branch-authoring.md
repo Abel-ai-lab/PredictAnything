@@ -104,13 +104,17 @@ CAP graph nodes are causal priors. They do not provide trading sign, lag, or
 guaranteed strength; deeper nodes are weaker or more indirect priors unless
 recorded evidence or domain context justifies them.
 
-## Journal And Research Reflection
+## Exploration Path
 
-`agent_context.md` is the compact factual resume surface. `research_journal.md`
-is the agent-owned research state.
+`agent_context.md` is the compact factual resume surface. `exploration_path.md`
+is the single human-facing exploration log.
 
-Use the journal for:
+Use the exploration path for:
 
+- the path chosen for each recorded round
+- why that path was chosen
+- Edge feedback after the round
+- key result facts and artifact references
 - hypotheses and observations
 - branch basis before strategy code when the choice could affect evidence
   interpretation
@@ -127,16 +131,14 @@ Use the journal for:
 When an insight should survive as a research conclusion, cite evidence such as
 `ledger:<branch_id>:<round_id>`, `frontier.md`, or a raw artifact path.
 
-Every recorded round needs its own agent-written journal entry before the next
+Every recorded round needs its own exploration path entry before the next
 recorded round. The entry does not need a fixed template, but it must cite the
-round ledger ref and preserve the observation or insight that should guide later
-exploration.
+round ledger ref and preserve the path, reason, and Edge feedback that should
+guide later exploration.
 
-When `journal_coverage_complete=false`, use frontier facts and the journal to
-close the missing entries. State whether you are continuing the neighborhood,
-pivoting graph inputs, changing strategy family, adding contrast evidence, or
-stopping. The framework exposes the shape of the search; it should not choose
-the route.
+When `path_coverage_complete=false`, update `exploration_path.md` for the
+missing ledger refs. The framework exposes the shape of the search; it should
+not choose the route.
 
 ## Prepared Inputs
 
@@ -187,7 +189,7 @@ graph/mechanism-led branch selection for the next standard round.
 7. Run `abel-invest run-branch --branch ...` when declaration and
    debug facts are ready enough for the evidence label you want.
 8. Read `evidence_ledger.json` and `frontier.md`.
-9. Update `research_journal.md` with grounded follow-up state.
+9. Keep `exploration_path.md` covered with path, why, Edge feedback, and ledger refs.
 
 ## Research Judgment
 

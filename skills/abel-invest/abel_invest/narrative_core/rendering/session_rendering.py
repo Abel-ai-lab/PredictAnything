@@ -11,14 +11,15 @@ from abel_invest.narrative_core.contracts.constants import (
     EXPLORATION_PATH_FILENAME,
     FRONTIER_JSON_FILENAME,
     FRONTIER_MARKDOWN_FILENAME,
-    RESEARCH_JOURNAL_FILENAME,
 )
 from abel_invest.narrative_core.runtime.context import validate_edge_handoff
 from abel_invest.narrative_core.evidence.evidence import load_json_object, write_evidence_ledger
 from abel_invest.narrative_core.evidence.frontier import build_frontier, render_frontier_markdown
 from abel_invest.narrative_core.io import write_json_file
-from abel_invest.narrative_core.evidence.journal import build_research_journal_status, ensure_research_journal
-from abel_invest.narrative_core.evidence.exploration_path import ensure_exploration_path
+from abel_invest.narrative_core.evidence.exploration_path import (
+    build_exploration_path_status,
+    ensure_exploration_path,
+)
 from abel_invest.narrative_core.readiness import (
     build_readiness_warning,
     format_data_readiness_summary,
@@ -41,7 +42,6 @@ from abel_invest.narrative_core.state import (
 
 
 def render_session(session: Path) -> None:
-    ensure_research_journal(session)
     ensure_exploration_path(session)
     discovery = load_discovery(session)
     readiness = load_readiness(session)
@@ -82,15 +82,15 @@ def print_status(session: Path) -> None:
     branches = load_branches(session)
     ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
     frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
-    journal_status = build_research_journal_status(session, ledger=ledger, frontier=frontier)
+    path_status = build_exploration_path_status(session, ledger=ledger, frontier=frontier)
     print(
         f"Session: {session.name} ({discovery.get('ticker', session.parent.name.upper())})"
     )
     print(f"Branches: {len(branches)}")
     print(f"Total rounds: {sum(len(branch['rows']) for branch in branches)}")
     print(
-        "Research journal: "
-        f"{journal_status.get('resolved_evidence_reference_count', 0)} evidence-linked refs"
+        "Exploration path: "
+        f"{path_status.get('resolved_evidence_reference_count', 0)} evidence-linked refs"
     )
     readiness_summary = format_data_readiness_summary(readiness)
     if readiness_summary:
@@ -103,8 +103,7 @@ def print_status(session: Path) -> None:
     if frontier:
         labels = frontier.get("evidence_label_counts") or {}
         graph_priority = frontier.get("graph_priority") or {}
-        reflection = frontier.get("research_reflection") or {}
-        journal_coverage = frontier.get("journal_coverage") or {}
+        path_coverage = frontier.get("path_coverage") or {}
         print(
             "Evidence frontier: "
             f"rows={frontier.get('row_count', 0)} "
@@ -112,8 +111,7 @@ def print_status(session: Path) -> None:
             f"target_control={labels.get('target_control_evidence', 0)} "
             f"workflow_blockers={frontier.get('workflow_blockers', 0)} "
             f"graph_first_uncovered={str(graph_priority.get('graph_first_uncovered', False)).lower()} "
-            f"research_reflection_due={str(reflection.get('research_reflection_due', False)).lower()} "
-            f"journal_coverage_complete={str(journal_coverage.get('journal_coverage_complete', False)).lower()}"
+            f"path_coverage_complete={str(path_coverage.get('path_coverage_complete', False)).lower()}"
         )
     for branch in branches:
         latest = branch["rows"][-1] if branch["rows"] else {}
@@ -232,16 +230,16 @@ def check_session(session: Path, *, strict: bool) -> int:
 
 def validate_exploration_protocol(session: Path, failures: list[str]) -> None:
     frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
-    journal_coverage = (
-        frontier.get("journal_coverage")
-        if isinstance(frontier.get("journal_coverage"), dict)
+    path_coverage = (
+        frontier.get("path_coverage")
+        if isinstance(frontier.get("path_coverage"), dict)
         else {}
     )
-    missing_rounds = list(journal_coverage.get("missing_journal_rounds") or [])
+    missing_rounds = list(path_coverage.get("missing_path_rounds") or [])
     if missing_rounds:
         failures.append(
-            "journal coverage incomplete: "
-            f"missing_journal_rounds={', '.join(str(item) for item in missing_rounds)}"
+            "exploration path coverage incomplete: "
+            f"missing_path_rounds={', '.join(str(item) for item in missing_rounds)}"
         )
 
 
@@ -267,32 +265,32 @@ def graph_priority_warning_lines(session: Path) -> list[str]:
     return lines
 
 
-def journal_coverage_missing_rounds(session: Path) -> list[str]:
+def path_coverage_missing_rounds(session: Path) -> list[str]:
     frontier = load_json_object(session / FRONTIER_JSON_FILENAME)
-    journal_coverage = (
-        frontier.get("journal_coverage")
-        if isinstance(frontier.get("journal_coverage"), dict)
+    path_coverage = (
+        frontier.get("path_coverage")
+        if isinstance(frontier.get("path_coverage"), dict)
         else {}
     )
-    return [str(item) for item in journal_coverage.get("missing_journal_rounds") or []]
+    return [str(item) for item in path_coverage.get("missing_path_rounds") or []]
 
 
-def journal_coverage_warning_lines(session: Path) -> list[str]:
-    missing_rounds = journal_coverage_missing_rounds(session)
+def path_coverage_warning_lines(session: Path) -> list[str]:
+    missing_rounds = path_coverage_missing_rounds(session)
     if not missing_rounds:
         return []
     return [
-        "journal_coverage_complete=false "
-        f"missing_journal_rounds={', '.join(missing_rounds)} "
-        f"required_action=update_{RESEARCH_JOURNAL_FILENAME}_with_round_insights"
+        "path_coverage_complete=false "
+        f"missing_path_rounds={', '.join(missing_rounds)} "
+        f"required_action=update_{EXPLORATION_PATH_FILENAME}_with_path_why_and_edge_feedback"
     ]
 
 
 def write_frontier(session: Path, ledger: dict) -> dict:
-    journal_status = build_research_journal_status(session, ledger=ledger, frontier={})
+    path_status = build_exploration_path_status(session, ledger=ledger, frontier={})
     frontier = build_frontier(
         ledger,
-        journal_status=journal_status,
+        exploration_path_status=path_status,
     )
     write_json_file(session / FRONTIER_JSON_FILENAME, frontier)
     (session / FRONTIER_MARKDOWN_FILENAME).write_text(

@@ -48,7 +48,6 @@ from abel_invest.narrative_core.contracts.constants import (
     EXPLORATION_PATH_FILENAME,
     EXECUTION_CONSTRAINTS_FILENAME,
     PROBE_SAMPLES_FILENAME,
-    RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
     RUNTIME_PROFILE_FILENAME,
 )
@@ -88,8 +87,8 @@ from abel_invest.narrative_core.session_lifecycle import (
 )
 from abel_invest.narrative_core.rendering.session_rendering import (
     graph_priority_warning_lines,
-    journal_coverage_missing_rounds,
-    journal_coverage_warning_lines,
+    path_coverage_missing_rounds,
+    path_coverage_warning_lines,
     render_section,
     render_session,
 )
@@ -392,12 +391,12 @@ def run_branch_round(args: argparse.Namespace) -> int:
     readiness = load_readiness(session)
     with SessionLock(session):
         render_session(session)
-    blocking_missing_journal = journal_coverage_missing_rounds(session)
-    if blocking_missing_journal:
+    blocking_missing_path = path_coverage_missing_rounds(session)
+    if blocking_missing_path:
         print(
-            "Journal required before next recorded round: "
-            f"missing_journal_rounds={', '.join(blocking_missing_journal)}. "
-            f"Update {RESEARCH_JOURNAL_FILENAME} with evidence-linked notes for each missing ledger round.",
+            "Exploration path entry required before next recorded round: "
+            f"missing_path_rounds={', '.join(blocking_missing_path)}. "
+            f"Update {EXPLORATION_PATH_FILENAME} with path, why, Edge feedback, and ledger refs for each missing round.",
             file=sys.stderr,
         )
         return 2
@@ -673,8 +672,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
         render_session(session)
     for line in graph_priority_warning_lines(session):
         print(f"Exploration protocol: {line}")
-    for line in journal_coverage_warning_lines(session):
-        print(f"Journal required: {line}")
+    for line in path_coverage_warning_lines(session):
+        print(f"Exploration path required: {line}")
     print(f"Alpha context: {context_path.relative_to(session)}")
     print(f"Edge result: {result_path.relative_to(session)}")
     print(f"Edge validation: {report_path.relative_to(session)}")

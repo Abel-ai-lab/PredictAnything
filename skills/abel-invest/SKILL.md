@@ -20,7 +20,7 @@ Use this skill for:
 - creating sessions and branches
 - preparing, debugging, recording, and reviewing research rounds
 - interpreting `evidence_ledger.json`, `frontier.md`, `agent_context.md`, and
-  `research_journal.md`
+  `exploration_path.md`
 
 ## Activation Checklist
 
@@ -50,7 +50,7 @@ Always start by resolving workspace state before strategy work.
 - Live graph discovery, graph frontier expansion, or graph-first reasoning:
   read `references/discovery-protocol.md`.
 - Creating or revising `branch.yaml`, reviewing evidence labels,
-  journal coverage, input realization, or research journal use:
+  path coverage, input realization, or exploration path use:
   read `references/branch-authoring.md`.
 - Writing `engine.py`, handling semantic/runtime failures, or checking
   temporal legality:
@@ -76,7 +76,7 @@ Always start by resolving workspace state before strategy work.
 8. Treat `evidence_ledger.json` and `frontier.md` as factual evidence surfaces,
    not generated strategy advice.
 9. Treat `agent_context.md` as the compact factual resume surface and
-   `research_journal.md` as agent-owned research state.
+   `exploration_path.md` as the single human-facing exploration log.
 10. New sessions are graph-first: live causal graph discovery initializes
    `graph_frontier.json`. Expand graph breadth only when a frontier question
    remains after reading current evidence; do not expand just because a small
@@ -111,8 +111,9 @@ Always start by resolving workspace state before strategy work.
     the current graph neighborhood has no clear real-world mechanism. Record
     off-target, weak, unavailable, or skipped narrative scout plainly; do not
     force it into branch evidence.
-20. Every recorded round requires an agent-written `research_journal.md` entry
-    with the round ledger reference before the next recorded round.
+20. Every recorded round requires an `exploration_path.md` entry with the chosen
+    path, why it was chosen, Edge feedback, round ledger reference, and any
+    scout influence before the next recorded round.
 21. Treat input realization as an evidence fact: a graph-supported declaration
     only becomes graph-supported evidence when runtime reads the prepared graph
     inputs. When graph-node reads are inferred from asset reads, preserve that
