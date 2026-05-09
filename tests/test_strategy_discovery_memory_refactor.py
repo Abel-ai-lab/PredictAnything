@@ -637,6 +637,26 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
         "close": 17.06,
         "source": "abel_invest_edge_frame_csv",
     }
+    assert primary["backtestFrame"]["source"] == "abel_invest_edge_frame_csv"
+    assert primary["backtestFrame"]["frameRef"] == (
+        "branches/graph-v3/outputs/round-001-edge-frame.csv"
+    )
+    assert primary["backtestFrame"]["rows"] == [
+        {
+            "date": "2026-05-04",
+            "pnl": 0.01,
+            "position": 0.75,
+            "next_position": 0.3,
+            "close": 16.13,
+        },
+        {
+            "date": "2026-05-05",
+            "pnl": 0.02,
+            "position": 0.3,
+            "next_position": 0.6,
+            "close": None,
+        },
+    ]
 
 
 def test_primary_strategy_position_action_maps_previous_to_next_position() -> None:

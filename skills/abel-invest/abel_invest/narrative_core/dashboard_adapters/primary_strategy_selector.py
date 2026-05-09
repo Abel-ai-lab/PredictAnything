@@ -128,7 +128,42 @@ def _primary_strategy_payload(candidate: RoundCandidate) -> dict[str, Any]:
         "resultRef": result_ref,
         "reportRef": report_ref,
         "latestDecision": _latest_decision_from_frame(candidate.session, result_ref),
+        "backtestFrame": _backtest_frame_from_frame_csv(candidate.session, result_ref),
     }
+
+
+def _backtest_frame_from_frame_csv(session: Path, result_ref: str) -> dict[str, Any] | None:
+    frame_path = _frame_path_for_result_ref(session, result_ref)
+    if frame_path is None or not frame_path.exists():
+        return None
+    with frame_path.open(newline="", encoding="utf-8") as handle:
+        rows = [_typed_frame_row(row) for row in csv.DictReader(handle)]
+    return {
+        "source": "abel_invest_edge_frame_csv",
+        "frameRef": str(frame_path.relative_to(session)),
+        "rows": rows,
+    }
+
+
+def _typed_frame_row(row: dict[str, str]) -> dict[str, Any]:
+    typed: dict[str, Any] = {}
+    numeric_fields = {
+        "pnl",
+        "position",
+        "asset_return",
+        "gross_pnl",
+        "turnover",
+        "execution_cost",
+        "next_position",
+        "close",
+    }
+    for key, value in row.items():
+        text = str(value or "").strip()
+        if key in numeric_fields:
+            typed[key] = _optional_float_value(text)
+        else:
+            typed[key] = text or None
+    return typed
 
 
 def _latest_decision_from_frame(session: Path, result_ref: str) -> dict[str, Any] | None:
