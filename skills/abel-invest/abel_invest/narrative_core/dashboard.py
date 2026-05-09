@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import uuid
 from datetime import datetime
 from pathlib import Path
 from urllib.error import HTTPError
@@ -223,6 +224,7 @@ def post_skill_dashboard_session(
     base_url: str,
     api_key: str,
     bundle: dict,
+    session_root: Path | None = None,
     opener=urlopen,
     timeout: int = 60,
 ) -> dict:
@@ -232,11 +234,25 @@ def post_skill_dashboard_session(
     normalized_api_key = str(api_key or "").strip()
     if not normalized_api_key:
         raise RuntimeError("Missing Abel API key")
-    body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+    trade_log_path = _primary_strategy_trade_log_path(bundle, session_root=session_root)
+    if trade_log_path is not None and trade_log_path.is_file():
+        body, content_type = build_multipart_form_data(
+            fields={"payload": json.dumps(bundle, ensure_ascii=False)},
+            files={
+                "backtestTradeLog": {
+                    "filename": trade_log_path.name,
+                    "content_type": "text/csv",
+                    "content": trade_log_path.read_bytes(),
+                }
+            },
+        )
+    else:
+        body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+        content_type = "application/json"
     request = Request(
         f"{normalized_base_url}/web/skill-dashboard/sessions",
         data=body,
-        headers={"Content-Type": "application/json", "api-key": normalized_api_key},
+        headers={"Content-Type": content_type, "api-key": normalized_api_key},
         method="POST",
     )
     try:
@@ -246,6 +262,55 @@ def post_skill_dashboard_session(
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Skill dashboard session upload failed: HTTP {exc.code}: {detail}") from exc
     return json.loads(raw)
+
+
+def _primary_strategy_trade_log_path(bundle: dict, *, session_root: Path | None = None) -> Path | None:
+    payload = bundle.get("payload") if isinstance(bundle.get("payload"), dict) else {}
+    primary_strategy = (
+        payload.get("primaryStrategy") if isinstance(payload.get("primaryStrategy"), dict) else {}
+    )
+    trade_log = (
+        primary_strategy.get("backtestTradeLog")
+        if isinstance(primary_strategy.get("backtestTradeLog"), dict)
+        else {}
+    )
+    trade_log_ref = str(trade_log.get("tradeLogRef") or "").strip()
+    if not trade_log_ref:
+        return None
+    root = session_root.resolve() if session_root is not None else Path.cwd()
+    return root / trade_log_ref
+
+
+def build_multipart_form_data(*, fields: dict[str, str], files: dict[str, dict]) -> tuple[bytes, str]:
+    boundary = f"----abel-skill-dashboard-{uuid.uuid4().hex}"
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
+                str(value).encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+    for name, file_info in files.items():
+        filename = Path(str(file_info.get("filename") or name)).name
+        content_type = str(file_info.get("content_type") or "application/octet-stream")
+        content = file_info.get("content") or b""
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                (
+                    f'Content-Disposition: form-data; name="{name}"; '
+                    f'filename="{filename}"\r\n'
+                ).encode("utf-8"),
+                f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+                content,
+                b"\r\n",
+            ]
+        )
+    chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
 
 
 def upload_skill_dashboard_bundle(args: argparse.Namespace) -> int:
@@ -281,7 +346,12 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
     workspace_root = find_workspace_root(session)
     base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
-    result = post_skill_dashboard_session(base_url=base_url, api_key=api_key, bundle=bundle)
+    result = post_skill_dashboard_session(
+        base_url=base_url,
+        api_key=api_key,
+        bundle=bundle,
+        session_root=session,
+    )
     print(render_skill_dashboard_session_upload_result(result))
     return 0
 

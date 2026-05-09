@@ -128,42 +128,63 @@ def _primary_strategy_payload(candidate: RoundCandidate) -> dict[str, Any]:
         "resultRef": result_ref,
         "reportRef": report_ref,
         "latestDecision": _latest_decision_from_frame(candidate.session, result_ref),
-        "backtestFrame": _backtest_frame_from_frame_csv(candidate.session, result_ref),
+        "backtestTradeLog": _backtest_trade_log_from_frame_csv(candidate.session, result_ref),
     }
 
 
-def _backtest_frame_from_frame_csv(session: Path, result_ref: str) -> dict[str, Any] | None:
+def _backtest_trade_log_from_frame_csv(session: Path, result_ref: str) -> dict[str, Any] | None:
     frame_path = _frame_path_for_result_ref(session, result_ref)
     if frame_path is None or not frame_path.exists():
         return None
-    with frame_path.open(newline="", encoding="utf-8") as handle:
-        rows = [_typed_frame_row(row) for row in csv.DictReader(handle)]
+    trade_log_path = frame_path.with_name(frame_path.name.replace("-edge-frame.csv", "-trade-log.csv"))
+    _write_trade_log_from_frame(frame_path, trade_log_path)
     return {
-        "source": "abel_invest_edge_frame_csv",
-        "frameRef": str(frame_path.relative_to(session)),
-        "rows": rows,
+        "source": "abel_invest_trade_log_csv",
+        "tradeLogRef": str(trade_log_path.relative_to(session)),
     }
 
 
-def _typed_frame_row(row: dict[str, str]) -> dict[str, Any]:
-    typed: dict[str, Any] = {}
-    numeric_fields = {
+def _write_trade_log_from_frame(frame_path: Path, trade_log_path: Path) -> None:
+    fields = [
+        "date",
+        "asset_return",
         "pnl",
         "position",
-        "asset_return",
+        "source",
+        "decision_time",
+        "effective_time",
+        "next_position",
         "gross_pnl",
         "turnover",
         "execution_cost",
-        "next_position",
-        "close",
-    }
-    for key, value in row.items():
-        text = str(value or "").strip()
-        if key in numeric_fields:
-            typed[key] = _optional_float_value(text)
-        else:
-            typed[key] = text or None
-    return typed
+        "cum_return",
+    ]
+    with frame_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    equity = 1.0
+    trade_log_path.parent.mkdir(parents=True, exist_ok=True)
+    with trade_log_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for row in rows:
+            pnl = _float_value(row.get("pnl", ""))
+            equity *= 1.0 + pnl
+            writer.writerow(
+                {
+                    "date": row.get("date", ""),
+                    "asset_return": row.get("asset_return", ""),
+                    "pnl": row.get("pnl", ""),
+                    "position": row.get("position", ""),
+                    "source": "backfill",
+                    "decision_time": row.get("decision_time", ""),
+                    "effective_time": row.get("effective_time", ""),
+                    "next_position": row.get("next_position", ""),
+                    "gross_pnl": row.get("gross_pnl", ""),
+                    "turnover": row.get("turnover", ""),
+                    "execution_cost": row.get("execution_cost", ""),
+                    "cum_return": equity - 1.0,
+                }
+            )
 
 
 def _latest_decision_from_frame(session: Path, result_ref: str) -> dict[str, Any] | None:
