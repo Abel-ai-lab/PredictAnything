@@ -27,6 +27,10 @@ from abel_invest.workspace_core.edge_runtime import (
 from abel_invest.narrative_core.runtime.edge_commands import (
     resolve_default_python_bin,
 )
+from abel_invest.narrative_core.runtime.dsr_accounting import (
+    append_dsr_accounting_record,
+    build_dsr_accounting_facts,
+)
 from abel_invest.workspace_core.workspace import (
     find_workspace_root,
     resolve_workspace_env_file,
@@ -37,6 +41,9 @@ from abel_invest.narrative_core.runtime.workflow_blockers import (
 from abel_invest.narrative_core.contracts.constants import (
     BRANCH_SPEC_FILENAME,
     EVENTS_HEADER,
+    EXPLORATION_PATH_FILENAME,
+    EXECUTION_CONSTRAINTS_FILENAME,
+    PROBE_SAMPLES_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
 )
@@ -47,6 +54,7 @@ from abel_invest.narrative_core.runtime.context import (
     build_branch_context,
     classify_result_frame,
 )
+from abel_invest.narrative_core.evidence.exploration_path import append_exploration_path_round
 from abel_invest.narrative_core.io import (
     SessionLock,
     _now,
@@ -358,20 +366,16 @@ def run_branch_round(args: argparse.Namespace) -> int:
     frame_path = branch / "outputs" / f"{round_id}-edge-frame.csv"
     handoff_path = branch / "outputs" / f"{round_id}-edge-handoff.json"
     context_path = branch / "outputs" / f"{round_id}-alpha-context.json"
-    context_path.write_text(
-        json.dumps(
-            build_branch_context(
-                branch=branch,
-                session=session,
-                discovery=discovery,
-                readiness=readiness,
-                round_id=round_id,
-                backtest_start=backtest_start,
-            ),
-            indent=2,
-        ),
-        encoding="utf-8",
+    context = build_branch_context(
+        branch=branch,
+        session=session,
+        discovery=discovery,
+        readiness=readiness,
+        round_id=round_id,
+        backtest_start=backtest_start,
+        selection_trials=getattr(args, "selection_trials", 1),
     )
+    context_path.write_text(json.dumps(context, indent=2), encoding="utf-8")
     emit_readiness_warning = False
     session_start = _get_backtest_start(discovery)
     if warning and backtest_start == session_start:
@@ -459,6 +463,18 @@ def run_branch_round(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return completed.returncode or 1
+    dsr_accounting = build_dsr_accounting_facts(
+        session=session,
+        branch_id=branch.name,
+        round_id=round_id,
+        run_type="round",
+        context_path=context_path,
+        result_path=result_path,
+        context=context,
+        result=result,
+    )
+    with SessionLock(session):
+        append_dsr_accounting_record(session, dsr_accounting)
     emit_missing_hypothesis_warning = False
     if not has_explicit_hypothesis(effective_hypothesis):
         with SessionLock(session):
@@ -470,7 +486,6 @@ def run_branch_round(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     decision = alpha_decision(rows, result, session=session)
-
     round_note = branch / "rounds" / f"{round_id}.md"
     round_note.write_text(
         render_round_note(
@@ -498,6 +513,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
             result_path=str(result_path.relative_to(session)),
             report_path=str(report_path.relative_to(session)),
             handoff_path=str(handoff_path.relative_to(session)),
+            dsr_accounting=dsr_accounting,
         ),
         encoding="utf-8",
     )
@@ -550,6 +566,21 @@ def run_branch_round(args: argparse.Namespace) -> int:
                 "artifact_path": str(result_path.relative_to(session)),
             },
         )
+        append_exploration_path_round(
+            session=session,
+            branch=branch,
+            round_id=round_id,
+            mode=args.mode,
+            decision=decision,
+            description=args.description,
+            result=result,
+            result_path=result_path,
+            report_path=report_path,
+            hypothesis=effective_hypothesis,
+            change_summary=args.change_summary,
+            next_step=args.next_step,
+            changed_dimensions=getattr(args, "changed_dimension", []),
+        )
         render_session(session)
     for line in graph_priority_warning_lines(session):
         print(f"Exploration protocol: {line}")
@@ -561,6 +592,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
     print(f"Edge handoff: {handoff_path.relative_to(session)}")
     if frame_path.exists():
         print(f"Edge frame: {frame_path.relative_to(session)}")
+    print(f"Exploration path: {session / EXPLORATION_PATH_FILENAME}")
     semantic = result.get("semantic") or {}
     if isinstance(semantic, dict) and semantic:
         render_section(
@@ -598,20 +630,15 @@ def debug_branch_run(args: argparse.Namespace) -> int:
     context_path = branch / "outputs" / "debug-alpha-context.json"
     debug_result_path = branch / "outputs" / "debug-edge-result.json"
     context_path.parent.mkdir(parents=True, exist_ok=True)
-    context_path.write_text(
-        json.dumps(
-            build_branch_context(
-                branch=branch,
-                session=session,
-                discovery=discovery,
-                readiness=readiness,
-                round_id="debug",
-                backtest_start=backtest_start,
-            ),
-            indent=2,
-        ),
-        encoding="utf-8",
+    context = build_branch_context(
+        branch=branch,
+        session=session,
+        discovery=discovery,
+        readiness=readiness,
+        round_id="debug",
+        backtest_start=backtest_start,
     )
+    context_path.write_text(json.dumps(context, indent=2), encoding="utf-8")
     python_bin = args.python_bin or resolve_default_python_bin(branch)
     command = [
         python_bin,
@@ -639,6 +666,14 @@ def debug_branch_run(args: argparse.Namespace) -> int:
         text=True,
         env=runtime_env,
     )
+    debug_result: dict[str, object] = {}
+    if debug_result_path.exists():
+        try:
+            parsed_debug_result = json.loads(debug_result_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            parsed_debug_result = {}
+        if isinstance(parsed_debug_result, dict):
+            debug_result = parsed_debug_result
     debug_snapshot = build_debug_snapshot(
         completed=completed,
         session=session,
@@ -646,38 +681,45 @@ def debug_branch_run(args: argparse.Namespace) -> int:
         debug_result_path=debug_result_path,
         backtest_start=backtest_start,
     )
+    dsr_accounting = build_dsr_accounting_facts(
+        session=session,
+        branch_id=branch.name,
+        round_id="debug",
+        run_type="debug",
+        context_path=context_path,
+        result_path=debug_result_path,
+        context=context,
+        result=debug_result,
+    )
     with SessionLock(session):
         persist_debug_snapshot(branch, debug_snapshot)
+        if debug_result_path.exists():
+            append_dsr_accounting_record(session, dsr_accounting)
         render_session(session)
     sys.stdout.write(completed.stdout)
     sys.stderr.write(completed.stderr)
     for line in advisory_lines:
         print(f"Runtime context: {line}")
-    if debug_result_path.exists():
-        try:
-            debug_result = json.loads(debug_result_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            debug_result = {}
-        if isinstance(debug_result, dict) and debug_result:
-            semantic = debug_result.get("semantic") or {}
-            if isinstance(semantic, dict) and semantic:
-                render_section(
-                    "Preflight",
-                    [
-                        f"semantic_verdict={semantic.get('verdict', 'unknown')}",
-                        f"decision_count={semantic.get('decision_count', 0)}",
-                        f"read_count={semantic.get('read_count', 0)}",
-                        f"output_shape={((semantic.get('output_shape') or {}).get('label', 'unknown'))}",
-                    ],
-                )
-            frame_key, frame_text = classify_result_frame(debug_result)
+    if isinstance(debug_result, dict) and debug_result:
+        semantic = debug_result.get("semantic") or {}
+        if isinstance(semantic, dict) and semantic:
             render_section(
-                "Interpretation",
+                "Preflight",
                 [
-                    f"result_class={frame_key}",
-                    frame_text,
+                    f"semantic_verdict={semantic.get('verdict', 'unknown')}",
+                    f"decision_count={semantic.get('decision_count', 0)}",
+                    f"read_count={semantic.get('read_count', 0)}",
+                    f"output_shape={((semantic.get('output_shape') or {}).get('label', 'unknown'))}",
                 ],
             )
+        frame_key, frame_text = classify_result_frame(debug_result)
+        render_section(
+            "Interpretation",
+            [
+                f"result_class={frame_key}",
+                frame_text,
+            ],
+        )
     print(f"Debug context: {context_path.relative_to(session)}")
     if debug_result_path.exists():
         print(f"Debug result: {debug_result_path.relative_to(session)}")

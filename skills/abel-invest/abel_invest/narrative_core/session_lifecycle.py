@@ -14,6 +14,7 @@ from abel_invest.narrative_core.contracts.branch_spec import (
 from abel_invest.narrative_core.contracts.constants import (
     DEFAULT_BACKTEST_START,
     EVENTS_HEADER,
+    EXPLORATION_PATH_FILENAME,
     GRAPH_FRONTIER_FILENAME,
     READINESS_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
@@ -29,6 +30,7 @@ from abel_invest.narrative_core.io import (
     write_tsv_header,
 )
 from abel_invest.narrative_core.evidence.journal import ensure_research_journal
+from abel_invest.narrative_core.evidence.exploration_path import ensure_exploration_path
 from abel_invest.narrative_core.evidence import graph_frontier
 from abel_invest.narrative_core.contracts.paths import branch_spec_path, branch_state_path, session_state_path
 from abel_invest.narrative_core.readiness import format_data_readiness_summary
@@ -102,6 +104,7 @@ def resolve_session_root(
 def render_breadth_first_start_lines(session: Path) -> list[str]:
     return [
         "graph-first research loop:",
+        f"read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing the next branch or round",
         f"edit {session / RESEARCH_JOURNAL_FILENAME}",
         f"abel-invest init-branch --session {session} --branch-id <family-a-branch>",
         f"abel-invest init-branch --session {session} --branch-id <family-b-branch>",
@@ -144,6 +147,7 @@ def init_session_dir(
     session = root / ticker.lower() / exp_id
     session.mkdir(parents=True, exist_ok=True)
     ensure_research_journal(session)
+    ensure_exploration_path(session)
     frontier_data = None
     discovery_data = None
     readiness_report = None

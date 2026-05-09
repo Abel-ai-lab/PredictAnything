@@ -24,6 +24,7 @@ from abel_invest.narrative_core.evidence.frontier import (
     exploration_neighborhood_key,
 )
 from abel_invest.narrative_core.io import _now, write_json_file
+from abel_invest.narrative_core.runtime.dsr_accounting import build_dsr_accounting_facts
 from abel_invest.narrative_core.state import (
     context_experiment_metadata,
     latest_debug_snapshot,
@@ -439,7 +440,8 @@ def build_evidence_row(
     run_id: str,
 ) -> dict[str, object]:
     context_rel = note.get("context_path", "")
-    context = load_json_object(session / context_rel) if context_rel else {}
+    context_path = session / context_rel if context_rel else None
+    context = load_json_object(context_path) if context_path is not None else {}
     branch_spec = context.get("branch_spec") if isinstance(context.get("branch_spec"), dict) else None
     if branch_spec is None:
         branch_spec = load_branch_spec(branch_dir)
@@ -449,6 +451,16 @@ def build_evidence_row(
     result_rel = note.get("result_path") or row.get("result_path", "")
     result_path = session / result_rel if result_rel else None
     result = load_json_object(result_path) if result_path is not None else {}
+    dsr_accounting = build_dsr_accounting_facts(
+        session=session,
+        branch_id=branch_id,
+        round_id=run_id,
+        run_type=run_type,
+        context_path=context_path,
+        result_path=result_path,
+        context=context,
+        result=result,
+    )
     runtime = evidence_runtime_facts(result)
     input_realization = build_input_realization(declaration=declaration, runtime=runtime)
     if input_realization["actual_graph_node_reads"] and not runtime["actual_graph_node_reads"]:
@@ -518,6 +530,7 @@ def build_evidence_row(
         "input_realization": input_realization,
         "runtime_stage": runtime["runtime_stage"],
         "workflow_status": workflow_status,
+        "dsr_accounting": dsr_accounting,
         "validation_status": "completed" if validation_completed else "not_completed",
         "verdict": runtime["verdict"],
         "semantic_verdict": runtime["semantic_verdict"],
