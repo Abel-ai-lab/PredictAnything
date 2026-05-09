@@ -94,33 +94,30 @@ many rounds on local strategy variants. Target-only controls are useful contrast
 evidence, but they do not cover graph-supported candidate input breadth when
 live graph candidates exist.
 
-## Journal And Research Reflection
+## Exploration Path
 
-`agent_context.md` is the compact factual resume surface. `research_journal.md`
-is the agent-owned research state.
+`agent_context.md` is the compact factual resume surface. `exploration_path.md`
+is the single human-facing exploration log.
 
-Use the journal for:
+Use the exploration path for:
 
-- hypotheses and observations
-- failed neighborhoods
-- open questions
-- reasons to continue, pivot, add contrast evidence, or stop
-- cross-branch comparisons
-- final research summaries
+- the path chosen for each recorded round
+- why that path was chosen
+- Edge feedback after the round
+- key result facts and artifact references
+- cross-branch context when it clarifies the path
 
 When an insight should survive as a research conclusion, cite evidence such as
 `ledger:<branch_id>:<round_id>`, `frontier.md`, or a raw artifact path.
 
-Every recorded round needs its own agent-written journal entry before the next
+Every recorded round needs its own exploration path entry before the next
 recorded round. The entry does not need a fixed template, but it must cite the
-round ledger ref and preserve the observation or insight that should guide later
-exploration.
+round ledger ref and preserve the path, reason, and Edge feedback that should
+guide later exploration.
 
-When `journal_coverage_complete=false`, use frontier facts and the journal to
-close the missing entries. State whether you are continuing the neighborhood,
-pivoting graph inputs, changing strategy family, adding contrast evidence, or
-stopping. The framework exposes the shape of the search; it should not choose
-the route.
+When `path_coverage_complete=false`, update `exploration_path.md` for the
+missing ledger refs. The framework exposes the shape of the search; it should
+not choose the route.
 
 ## Prepared Inputs
 
@@ -150,7 +147,7 @@ used by the current runtime.
 7. Run `abel-invest run-branch --branch ...` when declaration and
    debug facts are ready enough for the evidence label you want.
 8. Read `evidence_ledger.json` and `frontier.md`.
-9. Update `research_journal.md` with grounded follow-up state.
+9. Keep `exploration_path.md` covered with path, why, Edge feedback, and ledger refs.
 
 ## Research Judgment
 

@@ -31,7 +31,7 @@ The session owns:
 
 - `graph_frontier.json`: current graph node frontier and expansion provenance
 - `readiness.json`: advisory coverage report
-- `research_journal.md`: agent-owned research state
+- `exploration_path.md`: human-facing path, reason, and Edge feedback log
 - `frontier.md`: factual exploration coverage
 
 The branch then selects graph node inputs from that session context in

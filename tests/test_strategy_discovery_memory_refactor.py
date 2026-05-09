@@ -57,7 +57,7 @@ def _candidate_result_payload() -> dict:
     }
 
 
-def test_render_writes_agent_context_with_journal_view(tmp_path: Path) -> None:
+def test_render_writes_agent_context_with_exploration_path_view(tmp_path: Path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
     branch = ni.init_branch_dir(session, "graph-v1")
 
@@ -69,9 +69,8 @@ def test_render_writes_agent_context_with_journal_view(tmp_path: Path) -> None:
 
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
     assert "## Evidence Frontier" in context_text
-    assert "## Research Journal" in context_text
-    assert "## Research Reflection" in context_text
-    assert "## Journal Coverage" in context_text
+    assert "## Exploration Path" in context_text
+    assert "## Research Journal" not in context_text
     assert "## Input Realization" in context_text
 
 
@@ -267,30 +266,11 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     assert "create it and share the returned link" in status_output
     assert "abel-invest visualize-session --session" not in status_output
     assert "--base-url" not in status_output
-    assert "Research journal:" in status_output
+    assert "Exploration path:" in status_output
     assert "Agent memory:" not in status_output
     assert ni.check_session(session, strict=False) == 0
     assert ni.check_session(session, strict=True) == 1
-
-    blocked = ni.run_branch_round(
-        Namespace(
-            branch=str(branch),
-            mode="explore",
-            description="second pass",
-            input_note="",
-            hypothesis="AAPL driver strength leads TSLA next-day risk appetite.",
-            expected_signal="",
-            trigger="follow-up",
-            change_summary="second pass",
-            time_spent_min="10",
-            summary="",
-            next_step="",
-            action=[],
-            python_bin=None,
-        )
-    )
-    assert blocked == 2
-    assert "Journal required before next recorded round" in capsys.readouterr().err
+    assert ni.path_coverage_warning_lines(session) == []
 
 
 def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: Path) -> None:
@@ -374,10 +354,13 @@ def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: P
         },
     )
     ni.render_session(session)
-    (session / ni.RESEARCH_JOURNAL_FILENAME).write_text(
-        "# Research Journal\n\n"
-        "## Notes\n\n"
-        "- Driver concentration matters more than raw parent count. ledger:graph-v1:round-001\n",
+    (session / "exploration_path.md").write_text(
+        "# Exploration Path\n\n"
+        "## Entries\n\n"
+        "### graph-v1 round-001\n\n"
+        "- ledger: `ledger:graph-v1:round-001`\n"
+        "- path: causal driver vote\n"
+        "- why: Driver concentration matters more than raw parent count.\n",
         encoding="utf-8",
     )
 
@@ -405,11 +388,11 @@ def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: P
         "graph_input_read_gap_count": 0,
         "graph_input_read_gap_rows": [],
     }
-    assert bundle["payload"]["session"]["journalCoverage"] == {
+    assert bundle["payload"]["session"]["pathCoverage"] == {
         "recorded_round_count": 1,
-        "journaled_round_count": 1,
-        "journal_coverage_complete": True,
-        "missing_journal_rounds": [],
+        "covered_round_count": 1,
+        "path_coverage_complete": True,
+        "missing_path_rounds": [],
     }
     assert bundle["payload"]["rounds"][0]["roundId"] == "round-001"
     assert bundle["payload"]["rounds"][0]["branchId"] == "graph-v1"

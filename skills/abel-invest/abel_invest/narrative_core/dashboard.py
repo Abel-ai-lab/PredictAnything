@@ -21,8 +21,8 @@ from abel_invest.narrative_core.contracts.branch_spec import (
 from abel_invest.narrative_core.contracts.constants import (
     DEFAULT_ABEL_ROUTER_BASE_URL,
     EVIDENCE_LEDGER_FILENAME,
+    EXPLORATION_PATH_FILENAME,
     FRONTIER_JSON_FILENAME,
-    RESEARCH_JOURNAL_FILENAME,
 )
 from abel_invest.narrative_core.dashboard_adapters.primary_strategy_selector import (
     select_primary_strategy,
@@ -35,11 +35,10 @@ from abel_invest.narrative_core.evidence.evidence import (
 )
 from abel_invest.narrative_core.evidence.frontier import build_frontier
 from abel_invest.narrative_core.io import _now, read_env_file_values, read_tsv_rows
-from abel_invest.narrative_core.evidence.journal import (
-    build_research_journal_status,
-    extract_journal_evidence_refs,
-    journal_note_line_items,
-    resolve_journal_reference,
+from abel_invest.narrative_core.evidence.exploration_path import (
+    build_exploration_path_status,
+    extract_exploration_path_refs,
+    resolve_exploration_path_reference,
 )
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
 from abel_invest.narrative_core.rendering.session_rendering import render_session
@@ -62,7 +61,14 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
     ledger = load_json_object(session / EVIDENCE_LEDGER_FILENAME)
     if not ledger:
         ledger = build_evidence_ledger(session, discovery, load_branches(session))
-        frontier = build_frontier(ledger, journal_status=build_research_journal_status(session, ledger=ledger, frontier={}))
+        frontier = build_frontier(
+            ledger,
+            exploration_path_status=build_exploration_path_status(
+                session,
+                ledger=ledger,
+                frontier={},
+            ),
+        )
     branch_spec = load_branch_spec(branch)
     branch_state = load_branch_state(branch)
     rows = read_tsv_rows(branch / "results.tsv")
@@ -101,8 +107,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
     discovered_drivers = ordered_unique_upper(ledger.get("discovered_drivers") or [])
     graph_priority = frontier.get("graph_priority") if isinstance(frontier.get("graph_priority"), dict) else {}
     input_realization = frontier.get("input_realization") if isinstance(frontier.get("input_realization"), dict) else {}
-    research_reflection = frontier.get("research_reflection") if isinstance(frontier.get("research_reflection"), dict) else {}
-    journal_coverage = frontier.get("journal_coverage") if isinstance(frontier.get("journal_coverage"), dict) else {}
+    path_coverage = frontier.get("path_coverage") if isinstance(frontier.get("path_coverage"), dict) else {}
     return {
         "sessionId": session.name,
         "branchId": branch.name,
@@ -118,8 +123,7 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
                 "discoveredDrivers": discovered_drivers,
                 "frontierRows": frontier.get("row_count", 0),
                 "graphFirstUncovered": bool(graph_priority.get("graph_first_uncovered")),
-                "researchReflection": research_reflection,
-                "journalCoverage": journal_coverage,
+                "pathCoverage": path_coverage,
                 "inputRealization": input_realization,
             },
             "branch": branch_payload,
@@ -370,19 +374,19 @@ def skill_dashboard_branch_insights(
     frontier: dict,
     branch_id: str,
 ) -> list[dict]:
-    path = session / RESEARCH_JOURNAL_FILENAME
+    path = session / EXPLORATION_PATH_FILENAME
     if not path.exists():
         return []
     insights = []
-    for line_no, line in journal_note_line_items(path.read_text(encoding="utf-8").splitlines()):
-        summary = line.strip().lstrip("-").strip()
+    for index, block in enumerate(exploration_path_entry_blocks(path.read_text(encoding="utf-8")), start=1):
+        summary = exploration_path_block_summary(block)
         if not summary:
             continue
-        refs = extract_journal_evidence_refs(summary)
+        refs = extract_exploration_path_refs("\n".join(block))
         matching_refs = [
             ref
             for ref in refs
-            if journal_reference_matches_branch(
+            if path_reference_matches_branch(
                 ref,
                 branch_id=branch_id,
                 session=session,
@@ -394,13 +398,13 @@ def skill_dashboard_branch_insights(
             continue
         insights.append(
             {
-                "id": f"journal-line-{line_no}",
+                "id": f"exploration-path-entry-{index}",
                 "roundId": first_round_id_from_refs(matching_refs, branch_id=branch_id),
-                "kind": "research_journal",
+                "kind": "exploration_path",
                 "summary": summary,
                 "reusableRule": "",
                 "confidence": "",
-                "origin": "research_journal",
+                "origin": "exploration_path",
                 "evidenceRefs": matching_refs,
             }
         )
@@ -627,7 +631,7 @@ def dashboard_latest_evidence_label(ledger: dict, *, branch_id: str, round_id: s
     return ""
 
 
-def journal_reference_matches_branch(
+def path_reference_matches_branch(
     ref: str,
     *,
     branch_id: str,
@@ -635,14 +639,48 @@ def journal_reference_matches_branch(
     ledger: dict,
     frontier: dict,
 ) -> bool:
-    if not resolve_journal_reference(ref, session=session, ledger=ledger, frontier=frontier):
+    if not resolve_exploration_path_reference(ref, session=session, ledger=ledger, frontier=frontier):
         return False
     if ref.startswith("ledger:"):
         parts = ref.split(":")
         return len(parts) >= 3 and parts[1].strip() == branch_id
-    if ref.startswith("branches/"):
-        return ref.split("/")[1:2] == [branch_id]
+    if ref.startswith("branches/") or ref.startswith("branches\\"):
+        normalized = ref.replace("\\", "/")
+        return normalized.split("/")[1:2] == [branch_id]
     return False
+
+
+def exploration_path_entry_blocks(text: str) -> list[list[str]]:
+    lines = str(text or "").splitlines()
+    entry_start = 0
+    for index, line in enumerate(lines):
+        if line.strip() == "## Entries":
+            entry_start = index + 1
+            break
+    blocks: list[list[str]] = []
+    current: list[str] = []
+    for line in lines[entry_start:]:
+        if line.startswith("### ") and current:
+            blocks.append(current)
+            current = []
+        if line.strip() or current:
+            current.append(line)
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+def exploration_path_block_summary(block: list[str]) -> str:
+    for prefix in ("- why:", "- path:"):
+        for line in block:
+            stripped = line.strip()
+            if stripped.lower().startswith(prefix):
+                return stripped.split(":", 1)[1].strip()
+    for line in block:
+        stripped = line.strip().lstrip("#").strip()
+        if stripped:
+            return stripped
+    return ""
 
 
 def first_round_id_from_refs(refs: list[str], *, branch_id: str) -> str:

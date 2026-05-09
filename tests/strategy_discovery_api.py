@@ -24,7 +24,6 @@ from abel_invest.narrative_core.contracts.constants import (
     EVIDENCE_LEDGER_FILENAME,
     FRONTIER_JSON_FILENAME,
     FRONTIER_MARKDOWN_FILENAME,
-    JOURNAL_GENERATED_HEADER_END,
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
     GRAPH_FRONTIER_FILENAME,
@@ -40,7 +39,7 @@ from abel_invest.narrative_core.dashboard import (
 )
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts
 from abel_invest.narrative_core.io import append_tsv_row
-from abel_invest.narrative_core.evidence.journal import build_research_journal_status
+from abel_invest.narrative_core.evidence.exploration_path import build_exploration_path_status
 from abel_invest.narrative_core.command_handlers.branch import (
     debug_branch_run,
     prepare_branch_inputs,
@@ -78,7 +77,7 @@ from abel_invest.narrative_core.evidence.graph_frontier import (
 from abel_invest.narrative_core.rendering.session_rendering import (
     check_session,
     graph_priority_warning_lines,
-    journal_coverage_warning_lines,
+    path_coverage_warning_lines,
     print_status,
     render_session,
 )

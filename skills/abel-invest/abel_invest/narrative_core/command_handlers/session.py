@@ -12,7 +12,6 @@ from abel_invest.narrative_core.contracts.constants import (
     EXPLORATION_PATH_FILENAME,
     GRAPH_FRONTIER_FILENAME,
     READINESS_FILENAME,
-    RESEARCH_JOURNAL_FILENAME,
 )
 from abel_invest.narrative_core.io import SessionLock, _now, append_tsv_row
 from abel_invest.narrative_core.readiness import (
@@ -59,7 +58,6 @@ def handle_init_session(args: argparse.Namespace) -> int:
     print(f"  ticker: {discovery.get('ticker', args.ticker.upper())}")
     print(f"  graph_frontier: {session / GRAPH_FRONTIER_FILENAME}")
     print(f"  exploration_path: {session / EXPLORATION_PATH_FILENAME}")
-    print(f"  journal: {session / RESEARCH_JOURNAL_FILENAME}")
     print(f"  events: {session / 'events.tsv'}")
     if readiness:
         print(f"  readiness: {session / READINESS_FILENAME}")

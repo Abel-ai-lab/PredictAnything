@@ -15,7 +15,7 @@ agent = strategy judgment and research insight
 
 `abel-edge` owns runtime legality and validation metrics.
 `abel-invest` owns branch declarations, evidence labels, frontier
-facts, and the research journal surface.
+facts, and the exploration path surface.
 
 ## Core Principles
 
@@ -47,10 +47,10 @@ fragile, concentrated, or illegal.
 Each round should update the agent's understanding. Static parameter grids can
 hide whether the search is learning or just overfitting a neighborhood.
 
-**The journal is agent-owned.**
-`research_journal.md` preserves hypotheses, observations, pivots, and stop/keep
-reasoning between turns. Evidence references make journal insights durable, but
-the journal itself is not evidence truth.
+**The exploration path is agent-readable and evidence-linked.**
+`exploration_path.md` preserves the chosen path, why it was chosen, Edge
+feedback, and ledger/artifact references between turns. It is the human-facing
+research log, while evidence truth remains in the ledger and raw artifacts.
 
 ## Current Workflow Consequence
 
@@ -65,4 +65,4 @@ The branch-default path is:
 7. run semantic preflight
 8. record evidence
 9. inspect ledger/frontier facts
-10. update the research journal before deep local refinement
+10. keep `exploration_path.md` covered before deep local refinement

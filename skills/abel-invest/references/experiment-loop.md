@@ -24,14 +24,14 @@ abel-invest init-branch --session research/<ticker>/<exp_id> --branch-id <family
 # make each branch declaration explicit
 edit research/<ticker>/<exp_id>/branches/<family-a-branch>/branch.yaml
 edit research/<ticker>/<exp_id>/branches/<family-b-branch>/branch.yaml
-edit research/<ticker>/<exp_id>/research_journal.md
+read research/<ticker>/<exp_id>/exploration_path.md before choosing the next Edge run
 
 # implement, prepare, debug, and record the agent-chosen branch round
 edit research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py
 abel-invest prepare-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 abel-invest debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 abel-invest run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
-edit research/<ticker>/<exp_id>/research_journal.md  # add the round's ledger ref and insight before another run
+edit research/<ticker>/<exp_id>/exploration_path.md  # keep path, why, Edge feedback, and ledger ref concise
 
 # only after the user asks to visualize the session, or agrees after a PASS
 abel-invest visualize-session --session research/<ticker>/<exp_id>
@@ -57,18 +57,18 @@ Each round should answer a mechanism question, not just consume compute.
 
 1. Read `agent_context.md` when resuming.
 2. Use `frontier.md` to understand coverage, concentration, input
-   realization, and research reflection facts.
-3. Use `research_journal.md` for your own hypotheses, observations, open
-   questions, and pivot/continue reasoning.
+   realization, and path coverage facts.
+3. Use `exploration_path.md` as the single human-facing log of chosen paths,
+   why each path was chosen, Edge feedback, and ledger/artifact refs.
 4. Declare the branch hypothesis in `branch.yaml`.
 5. Run `prepare-branch` before trusting branch inputs.
 6. Run `debug-branch` before recording evidence.
 7. Run `run-branch` only when declaration and debug facts are ready enough for
    the evidence label you want.
 8. Re-read `evidence_ledger.json` and `frontier.md`.
-9. Update `research_journal.md` for the recorded round before starting another
-   recorded round. Cite the round ledger ref and capture what changed, what
-   happened, what was learned, and what that implies next.
+9. Ensure `exploration_path.md` has the recorded round before starting another
+   recorded round. Cite the round ledger ref and keep the path, why, and Edge
+   feedback concise.
 
 ## Layer Ownership
 
@@ -103,11 +103,11 @@ After each render, treat:
 - `evidence_ledger.json` as the evidence record
 - `frontier.md` / `frontier.json` as factual coverage reports
 - `agent_context.md` as the compact factual resume surface
-- `research_journal.md` as agent-owned research state
+- `exploration_path.md` as the single human-facing exploration log
 
-`journal_coverage_complete=false` means at least one recorded round still needs
-an agent-written journal entry. `research_reflection_due=true` is derived from
-that missing coverage; it does not mean the system has chosen a route.
+`path_coverage_complete=false` means at least one recorded round still needs an
+`exploration_path.md` entry with the round ledger ref, chosen path, reason, and
+Edge feedback. It does not mean the system has chosen a route.
 
 Input realization separates declaration from runtime behavior: a branch can
 declare `input_claim=graph_supported`, but if the strategy does not read
