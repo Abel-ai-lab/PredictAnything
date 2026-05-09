@@ -106,6 +106,7 @@ def _round_candidates(
 def _primary_strategy_payload(candidate: RoundCandidate) -> dict[str, Any]:
     result_ref = str(candidate.row.get("result_path") or "").strip()
     report_ref = str(candidate.row.get("report_path") or "").strip()
+    edge_metrics = _edge_result_metrics(candidate.session, result_ref)
     return {
         "branchId": candidate.branch_id,
         "roundId": candidate.round_id,
@@ -124,11 +125,84 @@ def _primary_strategy_payload(candidate: RoundCandidate) -> dict[str, Any]:
             "maxDd": _float_value(candidate.row.get("max_dd", "")),
             "totalReturn": candidate.total_return,
             "k": _int_value(candidate.row.get("K", "")),
+            "positionIcStability": _float_value(edge_metrics.get("position_ic_stability", "")),
+            "dsr": _float_value(edge_metrics.get("dsr", "")),
+            "lossYears": _int_value(edge_metrics.get("loss_years", "")),
         },
         "resultRef": result_ref,
         "reportRef": report_ref,
         "latestDecision": _latest_decision_from_frame(candidate.session, result_ref),
+        "backtestTradeLog": _backtest_trade_log_from_frame_csv(candidate.session, result_ref),
     }
+
+
+def _edge_result_metrics(session: Path, result_ref: str) -> dict[str, Any]:
+    if not result_ref:
+        return {}
+    result_path = session / result_ref
+    if not result_path.exists():
+        return {}
+    try:
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    metrics = payload.get("metrics")
+    return metrics if isinstance(metrics, dict) else {}
+
+
+def _backtest_trade_log_from_frame_csv(session: Path, result_ref: str) -> dict[str, Any] | None:
+    frame_path = _frame_path_for_result_ref(session, result_ref)
+    if frame_path is None or not frame_path.exists():
+        return None
+    trade_log_path = frame_path.with_name(frame_path.name.replace("-edge-frame.csv", "-trade-log.csv"))
+    _write_trade_log_from_frame(frame_path, trade_log_path)
+    return {
+        "source": "abel_invest_trade_log_csv",
+        "tradeLogRef": str(trade_log_path.relative_to(session)),
+    }
+
+
+def _write_trade_log_from_frame(frame_path: Path, trade_log_path: Path) -> None:
+    fields = [
+        "date",
+        "asset_return",
+        "pnl",
+        "position",
+        "source",
+        "decision_time",
+        "effective_time",
+        "next_position",
+        "gross_pnl",
+        "turnover",
+        "execution_cost",
+        "cum_return",
+    ]
+    with frame_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    equity = 1.0
+    trade_log_path.parent.mkdir(parents=True, exist_ok=True)
+    with trade_log_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for row in rows:
+            pnl = _float_value(row.get("pnl", ""))
+            equity *= 1.0 + pnl
+            writer.writerow(
+                {
+                    "date": row.get("date", ""),
+                    "asset_return": row.get("asset_return", ""),
+                    "pnl": row.get("pnl", ""),
+                    "position": row.get("position", ""),
+                    "source": "backfill",
+                    "decision_time": row.get("decision_time", ""),
+                    "effective_time": row.get("effective_time", ""),
+                    "next_position": row.get("next_position", ""),
+                    "gross_pnl": row.get("gross_pnl", ""),
+                    "turnover": row.get("turnover", ""),
+                    "execution_cost": row.get("execution_cost", ""),
+                    "cum_return": equity - 1.0,
+                }
+            )
 
 
 def _latest_decision_from_frame(session: Path, result_ref: str) -> dict[str, Any] | None:
