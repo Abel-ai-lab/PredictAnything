@@ -8,7 +8,6 @@ from pathlib import Path
 import yaml
 
 MANIFEST_NAME = "alpha.workspace.yaml"
-DEFAULT_EDGE_SPEC = "git+https://github.com/Abel-ai-causality/Abel-edge.git@main"
 DEFAULT_WORKSPACE_NAME = "abel-invest-workspace"
 
 
@@ -120,14 +119,6 @@ def resolve_runtime_python(root: Path, manifest: dict | None = None) -> Path:
     return root / configured
 
 
-def resolve_edge_spec(root: Path, manifest: dict | None = None) -> str:
-    """Resolve the configured Abel-edge install spec for this workspace."""
-    manifest = manifest or load_workspace_manifest(root)
-    runtime = manifest.get("runtime") or {}
-    configured = str(runtime.get("edge_spec") or "").strip()
-    return configured or DEFAULT_EDGE_SPEC
-
-
 def scaffold_workspace(
     name: str,
     *,
@@ -186,8 +177,6 @@ def build_default_manifest(name: str) -> dict:
         },
         "runtime": {
             "python": default_python_path(),
-            "edge_package": "abel-edge",
-            "edge_spec": DEFAULT_EDGE_SPEC,
             "auth_strategy": "reuse_abel_auth_first",
         },
         "defaults": {
@@ -234,7 +223,7 @@ def render_workspace_status(root: Path, manifest: dict | None = None) -> str:
         f"Venv: {resolved['venv']}",
         f"Runtime python: {runtime_python}",
         f"Runtime python exists: {'yes' if runtime_python.exists() else 'no'}",
-        f"Edge install target: {resolve_edge_spec(root, manifest)}",
+        "Edge dependency: managed by abel-invest package dependencies",
     ]
     return "\n".join(lines)
 
@@ -258,30 +247,39 @@ into branch evidence.
 ## A Usual Path
 
 ```bash
+abel-invest workspace context --path . --json
 abel-invest doctor
 {default_activate_command()}
 abel-invest init-session --ticker TSLA --exp-id tsla-v1
+abel-invest frontier status --session research/tsla/tsla-v1
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
 edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
 edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
+read research/tsla/tsla-v1/exploration_path.md before choosing the next Edge run
 edit research/tsla/tsla-v1/research_journal.md
 edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
 abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 edit research/tsla/tsla-v1/research_journal.md
+# ask the user first after a candidate PASS, or run when the user requests it
+abel-invest visualize-session --session research/tsla/tsla-v1
 ```
 
 Use that path as orientation, not as a rigid script. The important boundary is:
 - `doctor` tells you whether the workspace is actually ready
+- `workspace context --json` tells you the owning workspace and `research_root`
 - `branch.yaml` makes the branch inputs explicit
 - `prepare-branch` resolves inputs before you treat any round as evidence
 - the starter `engine.py` is only there to verify branch wiring before a branch-specific mechanism exists
-- new sessions default to graph-first research: use causal graph inputs first,
-  then strategy variants, then parameters
+- new sessions default to graph-first research: use `graph_frontier.json` and
+  `frontier expand` to widen graph breadth first, then strategy variants, then
+  parameters
 - every recorded round requires an agent-written `research_journal.md` entry
   with the round ledger ref before the next recorded round
+- every next Edge run should be chosen after reading `exploration_path.md` and
+  the latest Edge result; `run-branch` appends the new Edge feedback there
 
 ## Re-entry
 
@@ -289,17 +287,22 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - if you open this workspace root again later, continue here
 - if you open the parent launch directory later, reuse its child `abel-invest-workspace` before creating another one
 - do not create a second workspace in the same area unless you want one intentionally
+- create new sessions only after workspace context resolves; use `--root` only
+  for intentional outside-workspace legacy/offline sessions and pass
+  `--allow-outside-workspace`
 
 ## What This Workspace Makes Explicit
 
-- session owns `discovery.json` and `readiness.json`
-- session owns `evidence_ledger.json`, `frontier.md`, `agent_context.md`, and
-  `research_journal.md` after rendering
+- session owns `graph_frontier.json` and `readiness.json`
+- session owns `evidence_ledger.json`, `frontier.md`, `agent_context.md`,
+  `exploration_path.md`, and `research_journal.md` after rendering
 - branch owns `branch.yaml`
 - edge owns the market-data cache
 - `prepare-branch` should run before a recorded round
 - `frontier.md` reports input realization: declared graph-supported inputs only
-  count as realized when the engine reads prepared auxiliary inputs
+  count as realized when the engine reads prepared graph inputs
+- `visualize-session` creates an online session view from the session folder;
+  run it only when the user requests it or agrees after a candidate PASS
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter baseline for the first end-to-end run, not a finished branch thesis
 
@@ -317,7 +320,8 @@ interpreter with `abel-invest env init --runtime-python /path/to/python`.
 
 ## Readiness Gate
 
-Run `abel-invest doctor` before opening a session.
+Run `abel-invest workspace context --path . --json` and `abel-invest doctor`
+before opening a session.
 
 - `ready`: you can start research
 - `ready` means continue with `init-session -> init-branch -> branch.yaml -> prepare-branch`
@@ -339,6 +343,7 @@ follow a rigid script.
 
 ### Check whether this directory is a valid workspace
 ```bash
+abel-invest workspace context --path . --json
 abel-invest workspace status
 abel-invest doctor
 ```
@@ -348,33 +353,47 @@ is the workspace root. Do not create `./abel-invest-workspace` inside it.
 
 ### Start a new exploration session
 ```bash
+abel-invest workspace context --path . --json
 abel-invest doctor
 abel-invest init-session --ticker TSLA --exp-id tsla-v1
+abel-invest frontier status --session research/tsla/tsla-v1
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
 edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
 edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
+read research/tsla/tsla-v1/exploration_path.md before choosing the next Edge run
 edit research/tsla/tsla-v1/research_journal.md
 edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
 abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 edit research/tsla/tsla-v1/research_journal.md
+# ask the user first after a candidate PASS, or run when the user requests it
+abel-invest visualize-session --session research/tsla/tsla-v1
 ```
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
 `abel-auth`, then rerun `doctor`.
-Treat `branch.yaml` as the place where target, start, drivers, and overlap
-become explicit. Treat `prepare-branch` as the moment that makes those inputs
-real. Treat the generated `engine.py` as a starter path check; once the branch
-path is proven, encode the branch-specific mechanism there. Treat session
-readiness as advisory context; the branch's explicit `requested_start` is the
-runtime start when it is set. Treat this workspace `.venv` as the canonical
-runtime for daily work. Treat branch count as a file-organization fact, not as
-proof of graph/input breadth. Use `research_journal.md` to record your own
-evidence-linked insight and continue/pivot reasoning after each recorded round.
-Check journal coverage before starting another round. Check input realization before treating a
-declared graph-supported branch as graph-supported evidence.
+Run `workspace context --path . --json` before creating a session so the
+session lands under this workspace's `research/` directory. Do not pass
+`--root` unless intentionally creating a legacy/offline session outside the
+workspace, and then pass `--allow-outside-workspace`.
+Treat `branch.yaml` as the place where target, start, graph inputs, and overlap
+become explicit. Treat `prepare-branch` as the moment that makes those graph
+inputs real. Treat the generated `engine.py` as a starter path check; once the
+branch path is proven, encode the branch-specific mechanism there. Treat
+session readiness as advisory context; the branch's explicit `requested_start`
+is the runtime start when it is set. Treat this workspace `.venv` as the
+canonical runtime for daily work. Treat branch count as a file-organization
+fact, not as proof of graph breadth. Use `research_journal.md` to record your
+own evidence-linked insight and continue/pivot reasoning after each recorded
+round. Read `exploration_path.md` and the latest Edge result before choosing
+the next Edge run; after Edge feedback, keep the path updated. Check journal coverage before starting another round. Check input
+realization before treating a declared graph-supported branch as graph-supported
+evidence. Do not create the online session view automatically; after a
+candidate PASS, ask the user first. If the user agrees or explicitly asks to
+visualize the session, `visualize-session` builds the view from the session
+folder.
 This workspace is for alpha-managed branch research, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.
@@ -396,6 +415,7 @@ abel-invest promote-branch --branch research/tsla/tsla-v1/branches/<chosen-branc
 - if `alpha.workspace.yaml` is in the current directory, continue here directly and do not bootstrap a child workspace
 - if you are already in this workspace root, continue here directly
 - if you are in the parent launch directory, reuse its `abel-invest-workspace` child before creating another one
+- run `abel-invest workspace context --path . --json` before creating a session
 """
 
 

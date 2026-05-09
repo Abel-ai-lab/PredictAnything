@@ -3,10 +3,21 @@
 Use this reference after workspace preflight is complete and
 `abel-invest doctor` is ready.
 
+Before creating a new session, confirm the workspace context:
+
+```bash
+abel-invest workspace context --path . --json
+```
+
+Use the resolved workspace `research_root`. Do not pass `--root` unless this
+is an intentional legacy/offline session outside a workspace; in that case pass
+`--allow-outside-workspace` too.
+
 ## Standard Path
 
 ```bash
 abel-invest init-session --ticker <TICKER> --exp-id <exp-id>
+abel-invest frontier status --session research/<ticker>/<exp_id>
 abel-invest init-branch --session research/<ticker>/<exp_id> --branch-id <family-a-branch>
 abel-invest init-branch --session research/<ticker>/<exp_id> --branch-id <family-b-branch>
 
@@ -22,11 +33,23 @@ abel-invest debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-br
 abel-invest run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
 edit research/<ticker>/<exp_id>/research_journal.md  # add the round's ledger ref and insight before another run
 
+# only after the user asks to visualize the session, or agrees after a PASS
+abel-invest visualize-session --session research/<ticker>/<exp_id>
 ```
 
 New sessions run live graph discovery by default. Use `--no-discover` only when
 auth, service access, or continuity constraints make live graph discovery
 unavailable.
+
+When the known graph is too narrow for the next research question, expand the
+frontier before cutting more strategy variants:
+
+```bash
+abel-invest frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_ID> --mode all --limit 20
+```
+
+Frontier expansion changes `graph_frontier.json`; it does not record evidence
+or prescribe a branch.
 
 ## Research Loop
 
@@ -49,16 +72,29 @@ Each round should answer a mechanism question, not just consume compute.
 
 ## Layer Ownership
 
-- session: discovery and readiness
+- session: graph frontier, expansion provenance, and readiness
 - branch: branch declaration and `compute_decisions(self, ctx)`
 - edge cache: market data reuse
 - prepare step: branch input resolution and runtime contract materialization
 - debug step: semantic preflight
-- run step: evaluation and evidence recording
+- run step: evaluation, DSR trial-count declaration, and evidence recording
 
 Session `backtest_start` is the default exploration target. When
 `branch.yaml.requested_start` is explicit, that branch start should drive
 prepare/debug/run for the branch.
+
+`run-branch` writes `validation_context.dsr_trials.count` into the Alpha context
+passed to `abel-edge evaluate`. The count is effective exploration trials:
+prior PASS/FAIL rounds contribute their recorded trial count, and the current
+round defaults to `1`. If one submitted strategy was selected from a parameter,
+threshold, filter, sizing, or window sweep, pass `--selection-trials N` so DSR
+reflects the Alpha search width instead of only the final `engine.py` shape.
+Each edge result also appends a session-level `dsr_trials.jsonl` audit row.
+Recorded PASS/FAIL validation rounds count toward future DSR; debug runs,
+semantic errors, and workflow blockers are recorded for audit but do not increase
+future DSR count. Round notes and `evidence_ledger.json` expose the same K
+accounting facts for review. Workflow blockers preserve Alpha's declared count
+but use `edge_k_source=not_available` because no Edge K was returned.
 
 ## Evidence Reading
 
@@ -75,18 +111,36 @@ that missing coverage; it does not mean the system has chosen a route.
 
 Input realization separates declaration from runtime behavior: a branch can
 declare `input_claim=graph_supported`, but if the strategy does not read
-prepared auxiliary inputs, that round is summarized as a graph input read gap
-and cannot count as candidate causal evidence solely from the declaration.
+prepared graph inputs, that round is summarized as a graph input read gap and
+cannot count as candidate causal evidence solely from the declaration.
 
 The generated surfaces should show what happened, not tell you which driver,
 proxy, threshold, model family, or mechanism to try next.
 
+## Session Visualization
+
+Do not create an online session view automatically. If a candidate round
+records a PASS, ask the user whether to create an online visualization of this
+session. If the user agrees, or if the user explicitly asks to visualize the
+session, pass the session folder to the command:
+
+```bash
+abel-invest visualize-session --session research/<ticker>/<exp_id>
+```
+
+The command builds the online view from local session evidence. The agent
+should not hand-assemble the payload or choose a router URL.
+
+Default router base URL: `https://api.abel.ai/router/`.
+`abel-auth` is the canonical owner for API key setup. Maintainers should update
+the default URL in the skill code if this endpoint changes.
+
 ## Exploration Discipline
 
-- graph/input exploration comes first
+- graph breadth exploration comes first
 - strategy variants come second
 - parameter tuning comes last
-- multiple branches on one driver set can still be graph/input narrow
+- multiple branches on one graph input set can still be graph-breadth narrow
 - local refinement is useful only while it is still learning something
 
 If repeated variants fail in the same neighborhood, use the frontier and journal
