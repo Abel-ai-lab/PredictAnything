@@ -29,3 +29,8 @@ Do not guess from shell environment alone.
    session continuation, branch preparation, branch debugging, or branch runs,
    use `abel-invest`.
 3. For other graph-native or decision-oriented Abel reads, use `abel-ask`.
+
+## Good First Questions
+
+- Help me search for a TSLA trading strategy.
+- Should I still invest in a MBA degree?
