@@ -1630,6 +1630,104 @@ def test_export_selected_strategy_artifact_state_aware_zero_change(
     assert "edge/promotion-gate.json" in file_paths
 
 
+def test_export_selected_strategy_artifact_uses_local_runtime_state_source(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "runtime_state_source")
+    _write_strategy_artifact_inputs(branch)
+    state_file = branch / ".abel-runtime" / "state" / "model" / "latest.joblib"
+    state_file.parent.mkdir(parents=True)
+    state_file.write_text("runtime state\n", encoding="utf-8")
+    (branch / ".abel-runtime" / "state" / "model" / "scratch.joblib").write_text(
+        "undeclared state\n",
+        encoding="utf-8",
+    )
+    (branch / "engine.py").write_text(
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        model_path = ctx.state_dir / \"model/latest.joblib\"\n"
+        "        return ctx.decisions(1)\n",
+        encoding="utf-8",
+    )
+    (branch / "state_intent.json").write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.state-intent/v1",
+                "entries": [
+                    {
+                        "path": "model/latest.joblib",
+                        "role": "initial_state",
+                        "mutableInPaper": True,
+                        "requiredForSignal": True,
+                        "producedBy": "pytest",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+    output_dir = tmp_path / "exported-artifact"
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        evaluated = _fake_evaluate_command(command)
+        if evaluated is not None:
+            return evaluated
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 10,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
+    file_paths = [item["path"] for item in manifest["files"]]
+    assert result["promotionMode"] == "zero_change"
+    assert "runtime/initial-state/model/latest.joblib" in file_paths
+    assert not any(path.startswith("strategy/.abel-runtime/") for path in file_paths)
+
+
 def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
     tmp_path: Path,
 ) -> None:

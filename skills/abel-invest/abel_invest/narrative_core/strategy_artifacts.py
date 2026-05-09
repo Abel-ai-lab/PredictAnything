@@ -59,6 +59,7 @@ DEFAULT_PROMOTIONS_DIRNAME = "promotions"
 RUNTIME_STATE_SCHEMA = "abel-invest.runtime-state/v1"
 DENYLISTED_STRATEGY_PARTS = {
     ".git",
+    ".abel-runtime",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",

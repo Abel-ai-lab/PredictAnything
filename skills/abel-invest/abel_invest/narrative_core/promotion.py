@@ -14,6 +14,7 @@ from abel_edge.research.promotion_gate import build_promotion_gate_report
 
 STATE_INTENT_FILENAME = "state_intent.json"
 STATE_INTENT_SCHEMA = "abel-invest.state-intent/v1"
+LOCAL_RUNTIME_STATE_DIR = Path(".abel-runtime") / "state"
 PROMOTION_MODE_ZERO_CHANGE = "zero_change"
 PROMOTION_MODE_AUTO_ADAPTER = "auto_adapter"
 PROMOTION_MODE_NEEDS_AGENT_REFACTOR = "needs_agent_refactor"
@@ -310,7 +311,7 @@ def _state_intent_entries(
         required = raw.get("requiredForSignal")
         if not isinstance(mutable, bool) or not isinstance(required, bool):
             raise RuntimeError("state intent mutableInPaper/requiredForSignal must be boolean")
-        source_path = branch / relative
+        source_path = _state_intent_source_path(branch, relative=relative, role=role)
         if role not in {"exclude", "evidence"} and not source_path.is_file():
             raise RuntimeError(f"state intent source file is missing: {relative}")
         entries.append(
@@ -324,6 +325,14 @@ def _state_intent_entries(
             )
         )
     return entries
+
+
+def _state_intent_source_path(branch: Path, *, relative: str, role: str) -> Path:
+    if role == "initial_state":
+        runtime_state_path = branch / LOCAL_RUNTIME_STATE_DIR / relative
+        if runtime_state_path.is_file():
+            return runtime_state_path
+    return branch / relative
 
 
 def _validate_state_intent_relative_path(
