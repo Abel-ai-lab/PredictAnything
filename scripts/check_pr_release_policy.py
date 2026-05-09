@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from collections.abc import Iterable
 
@@ -27,14 +28,20 @@ def _normalize_changed_files(changed_files: Iterable[str]) -> list[str]:
     return normalized
 
 
-def evaluate_policy(*, base_branch: str, changed_files: Iterable[str]) -> list[str]:
+def evaluate_policy(
+    *,
+    base_branch: str,
+    changed_files: Iterable[str],
+    changed_source_version_files: Iterable[str] | None = None,
+) -> list[str]:
     base = str(base_branch or "").strip()
     files = _normalize_changed_files(changed_files)
     file_set = set(files)
+    version_files = set(_normalize_changed_files(changed_source_version_files or []))
     violations: list[str] = []
 
     changed_source_skill = any(path.startswith(SOURCE_SKILL_PREFIX) for path in files)
-    changed_source_version = any(path in file_set for path in SOURCE_VERSION_FILES)
+    changed_source_version = bool(version_files)
     changed_changelog = CHANGELOG_FILE in file_set
 
     if base == "develop":
@@ -61,6 +68,33 @@ def evaluate_policy(*, base_branch: str, changed_files: Iterable[str]) -> list[s
     return violations
 
 
+def detect_changed_source_version_files(
+    *,
+    base_ref: str | None,
+    changed_files: Iterable[str],
+) -> list[str]:
+    base = str(base_ref or "").strip()
+    if not base:
+        return [path for path in _normalize_changed_files(changed_files) if path in SOURCE_VERSION_FILES]
+    changed = []
+    for path in _normalize_changed_files(changed_files):
+        if path not in SOURCE_VERSION_FILES:
+            continue
+        diff = subprocess.run(
+            ["git", "diff", "--unified=0", f"{base}...HEAD", "--", path],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if diff.returncode not in {0, 1}:
+            continue
+        for line in diff.stdout.splitlines():
+            if line.startswith(("+version:", "-version:")):
+                changed.append(path)
+                break
+    return changed
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Check Abel-skills pull request branching and release policy."
@@ -72,6 +106,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Changed file path. Repeat for multiple files.",
     )
+    parser.add_argument(
+        "--base-ref",
+        default="",
+        help="Optional git base ref used to detect actual source skill version changes.",
+    )
     return parser
 
 
@@ -82,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
     violations = evaluate_policy(
         base_branch=args.base_branch,
         changed_files=args.changed_file,
+        changed_source_version_files=detect_changed_source_version_files(
+            base_ref=args.base_ref,
+            changed_files=args.changed_file,
+        ),
     )
     if not violations:
         print("PASS: pull request release policy satisfied.")
