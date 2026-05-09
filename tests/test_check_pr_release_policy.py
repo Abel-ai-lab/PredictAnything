@@ -27,8 +27,17 @@ class CheckPrReleasePolicyTests(unittest.TestCase):
         violations = self.module.evaluate_policy(
             base_branch="develop",
             changed_files=["skills/abel/SKILL.md"],
+            changed_source_version_files=["skills/abel/SKILL.md"],
         )
         self.assertTrue(any("version" in violation.lower() for violation in violations))
+
+    def test_develop_pr_allows_source_skill_content_change_without_version_bump(self) -> None:
+        violations = self.module.evaluate_policy(
+            base_branch="develop",
+            changed_files=["skills/abel/SKILL.md"],
+            changed_source_version_files=[],
+        )
+        self.assertEqual([], violations)
 
     def test_develop_pr_rejects_release_changelog(self) -> None:
         violations = self.module.evaluate_policy(
@@ -67,8 +76,21 @@ class CheckPrReleasePolicyTests(unittest.TestCase):
                 "skills/abel/references/routing.md",
                 "CHANGELOG.md",
             ],
+            changed_source_version_files=["skills/abel/SKILL.md"],
         )
         self.assertEqual([], violations)
+
+    def test_main_pr_requires_actual_version_bump_not_just_skill_file_change(self) -> None:
+        violations = self.module.evaluate_policy(
+            base_branch="main",
+            changed_files=[
+                "skills/abel/SKILL.md",
+                "skills/abel/references/routing.md",
+                "CHANGELOG.md",
+            ],
+            changed_source_version_files=[],
+        )
+        self.assertTrue(any("version" in violation.lower() for violation in violations))
 
     def test_main_pr_allows_release_bundle(self) -> None:
         violations = self.module.evaluate_policy(
@@ -78,6 +100,7 @@ class CheckPrReleasePolicyTests(unittest.TestCase):
                 "skills/abel/SKILL.md",
                 "CHANGELOG.md",
             ],
+            changed_source_version_files=["skills/abel/SKILL.md"],
         )
         self.assertEqual([], violations)
 
