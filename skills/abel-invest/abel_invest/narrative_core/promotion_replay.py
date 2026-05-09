@@ -61,14 +61,23 @@ def verify_promotion_replay(
         shutil.copyfile(promoted_source_path, replay_branch / "engine.py")
         _bootstrap_replay_state(replay_branch, state_entries)
         replay_candidate = replace(candidate, branch=replay_branch)
-        replay_result = run_edge_metric_input_export(
-            python_bin=python_bin,
-            candidate=replay_candidate,
-            result_path=replay_result_path,
-            report_path=replay_report_path,
-            metric_input_path=replay_metric_input_path,
-            runner=runner,
-        )
+        try:
+            replay_result = run_edge_metric_input_export(
+                python_bin=python_bin,
+                candidate=replay_candidate,
+                result_path=replay_result_path,
+                report_path=replay_report_path,
+                metric_input_path=replay_metric_input_path,
+                runner=runner,
+            )
+        except Exception as exc:
+            return _failed(
+                f"promoted replay failed: {_clean_reason(exc)}",
+                replacements=replacements,
+            )
+
+    if not replay_metric_input_path.is_file():
+        return _failed("promoted metric input is missing", replacements=replacements)
 
     comparison = _compare_metric_inputs(
         candidate.edge_metric_input_path,
@@ -116,6 +125,10 @@ def _failed(reason: str, *, replacements: list[dict[str, str]]) -> dict[str, Any
             "reason": reason,
         },
     }
+
+
+def _clean_reason(exc: Exception) -> str:
+    return " ".join(str(exc).split())[:500] or exc.__class__.__name__
 
 
 def _bootstrap_replay_state(replay_branch: Path, state_entries: tuple[Any, ...]) -> None:

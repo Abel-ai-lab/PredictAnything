@@ -1531,6 +1531,94 @@ def test_export_selected_strategy_artifact_normalizes_relative_python_bin(
     assert commands_seen[0][0] == str((Path.cwd() / ".venv/bin/python").absolute())
 
 
+def test_export_selected_strategy_artifact_returns_gate_evidence_on_replay_failure(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "replay_failure")
+    _write_strategy_artifact_inputs(branch)
+    (branch / "model").mkdir()
+    (branch / "model" / "latest.joblib").write_text("state\n", encoding="utf-8")
+    (branch / "engine.py").write_text(
+        "from pathlib import Path\n"
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        model_path = Path(\"model/latest.joblib\")\n"
+        "        return ctx.decisions(1)\n",
+        encoding="utf-8",
+    )
+    (branch / "state_intent.json").write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.state-intent/v1",
+                "entries": [
+                    {
+                        "path": "model/latest.joblib",
+                        "role": "initial_state",
+                        "mutableInPaper": True,
+                        "requiredForSignal": True,
+                        "producedBy": "pytest",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+    output_dir = tmp_path / "exported-artifact"
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        if "evaluate" in command:
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                stdout="",
+                stderr="synthetic promoted replay failure",
+            )
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert result["artifactExported"] is False
+    assert result["skipReason"] == "needs_agent_refactor"
+    gate_path = Path(result["promotionReport"]["gatePath"])
+    gate = json.loads(gate_path.read_text(encoding="utf-8"))
+    assert gate["status"] == "failed"
+    behavior_gate = next(
+        item for item in gate["gates"] if item["name"] == "behavior_equivalence"
+    )
+    assert behavior_gate["status"] == "failed"
+    assert "promoted replay failed" in behavior_gate["details"]["reason"]
+
+
 def test_export_selected_strategy_artifact_state_aware_zero_change(
     tmp_path: Path,
 ) -> None:

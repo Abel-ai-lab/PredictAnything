@@ -214,14 +214,14 @@ def prepare_promotion(
         behavior_equivalence=behavior_equivalence,
         paper_dry_run=paper_dry_run,
     )
-    if gate_report.get("status") != "passed":
-        raise PromotionNeedsAgentRefactor(
-            f"promotion gate did not pass: {gate_report.get('status')}"
-        )
     gate_path.write_text(
         json.dumps(gate_report, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    if gate_report.get("status") != "passed":
+        raise PromotionNeedsAgentRefactor(
+            f"promotion gate did not pass: {gate_report.get('status')}"
+        )
 
     extra_source_map = {strategy_entrypoint: strategy_source_path}
     for entry in state_entries:

@@ -575,6 +575,9 @@ def _prepare_promotion_for_export(
         }
         if request_path.is_file():
             result["promotionReport"]["requestPath"] = str(request_path)
+        gate_path = destination / PROMOTION_GATE_FILENAME
+        if gate_path.is_file():
+            result["promotionReport"]["gatePath"] = str(gate_path)
         return result
 
 
