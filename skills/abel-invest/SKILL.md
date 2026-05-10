@@ -1,5 +1,6 @@
 ---
 name: abel-invest
+version: 3.5.3
 description: >
   Use when the user wants Abel strategy discovery, candidate screening,
   graph-grounded trading research, or continuing/preparing/debugging an Abel
