@@ -283,27 +283,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional destination directory (defaults to <session>/promotions/<branch-id>)",
     )
 
-    upload_dashboard = sub.add_parser(
-        "upload-dashboard-bundle",
-        help="Upload branch evidence to the Abel router skill dashboard",
-    )
-    upload_dashboard.add_argument("--branch", required=True)
-    upload_dashboard.add_argument(
-        "--api-key",
-        default="",
-        help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
-    )
-    upload_dashboard.add_argument(
-        "--output-json",
-        default=None,
-        help="Optional path to write the upload payload before sending.",
-    )
-    upload_dashboard.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Build and print the payload without sending it.",
-    )
-
     visualize_session = sub.add_parser(
         "visualize-session",
         help="Create an online Abel skill dashboard view for a session",
@@ -313,6 +292,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--api-key",
         default="",
         help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
+    )
+    visualize_session.add_argument(
+        "--locale",
+        default="",
+        help="Optional dashboard locale. Accepts en/en-US or zh/zh-CN; uploads en-US or zh-CN.",
     )
     visualize_session.add_argument(
         "--output-json",
