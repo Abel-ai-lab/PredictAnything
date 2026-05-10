@@ -139,7 +139,7 @@ def _primary_strategy_payload(candidate: RoundCandidate) -> dict[str, Any]:
 def _edge_result_metrics(session: Path, result_ref: str) -> dict[str, Any]:
     if not result_ref:
         return {}
-    result_path = session / result_ref
+    result_path = _session_ref_path(session, result_ref)
     if not result_path.exists():
         return {}
     try:
@@ -239,7 +239,7 @@ def _latest_decision_from_frame(session: Path, result_ref: str) -> dict[str, Any
 def _frame_path_for_result_ref(session: Path, result_ref: str) -> Path | None:
     if not result_ref:
         return None
-    result_path = session / result_ref
+    result_path = _session_ref_path(session, result_ref)
     name = result_path.name
     if not name.endswith("-edge-result.json"):
         return None
@@ -254,7 +254,7 @@ def _latest_close_from_result_ref(
 ) -> float | None:
     if not result_ref:
         return None
-    result_path = session / result_ref
+    result_path = _session_ref_path(session, result_ref)
     if not result_path.exists():
         return None
     payload = json.loads(result_path.read_text(encoding="utf-8"))
@@ -268,6 +268,11 @@ def _latest_close_from_result_ref(
             continue
         return _optional_float_value(item.get("target_close", ""))
     return None
+
+
+def _session_ref_path(session: Path, ref: str) -> Path:
+    normalized = str(ref).strip().replace("\\", "/").lstrip("/")
+    return session / normalized
 
 
 def position_action(previous_position: float, next_position: float) -> str:

@@ -22,7 +22,6 @@ from abel_invest.narrative_core.command_handlers.workspace import (
 )
 from abel_invest.narrative_core.cli_parser import build_parser
 from abel_invest.narrative_core.dashboard import (
-    upload_skill_dashboard_bundle,
     upload_skill_dashboard_session,
 )
 from abel_invest.narrative_core.rendering.session_rendering import (
@@ -59,8 +58,6 @@ def main() -> int:
         return run_branch_round(args)
     if args.command == "promote-branch":
         return promote_branch_bundle(args)
-    if args.command == "upload-dashboard-bundle":
-        return upload_skill_dashboard_bundle(args)
     if args.command == "visualize-session":
         return upload_skill_dashboard_session(args)
     if args.command == "debug-branch":
