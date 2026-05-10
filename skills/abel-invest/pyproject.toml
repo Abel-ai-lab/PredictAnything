@@ -1,6 +1,6 @@
 [project]
 name = "abel-invest"
-version = "3.5.2"
+version = "3.5.3"
 description = "Workspace-oriented research orchestration for Abel-driven strategy discovery"
 requires-python = ">=3.11"
 license = "MIT"
