@@ -262,9 +262,9 @@ def test_run_branch_round_updates_ledger_and_agent_context(
 
     ni.print_status(session)
     status_output = capsys.readouterr().out
-    assert "Session visualization available:" in status_output
-    assert "Ask the user whether to create an online view of this session." in status_output
-    assert "create it and share the returned link" in status_output
+    assert "Session visualization available:" not in status_output
+    assert "Ask the user whether to create an online view of this session." not in status_output
+    assert "create it and share the returned link" not in status_output
     assert "abel-invest visualize-session --session" not in status_output
     assert "--base-url" not in status_output
     assert "Research journal:" in status_output

@@ -93,12 +93,17 @@ Always start by resolving workspace state before strategy work.
 15. Create new sessions only after workspace context resolves. Do not use
     `--root` unless intentionally creating a legacy/offline session, and then
     pass `--allow-outside-workspace`.
-16. Do not create an online session view automatically. If a candidate round
-    passes, ask the user whether to create an online visualization of this
-    session. Do not print a command for the user to run. If the user agrees,
-    or if the user explicitly asks to visualize the session, run
-    `abel-invest visualize-session --session <session>` yourself, then share
-    the returned Markdown link with the user.
+16. Do not create or refresh an online session view automatically. When the
+    strategy context is mature enough to be useful to review visually, ask the
+    user whether to visualize the session. This can be after a strong candidate
+    PASS, after several informative candidate rounds, before promotion, or
+    whenever the agent would naturally summarize that the strategy is worth a
+    visual review. Do not print a
+    command for the user to run. If the user agrees, or if the user explicitly
+    asks to visualize the session, run `visualize-session` for that session
+    yourself and share the returned Markdown link. Session views are
+    incremental: running `visualize-session` again updates the online view with
+    the latest local session evidence, rounds, primary strategy, and artifacts.
 17. The default Abel router base URL is `https://api.abel.ai/router/`.
     `abel-auth` owns API key setup. Do not ask the user or agent to provide a
     router URL unless they are intentionally testing another router.
