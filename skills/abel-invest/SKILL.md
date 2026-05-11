@@ -98,7 +98,7 @@ Always start by resolving workspace state before strategy work.
     user whether to visualize the session. This can be after a strong candidate
     PASS, after several informative candidate rounds, before promotion, or
     whenever the agent would naturally summarize that the strategy is worth a
-    visual review. Do not wait for `abel-invest status`, and do not print a
+    visual review. Do not print a
     command for the user to run. If the user agrees, or if the user explicitly
     asks to visualize the session, run `visualize-session` for that session
     yourself and share the returned Markdown link. Session views are
