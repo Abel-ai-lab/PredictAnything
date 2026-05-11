@@ -265,7 +265,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--selection-trials",
         type=_positive_int,
         default=1,
-        help="Effective strategy or parameter configurations tried before selecting this round output",
+        help=(
+            "Audit count for accidental or explicitly requested strategy or "
+            "parameter configurations tried before this round output"
+        ),
     )
     run_branch.add_argument(
         "--python-bin",
