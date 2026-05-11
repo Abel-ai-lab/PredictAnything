@@ -813,6 +813,9 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
     assert primary["metrics"]["score"] == "8/9"
     assert primary["metrics"]["totalReturn"] == 0.9
     assert primary["metrics"]["loAdjusted"] == 1.8
+    assert primary["metrics"]["positionIcStability"] == 0.0
+    assert primary["metrics"]["dsr"] == 0.0
+    assert primary["metrics"]["lossYears"] == 0
     assert primary["latestDecision"] == {
         "tradingDate": "2026-05-05",
         "previousPosition": 0.75,
@@ -824,6 +827,16 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
         "close": 17.06,
         "source": "abel_invest_edge_frame_csv",
     }
+    assert primary["backtestTradeLog"] == {
+        "source": "abel_invest_trade_log_csv",
+        "tradeLogRef": "branches/graph-v1/outputs/round-001-trade-log.csv",
+    }
+    trade_log_path = session / primary["backtestTradeLog"]["tradeLogRef"]
+    assert trade_log_path.read_text(encoding="utf-8").splitlines() == [
+        "date,asset_return,pnl,position,source,decision_time,effective_time,next_position,gross_pnl,turnover,execution_cost,cum_return",
+        "2026-05-04,,0.01,0.75,backfill,,,0.30,,,,0.010000000000000009",
+        "2026-05-05,,0.02,0.30,backfill,,,0.60,,,,0.030200000000000005",
+    ]
 
 
 def test_primary_strategy_position_action_maps_previous_to_next_position() -> None:
@@ -979,6 +992,55 @@ def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
     assert request.get_header("Api-key") == "secret-key"
     assert request.get_header("Content-type") == "application/json"
     assert timeout == 60
+
+
+def test_post_skill_dashboard_session_uploads_trade_log_as_multipart(tmp_path: Path) -> None:
+    calls = []
+    trade_log = tmp_path / "branches" / "b1" / "outputs" / "round-001-trade-log.csv"
+    trade_log.parent.mkdir(parents=True)
+    trade_log.write_text("date,pnl,cum_return\n2026-05-05,0.1,0.1\n", encoding="utf-8")
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"code": 200, "data": {"sessionId": "s1"}}'
+
+    def fake_opener(request, timeout):
+        calls.append((request, timeout))
+        return _Response()
+
+    result = ni.post_skill_dashboard_session(
+        base_url="https://router.example",
+        api_key="secret-key",
+        bundle={
+            "sessionId": "s1",
+            "payload": {
+                "session": {},
+                "branches": [],
+                "rounds": [],
+                "primaryStrategy": {
+                    "backtestTradeLog": {
+                        "tradeLogRef": "branches/b1/outputs/round-001-trade-log.csv",
+                    },
+                },
+            },
+        },
+        session_root=tmp_path,
+        opener=fake_opener,
+    )
+
+    request, _timeout = calls[0]
+    body = request.data.decode("utf-8")
+    assert result["data"]["sessionId"] == "s1"
+    assert request.get_header("Content-type").startswith("multipart/form-data; boundary=")
+    assert 'name="payload"' in body
+    assert 'name="backtestTradeLog"; filename="round-001-trade-log.csv"' in body
+    assert "date,pnl,cum_return" in body
 
 
 def test_select_best_pass_strategy_sorts_session_pass_rounds(tmp_path: Path) -> None:

@@ -304,6 +304,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
     )
     visualize_session.add_argument(
+        "--locale",
+        default="",
+        help="Optional dashboard locale. Accepts en/en-US or zh/zh-CN; uploads en-US or zh-CN.",
+    )
+    visualize_session.add_argument(
         "--output-json",
         default=None,
         help="Optional path to write the upload payload before sending.",

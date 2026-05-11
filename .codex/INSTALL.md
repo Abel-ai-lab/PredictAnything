@@ -2,7 +2,7 @@
 
 Enable Abel Skills in Codex via native skill discovery.
 
-Choose one install scope:
+Ask user to choose one install scope:
 
 - Global: available in every Codex session on this machine
 - Project-level: available only inside the current repo via `.agents/skills/`
@@ -70,9 +70,3 @@ abel-invest workspace bootstrap --path ./abel-invest-workspace
 ```
 
 This creates or reuses the default workspace, prepares its runtime, and runs doctor.
-
-## First Questions
-
-- Help me search for a TSLA strategy.
-- Find a few Abel-discovered candidates around semiconductor demand.
-- Continue my TSLA strategy workspace.

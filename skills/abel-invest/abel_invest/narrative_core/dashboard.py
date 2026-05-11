@@ -139,7 +139,12 @@ def build_skill_dashboard_bundle(branch: Path, *, uploaded_at: str | None = None
     }
 
 
-def build_skill_dashboard_session_bundle(session: Path, *, uploaded_at: str | None = None) -> dict:
+def build_skill_dashboard_session_bundle(
+    session: Path,
+    *,
+    uploaded_at: str | None = None,
+    locale: str | None = None,
+) -> dict:
     session = resolve_workspace_arg_path(session).resolve()
     discovery = load_discovery(session)
     render_session(session)
@@ -170,6 +175,7 @@ def build_skill_dashboard_session_bundle(session: Path, *, uploaded_at: str | No
         "sessionId": session.name,
         "startAt": start_at,
         "endAt": end_at,
+        "locale": _normalize_dashboard_locale(locale),
         "payload": {
             "session": {
                 "id": session.name,
@@ -227,6 +233,7 @@ def post_skill_dashboard_session(
     base_url: str,
     api_key: str,
     bundle: dict,
+    session_root: Path | None = None,
     opener=urlopen,
     timeout: int = 60,
 ) -> dict:
@@ -236,11 +243,25 @@ def post_skill_dashboard_session(
     normalized_api_key = str(api_key or "").strip()
     if not normalized_api_key:
         raise RuntimeError("Missing Abel API key")
-    body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+    trade_log_path = _primary_strategy_trade_log_path(bundle, session_root=session_root)
+    if trade_log_path is not None and trade_log_path.is_file():
+        body, content_type = build_multipart_form_data(
+            fields={"payload": json.dumps(bundle, ensure_ascii=False)},
+            files={
+                "backtestTradeLog": {
+                    "filename": trade_log_path.name,
+                    "content_type": "text/csv",
+                    "content": trade_log_path.read_bytes(),
+                }
+            },
+        )
+    else:
+        body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+        content_type = "application/json"
     request = Request(
         f"{normalized_base_url}/web/skill-dashboard/sessions",
         data=body,
-        headers={"Content-Type": "application/json", "api-key": normalized_api_key},
+        headers={"Content-Type": content_type, "api-key": normalized_api_key},
         method="POST",
     )
     try:
@@ -250,6 +271,23 @@ def post_skill_dashboard_session(
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Skill dashboard session upload failed: HTTP {exc.code}: {detail}") from exc
     return json.loads(raw)
+
+
+def _primary_strategy_trade_log_path(bundle: dict, *, session_root: Path | None = None) -> Path | None:
+    payload = bundle.get("payload") if isinstance(bundle.get("payload"), dict) else {}
+    primary_strategy = (
+        payload.get("primaryStrategy") if isinstance(payload.get("primaryStrategy"), dict) else {}
+    )
+    trade_log = (
+        primary_strategy.get("backtestTradeLog")
+        if isinstance(primary_strategy.get("backtestTradeLog"), dict)
+        else {}
+    )
+    trade_log_ref = str(trade_log.get("tradeLogRef") or "").strip()
+    if not trade_log_ref:
+        return None
+    root = session_root.resolve() if session_root is not None else Path.cwd()
+    return root / trade_log_ref
 
 
 def post_strategy_artifact_upload(
@@ -330,7 +368,7 @@ def upload_skill_dashboard_bundle(args: argparse.Namespace) -> int:
 
 def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
     session = resolve_workspace_arg_path(args.session).resolve()
-    bundle = build_skill_dashboard_session_bundle(session)
+    bundle = build_skill_dashboard_session_bundle(session, locale=getattr(args, "locale", None))
     if args.output_json:
         output_path = resolve_workspace_arg_path(args.output_json).resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -356,7 +394,12 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
         skip_reason = artifact_export_result.get("skipReason")
         if skipped and skip_reason != "no_pass_strategy":
             raise RuntimeError(_strategy_artifact_preupload_error(artifact_export_result))
-    result = post_skill_dashboard_session(base_url=base_url, api_key=api_key, bundle=bundle)
+    result = post_skill_dashboard_session(
+        base_url=base_url,
+        api_key=api_key,
+        bundle=bundle,
+        session_root=session,
+    )
     artifact_result = None
     if artifact_export_result is not None:
         artifact_result = upload_prepared_strategy_artifact_for_session(
@@ -608,6 +651,22 @@ def resolve_skill_dashboard_api_key(value: str | None, *, workspace_root: Path |
             if token:
                 return token
     raise RuntimeError("Set --api-key or run abel-auth before creating an online session view")
+
+
+def _normalize_dashboard_locale(value: str | None) -> str | None:
+    locale = str(value or "").strip()
+    if not locale:
+        return None
+    normalized = locale.replace("_", "-").lower()
+    if normalized == "en":
+        return "en-US"
+    if normalized == "zh":
+        return "zh-CN"
+    if normalized == "zh-cn":
+        return "zh-CN"
+    if normalized == "en-us":
+        return "en-US"
+    return locale
 
 
 def skill_dashboard_rounds(branch: Path, rows: list[dict[str, str]], ledger: dict) -> list[dict]:

@@ -30,7 +30,7 @@ jobs:
 
           mapfile -t changed_files < <(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
 
-          args=(--base-branch "${{ github.base_ref }}")
+          args=(--base-branch "${{ github.base_ref }}" --base-ref "origin/${{ github.base_ref }}")
           for path in "${changed_files[@]}"; do
             if [[ -n "$path" ]]; then
               args+=(--changed-file "$path")
