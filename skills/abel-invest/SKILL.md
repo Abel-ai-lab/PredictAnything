@@ -106,16 +106,21 @@ Always start by resolving workspace state before strategy work.
 18. Abel Ask or narrative context may generate mechanism hypotheses, supplement
     drivers, or graph expansion questions, but it is scout context, not
     validation evidence.
-19. Every recorded round requires an agent-written `research_journal.md` entry
+19. Use one narrative scout pass when the next research decision is ambiguous
+    between mechanism-deepening, graph expansion, or stopping, especially when
+    the current graph neighborhood has no clear real-world mechanism. Record
+    off-target, weak, unavailable, or skipped narrative scout plainly; do not
+    force it into branch evidence.
+20. Every recorded round requires an agent-written `research_journal.md` entry
     with the round ledger reference before the next recorded round.
-20. Treat input realization as an evidence fact: a graph-supported declaration
+21. Treat input realization as an evidence fact: a graph-supported declaration
     only becomes graph-supported evidence when runtime reads the prepared graph
     inputs. When graph-node reads are inferred from asset reads, preserve that
     source as a fact rather than overstating edge-native field-level proof.
-21. Create new sessions only after workspace context resolves. Do not use
+22. Create new sessions only after workspace context resolves. Do not use
     `--root` unless intentionally creating a legacy/offline session, and then
     pass `--allow-outside-workspace`.
-22. Do not create or refresh an online session view automatically. When the
+23. Do not create or refresh an online session view automatically. When the
     strategy context is mature enough to be useful to review visually, ask the
     user whether to visualize the session. This can be after a strong candidate
     PASS, after several informative candidate rounds, before promotion, or

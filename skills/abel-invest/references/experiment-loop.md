@@ -66,16 +66,19 @@ Each round should answer a mechanism question, not just consume compute.
 4. Choose a graph/mechanism hypothesis before metric search. Be able to state
    why the branch exists, why its constants are mechanism defaults or simple
    priors, and what evidence would invalidate it.
-5. Before widening graph breadth, ask whether the current graph neighborhood
+5. If the next decision is ambiguous between mechanism-deepening, graph
+   expansion, or stopping, run one lightweight narrative scout pass or journal
+   why it is unavailable, off-target, unnecessary, or skipped.
+6. Before widening graph breadth, ask whether the current graph neighborhood
    still has an unresolved sign, lag, regime, interaction, control, or
    risk-shaping question. If yes, answer that mechanism-depth question first.
-6. Declare the branch hypothesis in `branch.yaml`.
-7. Run `prepare-branch` before trusting branch inputs.
-8. Run `debug-branch` before recording evidence.
-9. Run `run-branch` only when declaration and debug facts are ready enough for
+7. Declare the branch hypothesis in `branch.yaml`.
+8. Run `prepare-branch` before trusting branch inputs.
+9. Run `debug-branch` before recording evidence.
+10. Run `run-branch` only when declaration and debug facts are ready enough for
    the evidence label you want.
-10. Re-read `evidence_ledger.json` and `frontier.md`.
-11. Update `research_journal.md` for the recorded round before starting another
+11. Re-read `evidence_ledger.json` and `frontier.md`.
+12. Update `research_journal.md` for the recorded round before starting another
    recorded round. Cite the round ledger ref and capture what changed, what
    happened, what was learned, and what that implies next.
 
@@ -144,6 +147,11 @@ driver ideas, and frontier questions. It is scout context, not validation
 evidence. If narrative results are off-target or weak, record that plainly and
 do not launder them into branch evidence.
 
+Use a lightweight narrative scout pass when the agent cannot yet decide whether
+to deepen the current mechanism, expand the graph, or stop. This is not a new
+mandatory gate: skip or stop the scout when Abel Ask auth is unavailable, the
+current evidence already answers the question, or the result drifts off target.
+
 ## Session Visualization
 
 Do not create an online session view automatically. If a candidate round
@@ -174,7 +182,8 @@ the default URL in the skill code if this endpoint changes.
   risk-shaping question
 - graph expansion needs a frontier question and enough current-frontier evidence
   to justify widening the node universe
-- narrative scout can narrow a mechanism question, but Edge evidence decides
+- narrative scout should be used at ambiguous deepen/expand/stop decision
+  points, but Edge evidence decides
   whether the branch worked
 
 If repeated variants fail in the same neighborhood, use the frontier and journal

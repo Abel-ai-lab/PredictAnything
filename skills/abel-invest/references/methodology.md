@@ -55,6 +55,15 @@ driver ideas, and graph expansion questions. Treat them as domain-context scout
 work: stronger than free association, weaker than CAP graph facts, and never a
 substitute for Edge validation.
 
+Use one narrative scout pass when the next research decision is ambiguous
+between mechanism-deepening, graph expansion, or stopping. This is most useful
+when graph nodes are hard to interpret, the current neighborhood lacks a clear
+industry or supply-demand mechanism, or the journal cannot state what sign,
+lag, regime, interaction, control, or risk-shaping question remains. If Abel Ask
+is unavailable, off-target, or weak, record that plainly and continue with the
+best graph/frontier evidence; do not launder narrative text into validation
+evidence.
+
 **Evidence labels are not strategy advice.**
 Candidate/control/diagnostic/blocker labels say what kind of research evidence a
 run produced. They do not choose the next driver, model, threshold, or mechanism.
@@ -85,7 +94,8 @@ The branch-default path is:
 1. resolve workspace and doctor readiness
 2. start or resume a graph-first session
 3. read ledger, frontier, and journal facts
-4. use narrative scout only when it helps form a mechanism or frontier question
+4. use one narrative scout pass when the next decision is ambiguous between
+   mechanism-deepening, graph expansion, or stopping
 5. deepen the current mechanism when unresolved sign, lag, regime, interaction,
    control, or risk-shaping questions remain
 6. expand `graph_frontier.json` only when current evidence leaves a frontier

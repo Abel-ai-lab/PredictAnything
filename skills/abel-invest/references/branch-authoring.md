@@ -116,6 +116,8 @@ Use the journal for:
   interpretation
 - any performance-like scout or sweep that influenced branch choice
 - Abel Ask or narrative scout context, including when it was off-target or weak
+- why narrative scout was skipped when the next step was already clear or when
+  Abel Ask was unavailable
 - failed neighborhoods
 - open questions
 - reasons to continue, pivot, add contrast evidence, or stop
@@ -161,6 +163,9 @@ Before writing strategy logic, be able to state:
 - the mechanism being tested
 - whether this is graph-breadth expansion or mechanism-depth work, and why that
   is the right next learning step
+- whether an ambiguous deepen/expand/stop decision used or skipped one
+  narrative scout pass, and what it changed about the mechanism or frontier
+  question if used
 - why chosen constants are mechanism defaults or simple priors, not
   backtest-selected values
 - what evidence would invalidate the branch
