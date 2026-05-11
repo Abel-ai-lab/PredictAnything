@@ -839,6 +839,52 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
     ]
 
 
+def test_dashboard_primary_strategy_uses_artifact_selection_rule(tmp_path: Path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-primary-shared-selector", tmp_path / "research")
+    lower_sharpe = ni.init_branch_dir(session, "score_leader")
+    sharpe_leader = ni.init_branch_dir(session, "sharpe_leader")
+    for branch, round_id, lo_adj, sharpe in [
+        (lower_sharpe, "round-001", "1.1", "1.0"),
+        (sharpe_leader, "round-001", "1.4", "1.6"),
+    ]:
+        _write_strategy_result_row(
+            session,
+            branch,
+            round_id=round_id,
+            verdict="PASS",
+            sharpe=float(sharpe),
+            lo_adj=float(lo_adj),
+            max_dd=-0.1,
+        )
+        ni.append_tsv_row(
+            session / "events.tsv",
+            ni.EVENTS_HEADER,
+            {
+                "timestamp": "2026-04-24T01:20:00+00:00",
+                "event": "round_recorded",
+                "branch_id": branch.name,
+                "round_id": round_id,
+                "mode": "explore",
+                "verdict": "PASS",
+                "decision": "keep",
+                "description": f"{branch.name} {round_id}",
+                "artifact_path": f"branches/{branch.name}/outputs/{round_id}-edge-result.json",
+            },
+        )
+
+    artifact_selection = ni.select_best_pass_strategy(session)
+    bundle = ni.build_skill_dashboard_session_bundle(
+        session,
+        uploaded_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    )
+
+    primary = bundle["payload"]["primaryStrategy"]
+    assert artifact_selection.selected_branch_id == "sharpe_leader"
+    assert primary["branchId"] == artifact_selection.selected_branch_id
+    assert primary["roundId"] == artifact_selection.selected_round_id
+    assert primary["selectionRule"] == "sharpe_desc_lo_adjusted_desc_max_dd_desc_latest_v1"
+
+
 def test_primary_strategy_position_action_maps_previous_to_next_position() -> None:
     assert position_action(0, 0.3) == "buy/open_long"
     assert position_action(0.3, 0) == "sell/close"

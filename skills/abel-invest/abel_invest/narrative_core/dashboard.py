@@ -426,7 +426,6 @@ def upload_strategy_artifact_for_session(
 ) -> dict:
     data = narrative_result.get("data") if isinstance(narrative_result.get("data"), dict) else {}
     hosted_session_id = str(data.get("sessionId") or data.get("id") or "").strip()
-    source_upload_id = str(data.get("uploadId") or data.get("sourceUploadId") or "").strip()
     if not hosted_session_id:
         return {
             "artifactExported": False,
