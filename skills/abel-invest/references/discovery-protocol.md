@@ -50,6 +50,11 @@ Direct parents are an opening clue, not a guarantee that the final branch should
 stay direct-only. If the first candidates look odd, do not discard them just
 because they are obscure or low-attention; explain them before moving on.
 
+CAP graph nodes are causal priors, not trading instructions. They do not give
+the trading sign, lag, direction, or a monotone strength map. Depth matters:
+deeper nodes should be treated as weaker or more indirect priors unless
+recorded evidence or domain context justifies a deeper branch.
+
 ## Practical Expansion
 
 Use this as a search prior, not a hard recipe:
@@ -59,8 +64,8 @@ Use this as a search prior, not a hard recipe:
 3. children-derived hop-2 candidates
 4. sector, market, or crypto peers only when they add a real mechanism
 
-When the known frontier is too narrow, expand the graph itself before spending
-rounds on strategy variants:
+When current evidence leaves a frontier question unresolved, expand the graph
+itself before spending rounds on strategy variants:
 
 ```bash
 abel-invest frontier status --session research/<ticker>/<exp_id>
@@ -70,6 +75,62 @@ abel-invest frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_
 Use `--mode parents`, `--mode mb`, or `--mode all` according to the causal
 question. The result is new or updated nodes in `graph_frontier.json`, not a
 recommendation to run a specific branch.
+
+Good expansion reasons include a missing liquidity, supply-chain, market-state,
+or demand-regime motif; current-frontier availability or input-realization
+limits; or user/narrative context that names a plausible real-world mechanism
+outside the current frontier. Weak reasons include "the last branch failed",
+"graph breadth is always good", or "a local metric scan found one attractive
+node, so expand around it until the result improves".
+
+Before expanding to a more distant frontier, check mechanism depth in the
+current neighborhood. If evidence still leaves a concrete sign, lag, regime,
+interaction, control, or risk-shaping question, prefer one branch that answers
+that question over wider graph expansion. Complexity is allowed when it adds
+mechanism information; it is not allowed as metric-pressure tuning.
+
+## Narrative Scout
+
+Abel Ask and narrative context can improve exploration efficiency by generating
+mechanism hypotheses before another branch cut or graph expansion. Use them to
+ask what industry, demand, supply-chain, liquidity, macro, volume, or peer
+mechanism could make a graph neighborhood matter.
+
+Narrative scout work can suggest:
+
+- a supplemental driver to test
+- a graph expansion anchor
+- a sign, lag, or regime question
+- a reason to stop exploring a weak mechanism family
+
+It is not validation evidence and it does not override CAP facts or Edge
+results. If the narrative result is off-target or weak, record that plainly.
+
+Use one narrative scout pass when ledger/frontier/journal facts do not make the
+next research move clear: deepen the current mechanism, expand the frontier, or
+stop. This is especially useful when the known graph nodes are obscure, the
+target is driven by industry or supply-demand context, or the branch self-check
+cannot name a real-world transmission path.
+
+When using Abel Ask for this scout pass, keep it lightweight: start from the
+Abel Ask narrative probe workflow, prefer `narrate` for a concrete candidate or
+`query-node` for a broad theme, and return to Abel Invest branch evidence as
+soon as the mechanism or frontier question is clear enough. If auth is missing,
+the result is thin, or the narrative drifts off target, journal that fact and do
+not treat the scout as branch evidence.
+
+Efficient pattern:
+
+```text
+ledger/frontier facts -> narrative scout for mechanism context ->
+frontier question -> optional CAP expansion or branch cut
+```
+
+Inefficient pattern:
+
+```text
+weak metric result -> expand graph broadly -> search new nodes for a metric win
+```
 
 ## Branch Cut
 
