@@ -131,8 +131,8 @@ Always start by resolving workspace state before strategy work.
     yourself and share the returned Markdown link. Session views are
     incremental: running `visualize-session` again updates the online view with
     the latest local session evidence, rounds, primary strategy, and artifacts.
-22. The default Abel router base URL is `https://api.abel.ai/router/`.
+24. The default Abel router base URL is `https://api.abel.ai/router/`.
     `abel-auth` owns API key setup. Do not ask the user or agent to provide a
     router URL unless they are intentionally testing another router.
-23. The framework defines evidence validity. The agent owns the strategy
+25. The framework defines evidence validity. The agent owns the strategy
     thinking.
