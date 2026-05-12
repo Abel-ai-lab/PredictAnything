@@ -100,6 +100,20 @@ from abel_invest.narrative_core.state import (
 )
 
 
+SELECTION_TRIALS_AUDIT_WARNING = (
+    "Selection-trials audit: --selection-trials records accidental or explicitly requested "
+    "search width for DSR accounting; it does not make sweep-selected candidates part of "
+    "standard discovery. Journal the branch basis and any scout or optimization influence "
+    "before continuing."
+)
+
+
+def selection_trials_audit_warning(selection_trials: int) -> str | None:
+    if selection_trials <= 1:
+        return None
+    return SELECTION_TRIALS_AUDIT_WARNING
+
+
 def prepare_branch_inputs(args: argparse.Namespace) -> int:
     branch = resolve_workspace_arg_path(args.branch).resolve()
     session = branch.parent.parent
@@ -366,6 +380,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
     frame_path = branch / "outputs" / f"{round_id}-edge-frame.csv"
     handoff_path = branch / "outputs" / f"{round_id}-edge-handoff.json"
     context_path = branch / "outputs" / f"{round_id}-alpha-context.json"
+    selection_trials = getattr(args, "selection_trials", 1)
     context = build_branch_context(
         branch=branch,
         session=session,
@@ -373,9 +388,12 @@ def run_branch_round(args: argparse.Namespace) -> int:
         readiness=readiness,
         round_id=round_id,
         backtest_start=backtest_start,
-        selection_trials=getattr(args, "selection_trials", 1),
+        selection_trials=selection_trials,
     )
     context_path.write_text(json.dumps(context, indent=2), encoding="utf-8")
+    selection_warning = selection_trials_audit_warning(selection_trials)
+    if selection_warning:
+        print(selection_warning, file=sys.stderr)
     emit_readiness_warning = False
     session_start = _get_backtest_start(discovery)
     if warning and backtest_start == session_start:

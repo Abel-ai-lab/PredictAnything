@@ -25,9 +25,44 @@ reduces blind search and is more likely to survive regime change. Correlation
 signals can still be useful, but they enter as supplements or controls unless
 the branch declares and validates a stronger claim.
 
-Graph-first means widening the graph frontier when the known node pool is too
-narrow. It does not mean repeatedly choosing more tickers from a fixed branch
-candidate list.
+CAP graph nodes are causal priors, not trading instructions. They do not provide
+the trading sign, lag, or a monotone strength map; deeper nodes are weaker or
+more indirect priors unless recorded evidence or domain context justifies them.
+
+Graph-first means using the graph to form input and mechanism hypotheses. Expand
+the graph when a frontier question remains after reading current evidence. Do
+not expand just because a few branches failed or because a local metric scan
+found one attractive node.
+
+Graph breadth should not outrun mechanism depth. Before widening to a more
+distant frontier, ask whether the current graph neighborhood still has an
+unresolved sign, lag, regime, interaction, control, or risk-shaping question. A
+mechanism-deepening branch is preferable when it can answer one of those
+questions without becoming parameter search.
+
+**Mechanism-led discovery beats metric-led search.**
+Standard discovery chooses a branch from graph context, mechanism reasoning,
+recorded evidence, or a control/ablation purpose before metric search. Local
+parameter, threshold, window, filter, sizing, driver, or asset sweeps are
+optimization behavior unless the user explicitly requests them.
+
+`--selection-trials` audits accidental or explicitly requested search width. It
+does not make brute-force candidate selection part of standard discovery.
+
+**Narrative scout is context, not evidence.**
+Abel Ask and narrative context can generate mechanism hypotheses, supplement
+driver ideas, and graph expansion questions. Treat them as domain-context scout
+work: stronger than free association, weaker than CAP graph facts, and never a
+substitute for Edge validation.
+
+Use one narrative scout pass when the next research decision is ambiguous
+between mechanism-deepening, graph expansion, or stopping. This is most useful
+when graph nodes are hard to interpret, the current neighborhood lacks a clear
+industry or supply-demand mechanism, or the journal cannot state what sign,
+lag, regime, interaction, control, or risk-shaping question remains. If Abel Ask
+is unavailable, off-target, or weak, record that plainly and continue with the
+best graph/frontier evidence; do not launder narrative text into validation
+evidence.
 
 **Evidence labels are not strategy advice.**
 Candidate/control/diagnostic/blocker labels say what kind of research evidence a
@@ -58,11 +93,17 @@ The branch-default path is:
 
 1. resolve workspace and doctor readiness
 2. start or resume a graph-first session
-3. expand `graph_frontier.json` when graph breadth is still thin
-4. declare branch hypothesis and selected graph inputs
-5. prepare branch inputs
-6. write `compute_decisions(self, ctx)`
-7. run semantic preflight
-8. record evidence
-9. inspect ledger/frontier facts
-10. update the research journal before deep local refinement
+3. read ledger, frontier, and journal facts
+4. use one narrative scout pass when the next decision is ambiguous between
+   mechanism-deepening, graph expansion, or stopping
+5. deepen the current mechanism when unresolved sign, lag, regime, interaction,
+   control, or risk-shaping questions remain
+6. expand `graph_frontier.json` only when current evidence leaves a frontier
+   question unresolved
+7. declare branch hypothesis and selected graph inputs
+8. prepare branch inputs
+9. write `compute_decisions(self, ctx)`
+10. run semantic preflight
+11. record evidence
+12. inspect ledger/frontier facts
+13. update the research journal before deep local refinement
