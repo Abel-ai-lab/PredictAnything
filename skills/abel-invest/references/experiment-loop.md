@@ -154,19 +154,21 @@ current evidence already answers the question, or the result drifts off target.
 
 ## Session Visualization
 
-Do not create an online session view automatically. If a candidate round
-records a PASS, ask the user whether to publish a paper-ready online
-visualization of this session. If the user agrees, or if the user explicitly
-asks to visualize the paper-ready session, pass the session folder to the
-command:
+Do not create an online session view automatically. When the strategy context
+is mature enough to be useful to review visually, ask the user whether to
+visualize the session. This can be after a strong candidate PASS, after several
+informative candidate rounds, before promotion, or whenever the agent would
+naturally summarize that the strategy is worth a visual review. If the user
+agrees, or if the user explicitly asks to visualize the session, pass the
+session folder to the command:
 
 ```bash
 abel-invest visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
 ```
 
-The command builds the online view from local session evidence and, when the
-flag is present, uploads the automatically selected best `PASS` strategy
-artifact. Use narrative-only `visualize-session` only when the user wants a
+The command builds the online view from local session evidence and uploads the
+automatically selected best `PASS` strategy artifact when one is available. Use
+narrative-only `visualize-session` only when the user explicitly asks for a
 session view without strategy artifact upload. If the command reports
 `needs_agent_refactor`, read the emitted `refactor-request.json` and handle it
 in the current skill loop. If `kind` is `state_intent_self_check`, inspect the
