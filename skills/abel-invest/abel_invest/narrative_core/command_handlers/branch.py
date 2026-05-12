@@ -1,10 +1,9 @@
-"""Branch preparation, execution, debug, and promotion command handlers."""
+"""Branch preparation, execution, and debug command handlers."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
 import sys
 
@@ -41,16 +40,12 @@ from abel_invest.narrative_core.runtime.workflow_blockers import (
 )
 from abel_invest.narrative_core.contracts.constants import (
     BRANCH_SPEC_FILENAME,
-    CONTEXT_GUIDE_FILENAME,
-    DATA_MANIFEST_FILENAME,
-    DEPENDENCIES_FILENAME,
     EVENTS_HEADER,
     EXPLORATION_PATH_FILENAME,
     EXECUTION_CONSTRAINTS_FILENAME,
     PROBE_SAMPLES_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
-    RUNTIME_PROFILE_FILENAME,
 )
 from abel_invest.narrative_core.runtime.context import (
     alpha_decision,
@@ -67,7 +62,6 @@ from abel_invest.narrative_core.io import (
     read_tsv_rows,
 )
 from abel_invest.narrative_core.contracts.paths import (
-    branch_spec_path,
     context_guide_path,
     data_manifest_path,
     dependencies_path,
@@ -80,7 +74,6 @@ from abel_invest.narrative_core.readiness import (
     readiness_coverage_hint_lines,
 )
 from abel_invest.narrative_core.rendering.renderers import (
-    build_promotion_bundle_readme,
     render_round_note,
 )
 from abel_invest.narrative_core.session_lifecycle import (
@@ -318,70 +311,6 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
         print(f"  abel-invest debug-branch --branch {branch}")
         print(f"  abel-invest run-branch --branch {branch} -d \"baseline\"")
     return completed.returncode
-
-
-def promote_branch_bundle(args: argparse.Namespace) -> int:
-    branch = resolve_workspace_arg_path(args.branch).resolve()
-    session = branch.parent.parent
-    rows = read_tsv_rows(branch / "results.tsv")
-    latest = rows[-1] if rows else {}
-    branch_spec = load_branch_spec(branch)
-    if not branch_spec:
-        raise RuntimeError(f"Missing {BRANCH_SPEC_FILENAME} under {branch}")
-    if args.output_dir:
-        destination = resolve_workspace_arg_path(args.output_dir).resolve()
-    else:
-        destination = session / "promotions" / branch.name
-    destination.mkdir(parents=True, exist_ok=True)
-
-    shutil.copy2(branch / "engine.py", destination / "engine.py")
-    shutil.copy2(branch_spec_path(branch), destination / BRANCH_SPEC_FILENAME)
-    if branch_inputs_ready(branch):
-        shutil.copy2(dependencies_path(branch), destination / DEPENDENCIES_FILENAME)
-        shutil.copy2(runtime_profile_path(branch), destination / RUNTIME_PROFILE_FILENAME)
-        shutil.copy2(execution_constraints_path(branch), destination / EXECUTION_CONSTRAINTS_FILENAME)
-        shutil.copy2(data_manifest_path(branch), destination / DATA_MANIFEST_FILENAME)
-        shutil.copy2(context_guide_path(branch), destination / CONTEXT_GUIDE_FILENAME)
-        shutil.copy2(probe_samples_path(branch), destination / PROBE_SAMPLES_FILENAME)
-
-    bundle_readme = build_promotion_bundle_readme(
-        branch=branch,
-        branch_spec=branch_spec,
-        latest=latest,
-    )
-    (destination / "PROMOTION.md").write_text(bundle_readme, encoding="utf-8")
-
-    with SessionLock(session):
-        append_tsv_row(
-            session / "events.tsv",
-            EVENTS_HEADER,
-            {
-                "timestamp": _now(),
-                "event": "branch_promoted",
-                "branch_id": branch.name,
-                "round_id": latest.get("round_id", ""),
-                "mode": latest.get("mode", ""),
-                "verdict": latest.get("verdict", ""),
-                "decision": latest.get("decision", ""),
-                "description": f"Created promotion bundle for {branch.name}",
-                "artifact_path": str(destination.relative_to(session)),
-            },
-        )
-        render_session(session)
-    print(f"Promotion bundle: {destination}")
-    print("")
-    print("Included:")
-    print(f"  {destination / 'engine.py'}")
-    print(f"  {destination / BRANCH_SPEC_FILENAME}")
-    if (destination / DEPENDENCIES_FILENAME).exists():
-        print(f"  {destination / DEPENDENCIES_FILENAME}")
-        print(f"  {destination / RUNTIME_PROFILE_FILENAME}")
-        print(f"  {destination / EXECUTION_CONSTRAINTS_FILENAME}")
-        print(f"  {destination / DATA_MANIFEST_FILENAME}")
-        print(f"  {destination / CONTEXT_GUIDE_FILENAME}")
-        print(f"  {destination / PROBE_SAMPLES_FILENAME}")
-    print(f"  {destination / 'PROMOTION.md'}")
-    return 0
 
 
 def run_branch_round(args: argparse.Namespace) -> int:
@@ -679,6 +608,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
     print(f"Edge result: {result_path.relative_to(session)}")
     print(f"Edge validation: {report_path.relative_to(session)}")
     print(f"Edge handoff: {handoff_path.relative_to(session)}")
+    if frame_path.exists():
+        print(f"Edge frame: {frame_path.relative_to(session)}")
     print(f"Exploration path: {session / EXPLORATION_PATH_FILENAME}")
     semantic = result.get("semantic") or {}
     if isinstance(semantic, dict) and semantic:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from abel_invest.narrative_core.command_handlers.branch import (
     debug_branch_run,
     prepare_branch_inputs,
-    promote_branch_bundle,
     run_branch_round,
 )
 from abel_invest.narrative_core.command_handlers.frontier import handle_frontier_command
@@ -22,6 +21,7 @@ from abel_invest.narrative_core.command_handlers.workspace import (
 )
 from abel_invest.narrative_core.cli_parser import build_parser
 from abel_invest.narrative_core.dashboard import (
+    upload_skill_dashboard_bundle,
     upload_skill_dashboard_session,
 )
 from abel_invest.narrative_core.rendering.session_rendering import (
@@ -30,6 +30,10 @@ from abel_invest.narrative_core.rendering.session_rendering import (
     render_session,
 )
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
+from abel_invest.narrative_core.strategy_artifacts import (
+    export_strategy_artifact_command,
+    promote_strategy_command,
+)
 
 
 def main() -> int:
@@ -56,10 +60,14 @@ def main() -> int:
         return prepare_branch_inputs(args)
     if args.command == "run-branch":
         return run_branch_round(args)
-    if args.command == "promote-branch":
-        return promote_branch_bundle(args)
+    if args.command == "upload-dashboard-bundle":
+        return upload_skill_dashboard_bundle(args)
     if args.command == "visualize-session":
         return upload_skill_dashboard_session(args)
+    if args.command == "export-strategy-artifact":
+        return export_strategy_artifact_command(args)
+    if args.command == "promote-strategy":
+        return promote_strategy_command(args)
     if args.command == "debug-branch":
         return debug_branch_run(args)
     if args.command == "render":

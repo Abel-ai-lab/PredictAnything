@@ -33,8 +33,8 @@ abel-invest debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-br
 abel-invest run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
 edit research/<ticker>/<exp_id>/research_journal.md  # add the round's ledger ref and insight before another run
 
-# only after the user asks to visualize the session, or agrees after a PASS
-abel-invest visualize-session --session research/<ticker>/<exp_id>
+# only after the user asks to publish the paper-ready session, or agrees after a PASS
+abel-invest visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
 ```
 
 New sessions run live graph discovery by default. Use `--no-discover` only when
@@ -155,16 +155,29 @@ current evidence already answers the question, or the result drifts off target.
 ## Session Visualization
 
 Do not create an online session view automatically. If a candidate round
-records a PASS, ask the user whether to create an online visualization of this
-session. If the user agrees, or if the user explicitly asks to visualize the
-session, pass the session folder to the command:
+records a PASS, ask the user whether to publish a paper-ready online
+visualization of this session. If the user agrees, or if the user explicitly
+asks to visualize the paper-ready session, pass the session folder to the
+command:
 
 ```bash
-abel-invest visualize-session --session research/<ticker>/<exp_id>
+abel-invest visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
 ```
 
-The command builds the online view from local session evidence. The agent
-should not hand-assemble the payload or choose a router URL.
+The command builds the online view from local session evidence and, when the
+flag is present, uploads the automatically selected best `PASS` strategy
+artifact. Use narrative-only `visualize-session` only when the user wants a
+session view without strategy artifact upload. If the command reports
+`needs_agent_refactor`, read the emitted `refactor-request.json` and handle it
+in the current skill loop. If `kind` is `state_intent_self_check`, inspect the
+selected branch source and nearby model/checkpoint/cache files, then write
+`state_intent.json`: either classify every durable state file required for
+paper startup, or explicitly write an empty `entries` list with a `selfCheck`
+summary explaining why the detected files are not durable paper state. If
+`kind` is `agent_assisted`, edit only the promoted copy named there, write
+`refactor-report.json`, and rerun the same command. Do not start a separate
+agent process. The agent should not hand-assemble the payload or choose a
+router URL.
 
 Default router base URL: `https://api.abel.ai/router/`.
 `abel-auth` is the canonical owner for API key setup. Maintainers should update

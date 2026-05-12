@@ -263,8 +263,8 @@ abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branc
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 edit research/tsla/tsla-v1/research_journal.md
-# ask the user first after a candidate PASS, or run when the user requests it
-abel-invest visualize-session --session research/tsla/tsla-v1
+# ask first after a candidate PASS, or run when the user requests paper-ready publish
+abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
 ```
 
 Use that path as orientation, not as a rigid script. The important boundary is:
@@ -302,7 +302,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `frontier.md` reports input realization: declared graph-supported inputs only
   count as realized when the engine reads prepared graph inputs
 - `visualize-session` creates an online session view from the session folder;
-  run it only when the user requests it or agrees after a candidate PASS
+  use `--with-strategy-artifact` for the paper-ready publish path and omit it
+  only for narrative-only views
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter baseline for the first end-to-end run, not a finished branch thesis
 
@@ -368,8 +369,8 @@ abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branc
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 edit research/tsla/tsla-v1/research_journal.md
-# ask the user first after a candidate PASS, or run when the user requests it
-abel-invest visualize-session --session research/tsla/tsla-v1
+# ask first after a candidate PASS, or run when the user requests paper-ready publish
+abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
 ```
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
@@ -392,8 +393,12 @@ the next Edge run; after Edge feedback, keep the path updated. Check journal cov
 realization before treating a declared graph-supported branch as graph-supported
 evidence. Do not create the online session view automatically; after a
 candidate PASS, ask the user first. If the user agrees or explicitly asks to
-visualize the session, `visualize-session` builds the view from the session
-folder.
+publish the paper-ready session, `visualize-session --with-strategy-artifact`
+builds the view from the session folder and uploads the selected strategy
+artifact. If the command reports `needs_agent_refactor`, read the emitted
+`refactor-request.json`, edit only the promoted copy named there, write
+`refactor-report.json`, and rerun the same command. Do not start a separate
+agent process. Omit the flag only for narrative-only views.
 This workspace is for alpha-managed branch research, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.
@@ -402,7 +407,7 @@ separate directory.
 ```bash
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
-abel-invest promote-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+abel-invest promote-strategy --branch research/tsla/tsla-v1/branches/<chosen-branch> --round <round-id>
 ```
 
 ### Understand the workspace layout

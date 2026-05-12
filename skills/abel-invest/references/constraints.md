@@ -23,6 +23,22 @@ invalid.
 
 That is the legal authoring surface for branch-default strategies.
 
+## Stateful Strategies
+
+Strategies may use rolling model files, checkpoints, scalers, and lightweight
+caches when the mechanism needs state across paper runs. Put durable mutable
+state behind the runtime state surface:
+
+```python
+model_path = ctx.state_dir / "model/latest.joblib"
+scaler_path = ctx.state_dir / "model/feature_scaler.json"
+```
+
+Do not write durable state beside `engine.py`, under `inputs/`, or in ad hoc
+temporary directories. Promotion can package declared initial state for the
+first paper run, but hosted paper execution will only persist files that live
+under the runner state directory.
+
 ## System-Owned Inputs
 
 Treat these files as runtime facts supplied by the system:
