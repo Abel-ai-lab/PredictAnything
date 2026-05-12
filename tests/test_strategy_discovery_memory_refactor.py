@@ -745,6 +745,7 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
                         "lo_adjusted": float(lo_adj),
                         "max_dd": -0.1,
                         "total_return": float(pnl) / 100.0,
+                        "position_hit_rate": 0.75,
                     },
                     "decision_preview": [
                         {"date": "2026-05-04", "target_close": 16.13},
@@ -814,6 +815,7 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
     assert primary["metrics"]["totalReturn"] == 0.9
     assert primary["metrics"]["loAdjusted"] == 1.8
     assert primary["metrics"]["positionIcStability"] == 0.0
+    assert primary["metrics"]["positionHitRate"] == 0.75
     assert primary["metrics"]["dsr"] == 0.0
     assert primary["metrics"]["lossYears"] == 0
     assert primary["latestDecision"] == {
