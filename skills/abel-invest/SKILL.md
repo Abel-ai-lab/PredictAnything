@@ -127,14 +127,14 @@ Always start by resolving workspace state before strategy work.
     whenever the agent would naturally summarize that the strategy is worth a
     visual review. Do not print a command for the user to run. If the user
     agrees, or if the user explicitly asks to visualize the session, run
-    `abel-invest visualize-session --session <session>` yourself and share the
-    returned Markdown link. If the user explicitly asks to visualize a
-    paper-ready session, or the session is being reviewed for promotion, include
-    `--with-strategy-artifact`; use narrative-only `visualize-session` when the
-    user asks for a session view without strategy artifact upload. Session
-    views are incremental: running `visualize-session` again updates the online
-    view with the latest local session evidence, rounds, primary strategy, and
-    artifacts.
+    `abel-invest visualize-session --session <session> --with-strategy-artifact`
+    yourself and share the returned Markdown link. This is the default
+    visualization path because the online review should include the selected
+    best `PASS` strategy artifact when one is available. Use narrative-only
+    `visualize-session` only when the user explicitly asks for a session view
+    without strategy artifact upload. Session views are incremental: running
+    `visualize-session` again updates the online view with the latest local
+    session evidence, rounds, primary strategy, and artifacts.
     If that command reports `needs_agent_refactor`, read the emitted
     `refactor-request.json` and handle it in this same skill loop. If `kind`
     is `state_intent_self_check`, inspect the selected branch source and nearby
