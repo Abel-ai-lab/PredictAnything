@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 import strategy_discovery_api as ni
 from abel_invest.narrative_core import promotion as promotion_helpers
-from abel_invest.narrative_core.dashboard_adapters.primary_strategy_selector import position_action
 
 
 def _candidate_result_payload() -> dict:
@@ -598,7 +597,7 @@ def test_build_skill_dashboard_session_bundle_aggregates_branches_and_rounds(tmp
     ]
 
 
-def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_results_tsv(
+def test_build_skill_dashboard_session_bundle_omits_primary_strategy_and_trade_log(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-primary-dashboard", tmp_path / "research")
@@ -687,175 +686,8 @@ def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_resu
         uploaded_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
     )
 
-    primary = bundle["payload"]["primaryStrategy"]
-    assert primary["branchId"] == "graph-v1"
-    assert primary["roundId"] == "round-001"
-    assert primary["selectionRule"] == "sharpe_desc_lo_adjusted_desc_max_dd_desc_latest_v1"
-    assert primary["metrics"]["score"] == "8/9"
-    assert primary["metrics"]["totalReturn"] == 0.9
-    assert primary["metrics"]["loAdjusted"] == 1.8
-    assert primary["metrics"]["positionIcStability"] == 0.0
-    assert primary["metrics"]["positionHitRate"] == 0.75
-    assert primary["metrics"]["dsr"] == 0.0
-    assert primary["metrics"]["lossYears"] == 0
-    assert primary["latestDecision"] == {
-        "tradingDate": "2026-05-05",
-        "previousPosition": 0.75,
-        "currentPosition": 0.3,
-        "position": 0.3,
-        "nextPosition": 0.6,
-        "delta": -0.15,
-        "action": "reduce",
-        "close": 17.06,
-        "source": "abel_invest_edge_frame_csv",
-    }
-    assert primary["backtestTradeLog"] == {
-        "source": "abel_invest_trade_log_csv",
-        "tradeLogRef": "branches/graph-v1/outputs/round-001-trade-log.csv",
-    }
-    trade_log_path = session / primary["backtestTradeLog"]["tradeLogRef"]
-    assert trade_log_path.read_text(encoding="utf-8").splitlines() == [
-        "date,asset_return,pnl,position,source,decision_time,effective_time,next_position,gross_pnl,turnover,execution_cost,cum_return",
-        "2026-05-04,,0.01,0.75,backfill,,,0.30,,,,0.010000000000000009",
-        "2026-05-05,,0.02,0.30,backfill,,,0.60,,,,0.030200000000000005",
-    ]
-
-
-def test_dashboard_primary_strategy_uses_artifact_selection_rule(tmp_path: Path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-primary-shared-selector", tmp_path / "research")
-    lower_sharpe = ni.init_branch_dir(session, "score_leader")
-    sharpe_leader = ni.init_branch_dir(session, "sharpe_leader")
-    for branch, round_id, lo_adj, sharpe in [
-        (lower_sharpe, "round-001", "1.1", "1.0"),
-        (sharpe_leader, "round-001", "1.4", "1.6"),
-    ]:
-        _write_strategy_result_row(
-            session,
-            branch,
-            round_id=round_id,
-            verdict="PASS",
-            sharpe=float(sharpe),
-            lo_adj=float(lo_adj),
-            max_dd=-0.1,
-        )
-        ni.append_tsv_row(
-            session / "events.tsv",
-            ni.EVENTS_HEADER,
-            {
-                "timestamp": "2026-04-24T01:20:00+00:00",
-                "event": "round_recorded",
-                "branch_id": branch.name,
-                "round_id": round_id,
-                "mode": "explore",
-                "verdict": "PASS",
-                "decision": "keep",
-                "description": f"{branch.name} {round_id}",
-                "artifact_path": f"branches/{branch.name}/outputs/{round_id}-edge-result.json",
-            },
-        )
-
-    artifact_selection = ni.select_best_pass_strategy(session)
-    bundle = ni.build_skill_dashboard_session_bundle(
-        session,
-        uploaded_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-    )
-
-    primary = bundle["payload"]["primaryStrategy"]
-    assert artifact_selection.selected_branch_id == "sharpe_leader"
-    assert primary["branchId"] == artifact_selection.selected_branch_id
-    assert primary["roundId"] == artifact_selection.selected_round_id
-    assert primary["selectionRule"] == "sharpe_desc_lo_adjusted_desc_max_dd_desc_latest_v1"
-
-
-def test_primary_strategy_position_action_maps_previous_to_next_position() -> None:
-    assert position_action(0, 0.3) == "buy/open_long"
-    assert position_action(0.3, 0) == "sell/close"
-    assert position_action(0.3, 0.6) == "increase"
-    assert position_action(0.75, 0.6) == "reduce"
-    assert position_action(0.3, 0.3) == "hold"
-
-
-def test_primary_strategy_selector_uses_only_recorded_kept_pass_rounds(tmp_path: Path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-primary-filter-dashboard", tmp_path / "research")
-    kept_branch = ni.init_branch_dir(session, "kept-branch")
-    discarded_branch = ni.init_branch_dir(session, "discarded-branch")
-    unrecorded_branch = ni.init_branch_dir(session, "unrecorded-branch")
-    rows = [
-        (kept_branch, "round-001", "keep", "PASS", "9/9", "20.0", True),
-        (discarded_branch, "round-001", "discard", "PASS", "9/9", "90.0", True),
-        (unrecorded_branch, "round-001", "keep", "PASS", "9/9", "95.0", False),
-    ]
-    for branch, round_id, decision, verdict, score, pnl, recorded in rows:
-        result_ref = f"branches/{branch.name}/outputs/{round_id}-edge-result.json"
-        result_path = session / result_ref
-        result_path.parent.mkdir(parents=True, exist_ok=True)
-        result_path.write_text(
-            json.dumps(
-                {
-                    "verdict": verdict,
-                    "metrics": {
-                        "sharpe": 1.0,
-                        "lo_adjusted": 1.0,
-                        "max_dd": -0.1,
-                        "total_return": float(pnl) / 100.0,
-                    },
-                    "effective_window": {
-                        "start": "2020-01-01",
-                        "end": "2020-12-31",
-                    },
-                }
-            ),
-            encoding="utf-8",
-        )
-        ni.append_tsv_row(
-            branch / "results.tsv",
-            ni.RESULTS_HEADER,
-            {
-                "exp_id": session.name,
-                "ticker": "TSLA",
-                "branch_id": branch.name,
-                "round_id": round_id,
-                "decision": decision,
-                "lo_adj": "1.000",
-                "ic": "0.0100",
-                "omega": "1.100",
-                "sharpe": "1.000",
-                "max_dd": "-0.1000",
-                "pnl": pnl,
-                "K": "3",
-                "score": score,
-                "verdict": verdict,
-                "mode": "explore",
-                "description": f"{branch.name} {round_id}",
-                "result_path": result_ref,
-                "report_path": f"branches/{branch.name}/outputs/{round_id}-edge-validation.md",
-                "handoff_path": f"branches/{branch.name}/outputs/{round_id}-edge-handoff.json",
-            },
-        )
-        if recorded:
-            ni.append_tsv_row(
-                session / "events.tsv",
-                ni.EVENTS_HEADER,
-                {
-                    "timestamp": "2026-04-24T01:20:00+00:00",
-                    "event": "round_recorded",
-                    "branch_id": branch.name,
-                    "round_id": round_id,
-                    "mode": "explore",
-                    "verdict": verdict,
-                    "decision": decision,
-                    "description": f"{branch.name} {round_id}",
-                    "artifact_path": result_ref,
-                },
-            )
-
-    bundle = ni.build_skill_dashboard_session_bundle(
-        session,
-        uploaded_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-    )
-
-    assert bundle["payload"]["primaryStrategy"]["branchId"] == "kept-branch"
-    assert bundle["payload"]["primaryStrategy"]["metrics"]["totalReturn"] == 0.2
+    assert "primaryStrategy" not in bundle["payload"]
+    assert not list(session.glob("branches/*/outputs/*-trade-log.csv"))
 
 
 def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
@@ -888,55 +720,6 @@ def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
     assert request.get_header("Api-key") == "secret-key"
     assert request.get_header("Content-type") == "application/json"
     assert timeout == 60
-
-
-def test_post_skill_dashboard_session_uploads_trade_log_as_multipart(tmp_path: Path) -> None:
-    calls = []
-    trade_log = tmp_path / "branches" / "b1" / "outputs" / "round-001-trade-log.csv"
-    trade_log.parent.mkdir(parents=True)
-    trade_log.write_text("date,pnl,cum_return\n2026-05-05,0.1,0.1\n", encoding="utf-8")
-
-    class _Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b'{"code": 200, "data": {"sessionId": "s1"}}'
-
-    def fake_opener(request, timeout):
-        calls.append((request, timeout))
-        return _Response()
-
-    result = ni.post_skill_dashboard_session(
-        base_url="https://router.example",
-        api_key="secret-key",
-        bundle={
-            "sessionId": "s1",
-            "payload": {
-                "session": {},
-                "branches": [],
-                "rounds": [],
-                "primaryStrategy": {
-                    "backtestTradeLog": {
-                        "tradeLogRef": "branches/b1/outputs/round-001-trade-log.csv",
-                    },
-                },
-            },
-        },
-        session_root=tmp_path,
-        opener=fake_opener,
-    )
-
-    request, _timeout = calls[0]
-    body = request.data.decode("utf-8")
-    assert result["data"]["sessionId"] == "s1"
-    assert request.get_header("Content-type").startswith("multipart/form-data; boundary=")
-    assert 'name="payload"' in body
-    assert 'name="backtestTradeLog"; filename="round-001-trade-log.csv"' in body
-    assert "date,pnl,cum_return" in body
 
 
 def test_select_best_pass_strategy_sorts_session_pass_rounds(tmp_path: Path) -> None:

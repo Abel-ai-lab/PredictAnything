@@ -25,9 +25,6 @@ from abel_invest.narrative_core.contracts.constants import (
     EVIDENCE_LEDGER_FILENAME,
     FRONTIER_JSON_FILENAME,
 )
-from abel_invest.narrative_core.dashboard_adapters.primary_strategy_selector import (
-    select_primary_strategy,
-)
 from abel_invest.workspace_core.edge_runtime import resolve_runtime_auth_env_file
 from abel_invest.narrative_core.evidence.evidence import (
     load_json_object,
@@ -69,13 +66,7 @@ def build_skill_dashboard_session_bundle(
         skill_dashboard_branch_payload(branch, discovery=discovery, ledger=ledger)
         for branch in branches
     ]
-    round_order = session_round_order(events)
     rounds = indexed_skill_dashboard_rounds(branches, events, ledger)
-    primary_strategy = select_primary_strategy(
-        session=session,
-        branches=branches,
-        session_round_indexes=round_order,
-    )
     return {
         "sessionId": session.name,
         "startAt": start_at,
@@ -91,7 +82,6 @@ def build_skill_dashboard_session_bundle(
             },
             "branches": branch_payloads,
             "rounds": rounds,
-            "primaryStrategy": primary_strategy,
             "explorationMap": build_skill_dashboard_exploration_map(
                 discovery=discovery,
                 branches=branch_payloads,
@@ -108,7 +98,6 @@ def post_skill_dashboard_session(
     base_url: str,
     api_key: str,
     bundle: dict,
-    session_root: Path | None = None,
     opener=urlopen,
     timeout: int = 60,
 ) -> dict:
@@ -118,21 +107,8 @@ def post_skill_dashboard_session(
     normalized_api_key = str(api_key or "").strip()
     if not normalized_api_key:
         raise RuntimeError("Missing Abel API key")
-    trade_log_path = _primary_strategy_trade_log_path(bundle, session_root=session_root)
-    if trade_log_path is not None and trade_log_path.is_file():
-        body, content_type = build_multipart_form_data(
-            fields={"payload": json.dumps(bundle, ensure_ascii=False)},
-            files={
-                "backtestTradeLog": {
-                    "filename": trade_log_path.name,
-                    "content_type": "text/csv",
-                    "content": trade_log_path.read_bytes(),
-                }
-            },
-        )
-    else:
-        body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
-        content_type = "application/json"
+    body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
+    content_type = "application/json"
     request = Request(
         f"{normalized_base_url}/web/skill-dashboard/sessions",
         data=body,
@@ -146,23 +122,6 @@ def post_skill_dashboard_session(
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Skill dashboard session upload failed: HTTP {exc.code}: {detail}") from exc
     return json.loads(raw)
-
-
-def _primary_strategy_trade_log_path(bundle: dict, *, session_root: Path | None = None) -> Path | None:
-    payload = bundle.get("payload") if isinstance(bundle.get("payload"), dict) else {}
-    primary_strategy = (
-        payload.get("primaryStrategy") if isinstance(payload.get("primaryStrategy"), dict) else {}
-    )
-    trade_log = (
-        primary_strategy.get("backtestTradeLog")
-        if isinstance(primary_strategy.get("backtestTradeLog"), dict)
-        else {}
-    )
-    trade_log_ref = str(trade_log.get("tradeLogRef") or "").strip()
-    if not trade_log_ref:
-        return None
-    root = session_root.resolve() if session_root is not None else Path.cwd()
-    return root / trade_log_ref
 
 
 def post_strategy_artifact_upload(
@@ -254,7 +213,6 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
         base_url=base_url,
         api_key=api_key,
         bundle=bundle,
-        session_root=session,
     )
     artifact_result = None
     if artifact_export_result is not None:
