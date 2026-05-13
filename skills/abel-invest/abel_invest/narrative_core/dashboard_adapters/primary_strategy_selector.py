@@ -72,7 +72,7 @@ def _backtest_trade_log_from_frame_csv(session: Path, result_ref: str) -> dict[s
     _write_trade_log_from_frame(frame_path, trade_log_path)
     return {
         "source": "abel_invest_trade_log_csv",
-        "tradeLogRef": str(trade_log_path.relative_to(session)),
+        "tradeLogRef": trade_log_path.relative_to(session).as_posix(),
     }
 
 
