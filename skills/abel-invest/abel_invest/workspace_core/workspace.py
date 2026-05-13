@@ -302,7 +302,7 @@ Use that path as orientation, not as a rigid script. The important boundary is:
   count as realized when the engine reads prepared graph inputs
 - `visualize-session` creates an online session view from the session folder;
   use `--with-strategy-artifact` by default so the review includes the selected
-  best PASS strategy artifact when one is available, and omit it only for
+  best ranked hostable strategy artifact when one is available, and omit it only for
   narrative-only views
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter baseline for the first end-to-end run, not a finished branch thesis

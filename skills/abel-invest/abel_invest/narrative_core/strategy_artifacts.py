@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
@@ -50,17 +51,17 @@ STRATEGY_ARTIFACT_ENTRYPOINT = "strategy/strategy.py"
 STRATEGY_ARTIFACT_CLASS_NAME = "BranchEngine"
 STRATEGY_ARTIFACT_PAPER_MODE = "paper_signal"
 STRATEGY_ARTIFACT_WORKSPACE_KIND = "abel-invest"
-SELECTION_MODE_AUTO_BEST_PASS = "auto_best_pass_by_metric_order"
+SELECTION_MODE_AUTO_BEST_PASS = "auto_best_validation_by_pass_rate"
 SELECTION_MODE_EXPLICIT_BRANCH_ROUND = "explicit_branch_round"
 SELECTION_SCOPE_SESSION = "session"
 SELECTION_SCOPE_BRANCH = "branch"
-SELECTION_METRIC_ORDER = ("sharpe", "lo_adjusted", "max_dd")
+SELECTION_METRIC_ORDER = ("pass_rate", "sharpe", "calmar", "max_dd")
 SELECTION_RULE_AUTO_BEST_PASS = (
-    "sharpe_desc_lo_adjusted_desc_max_dd_desc_latest_v1"
+    "pass_rate_desc_sharpe_desc_calmar_desc_max_dd_desc_latest_v1"
 )
 SELECTION_REASON_AUTO_BEST_PASS = (
-    "highest Sharpe, then highest Lo-adjusted Sharpe, then least severe max drawdown; "
-    "ties use latest recorded round"
+    "highest validation pass rate, then highest Sharpe, then highest Calmar, "
+    "then least severe max drawdown; ties use latest recorded round"
 )
 DEFAULT_PROMOTIONS_DIRNAME = "promotions"
 RUNTIME_STATE_SCHEMA = "abel-invest.runtime-state/v1"
@@ -124,8 +125,10 @@ class StrategyArtifactCandidate:
     mode: str
     description: str
     score: str
+    pass_rate: float
     sharpe: float
     lo_adjusted: float
+    calmar: float
     max_dd: float
     row: dict[str, str]
     edge_result: dict[str, Any]
@@ -137,8 +140,9 @@ class StrategyArtifactCandidate:
     @property
     def selection_metric_values(self) -> dict[str, float]:
         return {
+            "pass_rate": self.pass_rate,
             "sharpe": self.sharpe,
-            "lo_adjusted": self.lo_adjusted,
+            "calmar": self.calmar,
             "max_dd": self.max_dd,
         }
 
@@ -151,6 +155,10 @@ class StrategySelectionResult:
     eligible_count: int
 
     @property
+    def validation_round_count(self) -> int:
+        return self.pass_round_count
+
+    @property
     def selected_branch_id(self) -> str | None:
         return self.selected.branch_id if self.selected is not None else None
 
@@ -160,24 +168,24 @@ class StrategySelectionResult:
 
 
 def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
-    """Select the best hostable PASS strategy in one Abel Invest session."""
+    """Select the best ranked hostable validation strategy in one Abel Invest session."""
 
     session = resolve_workspace_arg_path(session).resolve()
     rows = _iter_session_result_rows(session)
     session_round_indexes = _session_round_indexes(session)
-    pass_rows = [
-        item for item in rows if _clean(item[1].get("verdict")).upper() == "PASS"
+    validation_rows = [
+        item for item in rows if _is_validation_verdict(item[1].get("verdict"))
     ]
-    if not pass_rows:
+    if not validation_rows:
         return StrategySelectionResult(
             selected=None,
-            skip_reason="no_pass_strategy",
+            skip_reason="no_validation_strategy",
             pass_round_count=0,
             eligible_count=0,
         )
 
     candidates: list[StrategyArtifactCandidate] = []
-    for branch, row in pass_rows:
+    for branch, row in validation_rows:
         branch_id = _clean(row.get("branch_id")) or branch.name
         round_id = _clean(row.get("round_id"))
         if _clean(row.get("decision")).lower() != "keep":
@@ -196,16 +204,17 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
     if not candidates:
         return StrategySelectionResult(
             selected=None,
-            skip_reason="no_hostable_pass_strategy",
-            pass_round_count=len(pass_rows),
+            skip_reason="no_hostable_validation_strategy",
+            pass_round_count=len(validation_rows),
             eligible_count=0,
         )
 
     ranked = sorted(
         candidates,
         key=lambda item: (
+            item.pass_rate,
             item.sharpe,
-            item.lo_adjusted,
+            item.calmar,
             item.max_dd,
             item.session_round_index,
         ),
@@ -215,7 +224,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
     return StrategySelectionResult(
         selected=selected,
         skip_reason="",
-        pass_round_count=len(pass_rows),
+        pass_round_count=len(validation_rows),
         eligible_count=len(candidates),
     )
 
@@ -230,27 +239,27 @@ def select_branch_promotion_candidate(
     branch = resolve_workspace_arg_path(branch).resolve()
     session = _session_from_branch(branch)
     rows = [(branch, row) for row in read_tsv_rows(branch / "results.tsv")]
-    pass_rows = [
-        item for item in rows if _clean(item[1].get("verdict")).upper() == "PASS"
+    validation_rows = [
+        item for item in rows if _is_validation_verdict(item[1].get("verdict"))
     ]
     if round_id:
         matched = [
-            item for item in pass_rows if _clean(item[1].get("round_id")) == round_id
+            item for item in validation_rows if _clean(item[1].get("round_id")) == round_id
         ]
         if not matched:
             return StrategySelectionResult(
                 selected=None,
-                skip_reason="branch_round_not_pass",
-                pass_round_count=len(pass_rows),
+                skip_reason="branch_round_not_validation",
+                pass_round_count=len(validation_rows),
                 eligible_count=0,
             )
         target_rows = matched
     else:
-        target_rows = pass_rows
+        target_rows = validation_rows
         if not target_rows:
             return StrategySelectionResult(
                 selected=None,
-                skip_reason="no_pass_round_in_branch",
+                skip_reason="no_validation_round_in_branch",
                 pass_round_count=0,
                 eligible_count=0,
             )
@@ -279,14 +288,14 @@ def select_branch_promotion_candidate(
         return StrategySelectionResult(
             selected=None,
             skip_reason="no_hostable_branch_round",
-            pass_round_count=len(pass_rows),
+            pass_round_count=len(validation_rows),
             eligible_count=0,
         )
     selected = _with_rank(candidates[0], selection_rank=1)
     return StrategySelectionResult(
         selected=selected,
         skip_reason="",
-        pass_round_count=len(pass_rows),
+        pass_round_count=len(validation_rows),
         eligible_count=len(candidates),
     )
 
@@ -300,7 +309,7 @@ def build_strategy_artifact_manifest(
     abel_edge_version: str | None = None,
     abel_invest_version: str | None = None,
 ) -> dict[str, Any]:
-    """Build the router upload manifest for one selected PASS strategy."""
+    """Build the router upload manifest for one selected validation strategy."""
 
     branch_spec = load_branch_spec(candidate.branch)
     runtime_profile = _load_json_object(runtime_profile_path(candidate.branch))
@@ -352,6 +361,19 @@ def build_strategy_artifact_manifest(
     }
     promotion_payload = _manifest_promotion_payload(candidate, promotion=promotion)
 
+    backtest_payload = {
+        "verdict": _clean(candidate.edge_result.get("verdict")).upper(),
+        "startAt": start_at,
+        "endAt": end_at,
+        "resultRef": "edge/edge-result.json",
+        "metrics": _manifest_backtest_metrics(candidate, metrics),
+    }
+    if candidate.edge_report_path is not None:
+        backtest_payload["reportRef"] = "edge/edge-validation.md"
+    latest_decision = _latest_decision_from_frame(candidate)
+    if latest_decision is not None:
+        backtest_payload["latestDecision"] = latest_decision
+
     manifest = {
         "schema": STRATEGY_ARTIFACT_SCHEMA,
         "createdAt": created_at or _now(),
@@ -401,29 +423,7 @@ def build_strategy_artifact_manifest(
             _artifact_file_entry(artifact_path=artifact_path, source_path=source_path)
             for artifact_path, source_path in source_files
         ],
-        "backtest": {
-            "verdict": _clean(candidate.edge_result.get("verdict")).upper(),
-            "startAt": start_at,
-            "endAt": end_at,
-            "metrics": {
-                "sharpe": _required_float(
-                    metrics.get("sharpe"),
-                    field_name="metrics.sharpe",
-                ),
-                "loAdjusted": _required_float(
-                    metrics.get("lo_adjusted", metrics.get("lo_adj")),
-                    field_name="metrics.lo_adjusted",
-                ),
-                "maxDrawdown": _required_float(
-                    metrics.get("max_dd", metrics.get("max_drawdown")),
-                    field_name="metrics.max_dd",
-                ),
-                "totalReturn": _required_float(
-                    metrics.get("total_return"),
-                    field_name="metrics.total_return",
-                ),
-            },
-        },
+        "backtest": backtest_payload,
     }
     if promotion is not None and promotion.state_intent_payload is not None:
         manifest["stateIntent"] = promotion.state_intent_payload
@@ -692,14 +692,22 @@ def _candidate_from_row(
     edge_result = _load_json_object(result_path)
     if not edge_result:
         return None
-    if _clean(edge_result.get("verdict")).upper() != "PASS":
+    if not _is_validation_verdict(edge_result.get("verdict")):
         return None
 
     metrics = edge_result.get("metrics") if isinstance(edge_result.get("metrics"), dict) else {}
+    pass_rate = _score_pass_rate(_clean(row.get("score")) or _clean(edge_result.get("score")))
     sharpe = _metric(row, metrics, row_key="sharpe", result_key="sharpe")
     lo_adjusted = _metric(row, metrics, row_key="lo_adj", result_key="lo_adjusted")
+    calmar = _to_float(metrics.get("calmar"))
     max_dd = _metric(row, metrics, row_key="max_dd", result_key="max_dd")
-    if sharpe is None or lo_adjusted is None or max_dd is None:
+    if (
+        pass_rate is None
+        or sharpe is None
+        or lo_adjusted is None
+        or calmar is None
+        or max_dd is None
+    ):
         return None
 
     report_path = _existing_optional_path(session, row.get("report_path"))
@@ -721,8 +729,10 @@ def _candidate_from_row(
         mode=_clean(row.get("mode")),
         description=_clean(row.get("description")),
         score=_clean(row.get("score")),
+        pass_rate=pass_rate,
         sharpe=sharpe,
         lo_adjusted=lo_adjusted,
+        calmar=calmar,
         max_dd=max_dd,
         row=dict(row),
         edge_result=edge_result,
@@ -800,7 +810,7 @@ def _ensure_metric_input_for_artifact(
         metric_input_path=metric_input_path,
         runner=runner,
     )
-    if _clean(result.get("verdict")).upper() != "PASS" or not metric_input_path.is_file():
+    if not _is_validation_verdict(result.get("verdict")) or not metric_input_path.is_file():
         return None
     return replace(
         candidate,
@@ -1217,6 +1227,149 @@ def _existing_optional_path(session: Path, value: str | None) -> Path | None:
     return path
 
 
+def _manifest_backtest_metrics(
+    candidate: StrategyArtifactCandidate,
+    metrics: dict[str, Any],
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "sharpe": _required_float(
+            metrics.get("sharpe"),
+            field_name="metrics.sharpe",
+        ),
+        "loAdjusted": _required_float(
+            metrics.get("lo_adjusted", metrics.get("lo_adj")),
+            field_name="metrics.lo_adjusted",
+        ),
+        "maxDrawdown": _required_float(
+            metrics.get("max_dd", metrics.get("max_drawdown")),
+            field_name="metrics.max_dd",
+        ),
+        "totalReturn": _required_float(
+            metrics.get("total_return"),
+            field_name="metrics.total_return",
+        ),
+        "calmar": _required_float(
+            metrics.get("calmar"),
+            field_name="metrics.calmar",
+        ),
+    }
+    _set_optional_float(payload, "annualReturn", _to_float(metrics.get("annual_return")))
+    score = _clean(candidate.score) or _clean(candidate.edge_result.get("score"))
+    if score:
+        payload["score"] = score
+    _set_optional_float(
+        payload,
+        "positionIc",
+        _metric(candidate.row, metrics, row_key="ic", result_key="position_ic"),
+    )
+    _set_optional_float(
+        payload,
+        "positionIcStability",
+        _to_float(metrics.get("position_ic_stability")),
+    )
+    _set_optional_float(
+        payload,
+        "positionHitRate",
+        _to_float(metrics.get("position_hit_rate")),
+    )
+    _set_optional_float(
+        payload,
+        "omega",
+        _metric(candidate.row, metrics, row_key="omega", result_key="omega"),
+    )
+    _set_optional_float(payload, "dsr", _to_float(metrics.get("dsr")))
+    _set_optional_int(payload, "lossYears", _to_int(metrics.get("loss_years")))
+    _set_optional_int(
+        payload,
+        "k",
+        _first_not_none(
+            _to_int(candidate.row.get("K")),
+            _to_int(candidate.edge_result.get("K")),
+        ),
+    )
+    return payload
+
+
+def _latest_decision_from_frame(candidate: StrategyArtifactCandidate) -> dict[str, Any] | None:
+    result_ref = _clean(candidate.row.get("result_path"))
+    if not result_ref:
+        return None
+    frame_path = _frame_path_for_result_ref(candidate.session, result_ref)
+    if frame_path is None or not frame_path.exists():
+        return None
+    with frame_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        return None
+    latest = rows[-1]
+    previous = rows[-2] if len(rows) > 1 else {}
+    previous_position = _to_float(previous.get("position"))
+    previous_position_for_action = previous_position if previous_position is not None else 0.0
+    position = _to_float(latest.get("position")) or 0.0
+    next_position = _to_float(latest.get("next_position")) or 0.0
+    trading_date = _date_text(latest.get("date"))
+    close = _to_float(latest.get("close"))
+    if close is None:
+        close = _latest_close_from_edge_result(candidate.edge_result, trading_date=trading_date)
+    return {
+        "tradingDate": trading_date,
+        "previousPosition": previous_position,
+        "currentPosition": position,
+        "position": position,
+        "nextPosition": next_position,
+        "delta": round(next_position - previous_position_for_action, 10),
+        "action": _position_action(previous_position_for_action, next_position),
+        "close": close,
+        "source": "abel_invest_edge_frame_csv",
+    }
+
+
+def _frame_path_for_result_ref(session: Path, result_ref: str) -> Path | None:
+    result_path = _resolve_session_relative_path(session, result_ref)
+    if result_path is None:
+        return None
+    name = result_path.name
+    if not name.endswith("-edge-result.json"):
+        return None
+    return result_path.with_name(name.replace("-edge-result.json", "-edge-frame.csv"))
+
+
+def _position_action(previous_position: float, next_position: float) -> str:
+    if previous_position == 0 and next_position > 0:
+        return "buy/open_long"
+    if next_position == 0 and previous_position > 0:
+        return "sell/close"
+    if next_position > previous_position:
+        return "increase"
+    if next_position < previous_position:
+        return "reduce"
+    return "hold"
+
+
+def _date_text(value: Any) -> str:
+    text = _clean(value)
+    if "T" in text:
+        return text.split("T", 1)[0]
+    return text.split(" ", 1)[0]
+
+
+def _latest_close_from_edge_result(
+    edge_result: dict[str, Any],
+    *,
+    trading_date: str,
+) -> float | None:
+    preview = edge_result.get("decision_preview")
+    if not isinstance(preview, list):
+        return None
+    for item in reversed(preview):
+        if not isinstance(item, dict):
+            continue
+        if _date_text(item.get("date")) != trading_date:
+            continue
+        return _to_float(item.get("target_close"))
+    return None
+
+
 def _load_json_object(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -1238,6 +1391,22 @@ def _metric(
     return _to_float(metrics.get(result_key))
 
 
+def _is_validation_verdict(value: Any) -> bool:
+    return _clean(value).upper() in {"PASS", "FAIL"}
+
+
+def _score_pass_rate(value: Any) -> float | None:
+    text = _clean(value)
+    if "/" not in text:
+        return None
+    passed, total = text.split("/", 1)
+    passed_value = _to_float(passed)
+    total_value = _to_float(total)
+    if passed_value is None or total_value is None or total_value <= 0:
+        return None
+    return passed_value / total_value
+
+
 def _to_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -1245,6 +1414,28 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _to_int(value: Any) -> int | None:
+    parsed = _to_float(value)
+    return None if parsed is None else int(parsed)
+
+
+def _set_optional_float(payload: dict[str, Any], key: str, value: float | None) -> None:
+    if value is not None:
+        payload[key] = value
+
+
+def _set_optional_int(payload: dict[str, Any], key: str, value: int | None) -> None:
+    if value is not None:
+        payload[key] = value
+
+
+def _first_not_none(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
 
 
 def _clean(value: Any) -> str:

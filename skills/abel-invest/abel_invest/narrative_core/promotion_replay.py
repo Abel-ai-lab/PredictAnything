@@ -102,7 +102,9 @@ def verify_promotion_replay(
     return {
         "behavior_equivalence": behavior_details,
         "paper_dry_run": {
-            "status": "passed" if clean(replay_result.get("verdict")).upper() == "PASS" else "failed",
+            "status": "passed"
+            if clean(replay_result.get("verdict")).upper() in {"PASS", "FAIL"}
+            else "failed",
             "method": method,
             "promotedVerdict": clean(replay_result.get("verdict")),
             "promotedMetricInputPath": str(replay_metric_input_path),
