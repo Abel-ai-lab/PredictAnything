@@ -134,7 +134,8 @@ Always start by resolving workspace state before strategy work.
     `visualize-session` only when the user explicitly asks for a session view
     without strategy artifact upload. Session views are incremental: running
     `visualize-session` again updates the online view with the latest local
-    session evidence, rounds, primary strategy, and artifacts.
+    session evidence, rounds, and selected strategy artifact when one is
+    available.
     If that command reports `needs_agent_refactor`, read the emitted
     `refactor-request.json` and handle it in this same skill loop. If `kind`
     is `state_intent_self_check`, inspect the selected branch source and nearby
