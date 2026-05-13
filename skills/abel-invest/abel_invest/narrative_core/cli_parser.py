@@ -275,15 +275,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Interpreter used to run abel-edge evaluate (defaults to the workspace python when available)",
     )
-    promote_branch = sub.add_parser(
-        "promote-branch",
-        help="Create a promotion bundle from a prepared research branch",
+    upload_dashboard = sub.add_parser(
+        "upload-dashboard-bundle",
+        help="Upload branch evidence to the Abel router skill dashboard",
     )
-    promote_branch.add_argument("--branch", required=True)
-    promote_branch.add_argument(
-        "--output-dir",
+    upload_dashboard.add_argument("--branch", required=True)
+    upload_dashboard.add_argument(
+        "--api-key",
+        default="",
+        help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
+    )
+    upload_dashboard.add_argument(
+        "--output-json",
         default=None,
-        help="Optional destination directory (defaults to <session>/promotions/<branch-id>)",
+        help="Optional path to write the upload payload before sending.",
+    )
+    upload_dashboard.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Build and print the payload without sending it.",
     )
 
     visualize_session = sub.add_parser(
@@ -310,6 +320,61 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Build and print the payload without sending it.",
+    )
+    visualize_session.add_argument(
+        "--with-strategy-artifact",
+        action="store_true",
+        help=(
+            "Prepare the session's best PASS strategy artifact, then upload "
+            "narrative and artifact."
+        ),
+    )
+    visualize_session.add_argument(
+        "--artifact-output-dir",
+        default=None,
+        help="Optional local directory for generated strategy artifact files.",
+    )
+    visualize_session.add_argument(
+        "--python-bin",
+        default=None,
+        help="Interpreter used to run Abel-edge artifact helpers (defaults to workspace python).",
+    )
+
+    export_strategy_artifact = sub.add_parser(
+        "export-strategy-artifact",
+        help="Export the best PASS strategy artifact for a session without uploading it",
+    )
+    export_strategy_artifact.add_argument("--session", required=True)
+    export_strategy_artifact.add_argument(
+        "--output-dir",
+        default=None,
+        help="Destination directory for manifest.json, trade-log.csv, and artifact.zip",
+    )
+    export_strategy_artifact.add_argument(
+        "--python-bin",
+        default=None,
+        help="Interpreter used to run Abel-edge export helpers (defaults to workspace python)",
+    )
+
+    promote_strategy = sub.add_parser(
+        "promote-strategy",
+        help="Promote an explicit branch/round into a paper-ready artifact",
+    )
+    promote_strategy.add_argument("--branch", required=True)
+    promote_strategy.add_argument(
+        "--round",
+        default=None,
+        help="Promotion source round. Required when the branch has multiple PASS rounds.",
+    )
+    promote_strategy.add_argument(
+        "--output-dir",
+        default=None,
+        help="Destination directory for manifest.json, trade-log.csv, and artifact.zip",
+    )
+    promote_strategy.add_argument(
+        "--python-bin",
+        default=None,
+        help="Interpreter used to run Abel-edge export helpers (defaults to workspace python)",
     )
 
     debug_branch = sub.add_parser(
