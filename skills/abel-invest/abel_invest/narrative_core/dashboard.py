@@ -207,7 +207,7 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
         )
         skipped = artifact_export_result.get("artifactUploadSkipped")
         skip_reason = artifact_export_result.get("skipReason")
-        if skipped and skip_reason not in {"no_pass_strategy", "no_validation_strategy"}:
+        if skipped and skip_reason != "no_validation_strategy":
             raise RuntimeError(_strategy_artifact_preupload_error(artifact_export_result))
     result = post_skill_dashboard_session(
         base_url=base_url,
