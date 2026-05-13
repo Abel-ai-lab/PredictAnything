@@ -275,27 +275,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Interpreter used to run abel-edge evaluate (defaults to the workspace python when available)",
     )
-    upload_dashboard = sub.add_parser(
-        "upload-dashboard-bundle",
-        help="Upload branch evidence to the Abel router skill dashboard",
-    )
-    upload_dashboard.add_argument("--branch", required=True)
-    upload_dashboard.add_argument(
-        "--api-key",
-        default="",
-        help="API key. Defaults to ABEL_API_KEY/CAP_API_KEY from env or shared Abel auth.",
-    )
-    upload_dashboard.add_argument(
-        "--output-json",
-        default=None,
-        help="Optional path to write the upload payload before sending.",
-    )
-    upload_dashboard.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Build and print the payload without sending it.",
-    )
-
     visualize_session = sub.add_parser(
         "visualize-session",
         help="Create an online Abel skill dashboard view for a session",

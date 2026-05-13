@@ -20,10 +20,7 @@ from abel_invest.narrative_core.command_handlers.workspace import (
     handle_workspace_command,
 )
 from abel_invest.narrative_core.cli_parser import build_parser
-from abel_invest.narrative_core.dashboard import (
-    upload_skill_dashboard_bundle,
-    upload_skill_dashboard_session,
-)
+from abel_invest.narrative_core.dashboard import upload_skill_dashboard_session
 from abel_invest.narrative_core.rendering.session_rendering import (
     check_session,
     print_status,
@@ -60,8 +57,6 @@ def main() -> int:
         return prepare_branch_inputs(args)
     if args.command == "run-branch":
         return run_branch_round(args)
-    if args.command == "upload-dashboard-bundle":
-        return upload_skill_dashboard_bundle(args)
     if args.command == "visualize-session":
         return upload_skill_dashboard_session(args)
     if args.command == "export-strategy-artifact":
