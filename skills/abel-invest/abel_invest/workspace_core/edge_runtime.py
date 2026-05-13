@@ -24,7 +24,41 @@ resolved_common_python_root = common_python_root()
 if str(resolved_common_python_root) not in sys.path:
     sys.path.insert(0, str(resolved_common_python_root))
 
-from abel_common.cap.auth import has_auth_token, resolve_auth_env_file
+from abel_common.cap.auth import has_auth_token, read_env_file_values, resolve_auth_env_file
+
+
+def _is_abel_runtime_env_key(key: str) -> bool:
+    return key.startswith(("ABEL_", "CAP_"))
+
+
+def load_workspace_env_values(workspace_root: Path) -> dict[str, str]:
+    """Load Abel runtime variables from the workspace-local ``.env`` file."""
+    workspace_env = (workspace_root / ".env").resolve()
+    return {
+        key: value
+        for key, value in read_env_file_values(workspace_env).items()
+        if key and value and _is_abel_runtime_env_key(key)
+    }
+
+
+def apply_workspace_env(
+    workspace_root: Path,
+    *,
+    environ: dict[str, str] | None = None,
+    override: bool = False,
+) -> dict[str, str]:
+    """Apply workspace ``.env`` Abel variables to an environment mapping.
+
+    The default mirrors common dotenv behavior: workspace values fill missing
+    variables while explicit process values keep precedence.
+    """
+    target = os.environ if environ is None else environ
+    applied: dict[str, str] = {}
+    for key, value in load_workspace_env_values(workspace_root).items():
+        if override or not target.get(key):
+            target[key] = value
+            applied[key] = value
+    return applied
 
 
 def resolve_runtime_auth_env_file(workspace_root: Path) -> Path | None:
@@ -161,6 +195,7 @@ def build_workspace_runtime_env(
 ) -> dict[str, str]:
     """Build a deterministic runtime environment for Abel-edge subprocesses."""
     env = dict(os.environ if base is None else base)
+    apply_workspace_env(workspace_root, environ=env)
     auth_env = resolve_runtime_auth_env_file(workspace_root)
     if not env.get("ABEL_AUTH_ENV_FILE") and auth_env is not None:
         env["ABEL_AUTH_ENV_FILE"] = str(auth_env)

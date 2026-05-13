@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from abel_invest.narrative_core.command_handlers.branch import (
     debug_branch_run,
     prepare_branch_inputs,
@@ -31,11 +33,14 @@ from abel_invest.narrative_core.strategy_artifacts import (
     export_strategy_artifact_command,
     promote_strategy_command,
 )
+from abel_invest.workspace_core.edge_runtime import apply_workspace_env
+from abel_invest.workspace_core.workspace import find_workspace_root, resolve_workspace_entry
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    hydrate_command_workspace_env(args)
 
     if args.command == "workspace":
         return handle_workspace_command(args)
@@ -74,6 +79,34 @@ def main() -> int:
     if args.command == "check":
         return check_session(resolve_workspace_arg_path(args.session), strict=args.strict)
     return 1
+
+
+def hydrate_command_workspace_env(args) -> None:
+    """Load workspace-local Abel runtime env before command handlers run."""
+    workspace_root = resolve_command_workspace_root(args)
+    if workspace_root is not None:
+        apply_workspace_env(workspace_root)
+
+
+def resolve_command_workspace_root(args) -> Path | None:
+    """Resolve the workspace root most relevant to a parsed command."""
+    for attr in ("branch", "session", "path", "root"):
+        raw = getattr(args, attr, None)
+        if not raw:
+            continue
+        candidate = Path(str(raw)).expanduser()
+        is_absolute = candidate.is_absolute()
+        if not is_absolute:
+            candidate = Path.cwd() / candidate
+        start = candidate if candidate.exists() else candidate.parent
+        workspace_root = find_workspace_root(start)
+        if workspace_root is not None:
+            return workspace_root
+        if is_absolute:
+            return None
+
+    workspace_root, _ = resolve_workspace_entry()
+    return workspace_root
 
 
 if __name__ == "__main__":
