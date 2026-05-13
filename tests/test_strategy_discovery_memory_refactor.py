@@ -24,10 +24,17 @@ def _candidate_result_payload() -> dict:
             "sharpe": 2.1,
             "lo_adjusted": 2.4,
             "position_ic": 0.03,
+            "position_ic_stability": 0.61,
+            "position_hit_rate": 0.58,
             "omega": 1.5,
             "total_return": 0.42,
+            "dsr": 0.44,
+            "loss_years": 1,
             "max_dd": -0.08,
         },
+        "decision_preview": [
+            {"date": "2020-12-31", "target_close": 17.06},
+        ],
         "requested_window": {"start": "2020-01-01", "end": None},
         "effective_window": {"start": "2020-01-01", "end": "2020-12-31"},
         "diagnostics": {
@@ -898,6 +905,12 @@ def test_build_strategy_artifact_manifest_uses_router_contract_fields(
         lo_adj=1.056,
         max_dd=-0.1278,
     )
+    (branch / "outputs" / "round-006-edge-frame.csv").write_text(
+        "date,pnl,position,next_position,close\n"
+        "2020-12-30,0.01,0.25,0.50,16.13\n"
+        "2020-12-31,0.02,0.50,0.75,\n",
+        encoding="utf-8",
+    )
 
     selection = ni.select_best_pass_strategy(session)
     assert selection.selected is not None
@@ -962,11 +975,32 @@ def test_build_strategy_artifact_manifest_uses_router_contract_fields(
         "verdict": "PASS",
         "startAt": "2020-01-01T00:00:00Z",
         "endAt": "2020-12-31T00:00:00Z",
+        "resultRef": "edge/edge-result.json",
+        "reportRef": "edge/edge-validation.md",
+        "latestDecision": {
+            "tradingDate": "2020-12-31",
+            "previousPosition": 0.25,
+            "currentPosition": 0.5,
+            "position": 0.5,
+            "nextPosition": 0.75,
+            "delta": 0.5,
+            "action": "increase",
+            "close": 17.06,
+            "source": "abel_invest_edge_frame_csv",
+        },
         "metrics": {
             "sharpe": 0.967,
             "loAdjusted": 1.056,
             "maxDrawdown": -0.1278,
             "totalReturn": 0.42,
+            "score": "9/9",
+            "positionIc": 0.03,
+            "positionIcStability": 0.61,
+            "positionHitRate": 0.58,
+            "omega": 1.5,
+            "dsr": 0.44,
+            "lossYears": 1,
+            "k": 1,
         },
     }
     file_paths = [item["path"] for item in manifest["files"]]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
@@ -352,6 +353,19 @@ def build_strategy_artifact_manifest(
     }
     promotion_payload = _manifest_promotion_payload(candidate, promotion=promotion)
 
+    backtest_payload = {
+        "verdict": _clean(candidate.edge_result.get("verdict")).upper(),
+        "startAt": start_at,
+        "endAt": end_at,
+        "resultRef": "edge/edge-result.json",
+        "metrics": _manifest_backtest_metrics(candidate, metrics),
+    }
+    if candidate.edge_report_path is not None:
+        backtest_payload["reportRef"] = "edge/edge-validation.md"
+    latest_decision = _latest_decision_from_frame(candidate)
+    if latest_decision is not None:
+        backtest_payload["latestDecision"] = latest_decision
+
     manifest = {
         "schema": STRATEGY_ARTIFACT_SCHEMA,
         "createdAt": created_at or _now(),
@@ -401,29 +415,7 @@ def build_strategy_artifact_manifest(
             _artifact_file_entry(artifact_path=artifact_path, source_path=source_path)
             for artifact_path, source_path in source_files
         ],
-        "backtest": {
-            "verdict": _clean(candidate.edge_result.get("verdict")).upper(),
-            "startAt": start_at,
-            "endAt": end_at,
-            "metrics": {
-                "sharpe": _required_float(
-                    metrics.get("sharpe"),
-                    field_name="metrics.sharpe",
-                ),
-                "loAdjusted": _required_float(
-                    metrics.get("lo_adjusted", metrics.get("lo_adj")),
-                    field_name="metrics.lo_adjusted",
-                ),
-                "maxDrawdown": _required_float(
-                    metrics.get("max_dd", metrics.get("max_drawdown")),
-                    field_name="metrics.max_dd",
-                ),
-                "totalReturn": _required_float(
-                    metrics.get("total_return"),
-                    field_name="metrics.total_return",
-                ),
-            },
-        },
+        "backtest": backtest_payload,
     }
     if promotion is not None and promotion.state_intent_payload is not None:
         manifest["stateIntent"] = promotion.state_intent_payload
@@ -1217,6 +1209,144 @@ def _existing_optional_path(session: Path, value: str | None) -> Path | None:
     return path
 
 
+def _manifest_backtest_metrics(
+    candidate: StrategyArtifactCandidate,
+    metrics: dict[str, Any],
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "sharpe": _required_float(
+            metrics.get("sharpe"),
+            field_name="metrics.sharpe",
+        ),
+        "loAdjusted": _required_float(
+            metrics.get("lo_adjusted", metrics.get("lo_adj")),
+            field_name="metrics.lo_adjusted",
+        ),
+        "maxDrawdown": _required_float(
+            metrics.get("max_dd", metrics.get("max_drawdown")),
+            field_name="metrics.max_dd",
+        ),
+        "totalReturn": _required_float(
+            metrics.get("total_return"),
+            field_name="metrics.total_return",
+        ),
+    }
+    score = _clean(candidate.score) or _clean(candidate.edge_result.get("score"))
+    if score:
+        payload["score"] = score
+    _set_optional_float(
+        payload,
+        "positionIc",
+        _metric(candidate.row, metrics, row_key="ic", result_key="position_ic"),
+    )
+    _set_optional_float(
+        payload,
+        "positionIcStability",
+        _to_float(metrics.get("position_ic_stability")),
+    )
+    _set_optional_float(
+        payload,
+        "positionHitRate",
+        _to_float(metrics.get("position_hit_rate")),
+    )
+    _set_optional_float(
+        payload,
+        "omega",
+        _metric(candidate.row, metrics, row_key="omega", result_key="omega"),
+    )
+    _set_optional_float(payload, "dsr", _to_float(metrics.get("dsr")))
+    _set_optional_int(payload, "lossYears", _to_int(metrics.get("loss_years")))
+    _set_optional_int(
+        payload,
+        "k",
+        _first_not_none(
+            _to_int(candidate.row.get("K")),
+            _to_int(candidate.edge_result.get("K")),
+        ),
+    )
+    return payload
+
+
+def _latest_decision_from_frame(candidate: StrategyArtifactCandidate) -> dict[str, Any] | None:
+    result_ref = _clean(candidate.row.get("result_path"))
+    if not result_ref:
+        return None
+    frame_path = _frame_path_for_result_ref(candidate.session, result_ref)
+    if frame_path is None or not frame_path.exists():
+        return None
+    with frame_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        return None
+    latest = rows[-1]
+    previous = rows[-2] if len(rows) > 1 else {}
+    previous_position = _to_float(previous.get("position"))
+    previous_position_for_action = previous_position if previous_position is not None else 0.0
+    position = _to_float(latest.get("position")) or 0.0
+    next_position = _to_float(latest.get("next_position")) or 0.0
+    trading_date = _date_text(latest.get("date"))
+    close = _to_float(latest.get("close"))
+    if close is None:
+        close = _latest_close_from_edge_result(candidate.edge_result, trading_date=trading_date)
+    return {
+        "tradingDate": trading_date,
+        "previousPosition": previous_position,
+        "currentPosition": position,
+        "position": position,
+        "nextPosition": next_position,
+        "delta": round(next_position - previous_position_for_action, 10),
+        "action": _position_action(previous_position_for_action, next_position),
+        "close": close,
+        "source": "abel_invest_edge_frame_csv",
+    }
+
+
+def _frame_path_for_result_ref(session: Path, result_ref: str) -> Path | None:
+    result_path = _resolve_session_relative_path(session, result_ref)
+    if result_path is None:
+        return None
+    name = result_path.name
+    if not name.endswith("-edge-result.json"):
+        return None
+    return result_path.with_name(name.replace("-edge-result.json", "-edge-frame.csv"))
+
+
+def _position_action(previous_position: float, next_position: float) -> str:
+    if previous_position == 0 and next_position > 0:
+        return "buy/open_long"
+    if next_position == 0 and previous_position > 0:
+        return "sell/close"
+    if next_position > previous_position:
+        return "increase"
+    if next_position < previous_position:
+        return "reduce"
+    return "hold"
+
+
+def _date_text(value: Any) -> str:
+    text = _clean(value)
+    if "T" in text:
+        return text.split("T", 1)[0]
+    return text.split(" ", 1)[0]
+
+
+def _latest_close_from_edge_result(
+    edge_result: dict[str, Any],
+    *,
+    trading_date: str,
+) -> float | None:
+    preview = edge_result.get("decision_preview")
+    if not isinstance(preview, list):
+        return None
+    for item in reversed(preview):
+        if not isinstance(item, dict):
+            continue
+        if _date_text(item.get("date")) != trading_date:
+            continue
+        return _to_float(item.get("target_close"))
+    return None
+
+
 def _load_json_object(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -1245,6 +1375,28 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _to_int(value: Any) -> int | None:
+    parsed = _to_float(value)
+    return None if parsed is None else int(parsed)
+
+
+def _set_optional_float(payload: dict[str, Any], key: str, value: float | None) -> None:
+    if value is not None:
+        payload[key] = value
+
+
+def _set_optional_int(payload: dict[str, Any], key: str, value: int | None) -> None:
+    if value is not None:
+        payload[key] = value
+
+
+def _first_not_none(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
 
 
 def _clean(value: Any) -> str:
