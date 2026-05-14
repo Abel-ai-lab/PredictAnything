@@ -50,19 +50,30 @@ Direct parents are an opening clue, not a guarantee that the final branch should
 stay direct-only. If the first candidates look odd, do not discard them just
 because they are obscure or low-attention; explain them before moving on.
 
-CAP graph nodes are causal priors, not trading instructions. They do not give
-the trading sign, lag, direction, or a monotone strength map. Depth matters:
-deeper nodes should be treated as weaker or more indirect priors unless
-recorded evidence or domain context justifies a deeper branch.
+CAP graph nodes are model-supported causal priors, not trading instructions.
+Trust that they carry target-relevant information, but do not infer disclosed
+weight, exact lag, signed effect, or tradable direction from the role alone.
+
+CAP graph roles expose causal-flow orientation when the role is specific enough,
+not signed trading direction:
+
+- `parent`: upstream of the target, `parent -> target`
+- `child`: downstream of the target, `target -> child`
+- `blanket`: Abel Invest's Markov-blanket discovery bucket/provenance label for
+  nodes returned through MB scope after parent/child handling; it is not
+  synonymous with `spouse` and does not by itself disclose one causal-flow
+  direction
+
+If more specific roles are present, use those roles for structural orientation.
+The underlying graph is temporal, so treat graph relevance as lag-mediated
+rather than contemporaneous by default. CAP does not disclose the exact lag; the
+branch construction should declare or test its timing assumption.
 
 ## Practical Expansion
 
-Use this as a search prior, not a hard recipe:
-
-1. direct parents
-2. other Markov blanket nodes, with `parents > children > spouses/co-parents`
-3. children-derived hop-2 candidates
-4. sector, market, or crypto peers only when they add a real mechanism
+Use this as a search prior, not a hard recipe. Prefer small explicit node sets
+whose use can be explained. Structural roles help name provenance and, when
+specific enough, orientation. They do not prescribe strategy use.
 
 When current evidence leaves a frontier question unresolved, expand the graph
 itself before spending rounds on strategy variants:
@@ -138,6 +149,8 @@ When moving from discovery into a branch:
 
 - choose a small explicit graph node input set
 - write it into `branch.yaml` as structured `selected_inputs`
+- state the graph use contract: selected nodes, construction, intended role,
+  unresolved assumption, and falsification scope
 - use readiness to understand coverage, not to auto-ban ideas
 - run `prepare-branch` before a recorded round
 - after the round, check input realization facts before treating a declared

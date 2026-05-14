@@ -50,9 +50,12 @@ abel-invest frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_
 
 Frontier expansion changes `graph_frontier.json`; it does not record evidence
 or prescribe a branch. Do not expand only because a small number of branches
-failed or because a metric-selected node looked promising. CAP nodes are causal
-priors, not trading directions; they do not provide sign, lag, or guaranteed
-strength.
+failed or because a metric-selected node looked promising. CAP nodes are
+model-supported causal priors, not trading directions. Trust that they carry
+target-relevant information, but do not infer disclosed weight, exact lag,
+signed effect, or tradable direction from the role alone. Parent and child roles
+disclose causal-flow orientation; Abel Invest's `blanket` role is a
+Markov-blanket discovery bucket, not a fixed causal-flow direction.
 
 ## Research Loop
 

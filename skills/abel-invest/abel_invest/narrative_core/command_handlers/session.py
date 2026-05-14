@@ -178,7 +178,7 @@ def handle_init_branch(args: argparse.Namespace) -> int:
     print("")
     print("What matters now:")
     print(f"  Read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing this branch's next Edge run.")
-    print("  branch.yaml is where target, start, drivers, and overlap become explicit.")
+    print("  branch.yaml is where target, start, selected inputs, graph use, and overlap become explicit.")
     print("  The generated engine is only a starter path check; it helps you verify the branch wiring before you encode a branch-specific mechanism.")
     print("  If you fetch bars, keep `limit=...` explicit and avoid blanket `dropna()` before confirming the target column survives.")
     print("")

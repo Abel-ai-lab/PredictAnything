@@ -26,7 +26,8 @@ def normalize_hypothesis_text(value: str) -> str:
         return text
     return (
         "Hypothesis missing. Before the next round, state the causal claim, "
-        "expected sign, and invalidation condition explicitly."
+        "graph use contract when applicable, expected sign/timing assumption, "
+        "and invalidation condition explicitly."
     )
 
 
@@ -606,13 +607,14 @@ def build_context_guide_markdown(
         "## Available Feeds",
         f"- names: `{', '.join(feed_names) or 'primary only'}`",
         "- use `ctx.target.series(\"close\")` for target history",
-        "- use `ctx.feed(\"<name>\").asof_series(\"close\")` for aligned driver history",
+        "- use `ctx.feed(\"<name>\").asof_series(\"close\")` for aligned auxiliary or graph-input history",
         "- use `ctx.points()` when you need path-sensitive cross-calendar logic",
         "",
         "## Declaration Fields",
         "- `hypothesis`: concrete claim being tested",
         "- `evidence_intent`: candidate, control, diagnostic, or draft",
         "- `input_claim`: graph_supported, target_only, supplement, or mixed",
+        "- graph-supported branches should state selected nodes, construction, intended role, unresolved assumption, and falsification scope",
         "- `mechanism_family`: factual mechanism label",
         "- `invalidation_condition`: what would weaken the claim",
         "",
