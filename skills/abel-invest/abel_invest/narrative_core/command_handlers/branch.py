@@ -44,6 +44,7 @@ from abel_invest.narrative_core.contracts.constants import (
     EXPLORATION_PATH_FILENAME,
     EXECUTION_CONSTRAINTS_FILENAME,
     PROBE_SAMPLES_FILENAME,
+    RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
 )
 from abel_invest.narrative_core.runtime.context import (
@@ -305,6 +306,12 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     if auth_handoff_needed:
         print("  Use abel-auth")
         print(f"  abel-invest prepare-branch --branch {branch}")
+    elif warm_fail:
+        print("  Fix cache failures before debug/run; unresolved prepared inputs should not become evidence.")
+        print(f"  inspect {output_path.relative_to(session)}")
+        print(f"  revise {branch / BRANCH_SPEC_FILENAME} or auth/data access if needed")
+        print(f"  abel-invest prepare-branch --branch {branch}")
+        return completed.returncode or 1
     else:
         print("  The branch inputs are ready; use debug preflight first, then record a round once the engine reflects the branch thesis.")
         print(f"  abel-invest debug-branch --branch {branch}")
@@ -630,6 +637,14 @@ def run_branch_round(args: argparse.Namespace) -> int:
             frame_text,
         ],
     )
+    print("")
+    print("From here:")
+    print(
+        f"  update {session / RESEARCH_JOURNAL_FILENAME} with ledger:{branch.name}:{round_id} "
+        "before another recorded round"
+    )
+    print(f"  read {session / EXPLORATION_PATH_FILENAME} and frontier.md before choosing continue/pivot/stop")
+    print(f"  if continuing this branch, run abel-invest debug-branch --branch {branch} before the next recorded round")
     return 0
 
 
@@ -742,4 +757,12 @@ def debug_branch_run(args: argparse.Namespace) -> int:
     if debug_result_path.exists():
         print(f"Debug result: {debug_result_path.relative_to(session)}")
     print("No narrative round was recorded.")
+    print("")
+    print("From here:")
+    if completed.returncode:
+        print("  inspect the debug output and fix the engine or prepared inputs before recording a round")
+        print(f"  abel-invest debug-branch --branch {branch}")
+    else:
+        print("  confirm branch.yaml has an explicit hypothesis, mechanism, and invalidation condition")
+        print(f"  abel-invest run-branch --branch {branch} -d \"<round-description>\"")
     return completed.returncode

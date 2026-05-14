@@ -252,10 +252,17 @@ def render_readme(name: str) -> str:
 
 This is an Abel strategy discovery workspace.
 
-Run `abel-invest workspace context --path . --json` or `abel-invest doctor`
-before creating a session. Sessions belong under this workspace's `research/`
-directory unless you intentionally use an explicit outside-workspace escape
-hatch.
+Run these checks before creating a session:
+
+```bash
+abel-invest workspace context --path . --json
+abel-invest doctor
+```
+
+Sessions belong under this workspace's `research/` directory unless you
+intentionally use `--root` with `--allow-outside-workspace` for offline or legacy
+work. After each recorded round, update `research_journal.md` with the new ledger
+reference before running another recorded round.
 """
 
 
@@ -265,6 +272,15 @@ def render_agents() -> str:
 Use this directory as the workspace root. If `alpha.workspace.yaml` is present,
 do not create a child `abel-invest-workspace` here. Run
 `abel-invest workspace context --path . --json` before creating a new session.
+
+Report to the user:
+- workspace root and doctor status
+- auth or runtime blockers
+- current session and branch path
+- the next action you will run or the one blocker that needs user input
+
+Do not treat `branch.yaml` as evidence. Prepare and debug branch inputs before a
+recorded round, and update `research_journal.md` after every recorded round.
 """
 
 

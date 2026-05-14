@@ -83,7 +83,7 @@ abel-invest frontier status --session research/<ticker>/<exp_id>
 abel-invest frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_ID> --mode all --limit 20
 ```
 
-Use `--mode parents`, `--mode mb`, or `--mode all` according to the causal
+Use `--mode parents`, `--mode blanket`, or `--mode all` according to the causal
 question. The result is new or updated nodes in `graph_frontier.json`, not a
 recommendation to run a specific branch.
 

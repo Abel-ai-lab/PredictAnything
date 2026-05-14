@@ -52,7 +52,7 @@ def test_strategy_discovery_dependencies_constrain_edge_major_version() -> None:
     pyproject = Path(__file__).resolve().parents[1] / "skills" / "abel-invest" / "pyproject.toml"
     data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
 
-    assert "abel-edge>=0.8.3,<0.9.0" in data["project"]["dependencies"]
+    assert "abel-edge>=0.8.4,<0.9.0" in data["project"]["dependencies"]
 
 
 def test_strategy_discovery_bootstrap_lets_pyproject_install_dependencies() -> None:
@@ -80,3 +80,43 @@ def test_strategy_discovery_cli_hides_edge_install_overrides() -> None:
         )
     with pytest.raises(SystemExit):
         parser.parse_args(["env", "init", "--edge-spec", "abel-edge==0.8.0"])
+
+
+def test_strategy_discovery_cli_rejects_non_positive_public_limits() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "init-session",
+                "--ticker",
+                "TSLA",
+                "--exp-id",
+                "limits",
+                "--discover-limit",
+                "0",
+            ]
+        )
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "frontier",
+                "expand",
+                "--session",
+                "research/tsla/limits",
+                "--anchor",
+                "TSLA.price",
+                "--limit",
+                "0",
+            ]
+        )
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "prepare-branch",
+                "--branch",
+                "research/tsla/limits/branches/a",
+                "--cache-limit",
+                "0",
+            ]
+        )

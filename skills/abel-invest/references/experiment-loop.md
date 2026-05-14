@@ -15,25 +15,42 @@ is an intentional legacy/offline session outside a workspace; in that case pass
 
 ## Standard Path
 
+Examples assume the current directory is `<workspace_root>` and session paths are
+relative to that root.
+
+Run:
+
 ```bash
 abel-invest init-session --ticker <TICKER> --exp-id <exp-id>
 abel-invest frontier status --session research/<ticker>/<exp_id>
 abel-invest init-branch --session research/<ticker>/<exp_id> --branch-id <family-a-branch>
 abel-invest init-branch --session research/<ticker>/<exp_id> --branch-id <family-b-branch>
+```
 
-# make each branch declaration explicit
-edit research/<ticker>/<exp_id>/branches/<family-a-branch>/branch.yaml
-edit research/<ticker>/<exp_id>/branches/<family-b-branch>/branch.yaml
-read research/<ticker>/<exp_id>/exploration_path.md before choosing the next Edge run
+Then make each branch declaration explicit by reading or editing:
 
-# implement, prepare, debug, and record the agent-chosen branch round
-edit research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py
+- `research/<ticker>/<exp_id>/branches/<family-a-branch>/branch.yaml`
+- `research/<ticker>/<exp_id>/branches/<family-b-branch>/branch.yaml`
+- `research/<ticker>/<exp_id>/exploration_path.md` before choosing the next Edge run
+- `research/<ticker>/<exp_id>/research_journal.md` for branch basis and any scout influence
+- `research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py`
+
+Then prepare, debug, and record the agent-chosen branch round:
+
+```bash
 abel-invest prepare-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 abel-invest debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 abel-invest run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
-edit research/<ticker>/<exp_id>/exploration_path.md  # keep path, why, Edge feedback, and ledger ref concise
+```
 
-# only after the user asks to publish the paper-ready session, or agrees after a PASS
+After the recorded round, update `research/<ticker>/<exp_id>/research_journal.md`
+with the round's ledger ref and insight, and keep
+`research/<ticker>/<exp_id>/exploration_path.md` covered with path, why, Edge
+feedback, and ledger ref before another recorded round.
+
+Only after the user asks to publish the paper-ready session, or agrees after a PASS:
+
+```bash
 abel-invest visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
 ```
 
@@ -192,7 +209,7 @@ the default URL in the skill code if this endpoint changes.
 
 ## Exploration Discipline
 
-- graph breadth exploration comes first
+- graph context comes before strategy variants
 - strategy variants come second
 - parameter tuning comes last
 - multiple branches on one graph input set can still be graph-breadth narrow

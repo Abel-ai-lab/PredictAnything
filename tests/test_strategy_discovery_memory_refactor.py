@@ -443,6 +443,10 @@ def test_run_branch_round_updates_ledger_and_agent_context(
             python_bin=None,
         )
     )
+    round_output = capsys.readouterr().out
+    assert "From here:" in round_output
+    assert "research_journal.md" in round_output
+    assert "before another recorded round" in round_output
 
     ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
     context = json.loads((branch / "outputs" / "round-001-alpha-context.json").read_text(encoding="utf-8"))
