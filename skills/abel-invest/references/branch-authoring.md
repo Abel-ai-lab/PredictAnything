@@ -142,12 +142,12 @@ the route.
 
 `prepare-branch` materializes the branch contract under `inputs/`:
 
-- `runtime_profile.json`
-- `execution_constraints.json`
-- `data_manifest.json`
-- `context_guide.md`
-- `probe_samples.json`
-- `dependencies.json`
+- `inputs/runtime_profile.json`
+- `inputs/execution_constraints.json`
+- `inputs/data_manifest.json`
+- `inputs/context_guide.md`
+- `inputs/probe_samples.json`
+- `inputs/dependencies.json`
 
 Inspect these files before changing strategy logic. Prefer prepared branch
 inputs over frontier-side inference. `data_manifest.json` and
@@ -179,7 +179,7 @@ graph/mechanism-led branch selection for the next standard round.
 
 1. State the branch thesis in `branch.yaml`.
 2. Run `abel-invest prepare-branch --branch ...`.
-3. Inspect `inputs/context_guide.md`, `probe_samples.json`, and
+3. Inspect `inputs/context_guide.md`, `inputs/probe_samples.json`, and
    `inputs/data_manifest.json`.
 4. Implement or revise `compute_decisions(self, ctx)`.
 5. Run `abel-invest debug-branch --branch ...`.

@@ -246,6 +246,8 @@ into branch evidence.
 
 ## A Usual Path
 
+Run these commands from the workspace root:
+
 ```bash
 abel-invest workspace context --path . --json
 abel-invest doctor
@@ -254,16 +256,30 @@ abel-invest init-session --ticker TSLA --exp-id tsla-v1
 abel-invest frontier status --session research/tsla/tsla-v1
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
-edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
-edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
-read research/tsla/tsla-v1/exploration_path.md before choosing the next Edge run
-edit research/tsla/tsla-v1/research_journal.md
-edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
+```
+
+Read or edit these files before the first recorded round:
+
+- `research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml`
+- `research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml`
+- `research/tsla/tsla-v1/exploration_path.md`
+- `research/tsla/tsla-v1/research_journal.md`
+- `research/tsla/tsla-v1/branches/<chosen-branch>/engine.py`
+
+Then run the branch preflight and recorded round:
+
+```bash
 abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
-edit research/tsla/tsla-v1/research_journal.md
-# ask first when the session is mature enough for visual review
+```
+
+After every recorded round, update `research_journal.md` with the new ledger ref
+before another recorded round.
+
+Only after asking the user and getting agreement for visual review, run:
+
+```bash
 abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
 ```
 
@@ -273,9 +289,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `branch.yaml` makes the branch inputs explicit
 - `prepare-branch` resolves inputs before you treat any round as evidence
 - the starter `engine.py` is only there to verify branch wiring before a branch-specific mechanism exists
-- new sessions default to graph-first research: use `graph_frontier.json` and
-  `frontier expand` to widen graph breadth first, then strategy variants, then
-  parameters
+- new sessions default to graph-first research: use `graph_frontier.json` to
+  choose graph/mechanism questions before strategy variants or parameters
 - every recorded round requires an agent-written `research_journal.md` entry
   with the round ledger ref before the next recorded round
 - every next Edge run should be chosen after reading `exploration_path.md` and
@@ -354,6 +369,8 @@ If `alpha.workspace.yaml` is already present in this directory, this directory
 is the workspace root. Do not create `./abel-invest-workspace` inside it.
 
 ### Start a new exploration session
+Run these commands from the workspace root:
+
 ```bash
 abel-invest workspace context --path . --json
 abel-invest doctor
@@ -361,16 +378,28 @@ abel-invest init-session --ticker TSLA --exp-id tsla-v1
 abel-invest frontier status --session research/tsla/tsla-v1
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
 abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
-edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
-edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
-read research/tsla/tsla-v1/exploration_path.md before choosing the next Edge run
-edit research/tsla/tsla-v1/research_journal.md
-edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
+```
+
+Read or edit these files before branch execution:
+
+- `research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml`
+- `research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml`
+- `research/tsla/tsla-v1/exploration_path.md`
+- `research/tsla/tsla-v1/research_journal.md`
+- `research/tsla/tsla-v1/branches/<chosen-branch>/engine.py`
+
+Then run:
+
+```bash
 abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
-edit research/tsla/tsla-v1/research_journal.md
-# ask first when the session is mature enough for visual review
+```
+
+Update `research_journal.md` with the round ledger ref before another recorded
+round. Ask the user before creating an online session view. If the user agrees:
+
+```bash
 abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
 ```
 
@@ -403,6 +432,13 @@ agent process. Omit the flag only for narrative-only views.
 This workspace is for alpha-managed branch research, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.
+
+### Report to the user
+- resolved workspace root and doctor status
+- current session and branch path
+- live/auth blockers and the exact next command only when you are going to run it
+- evidence status honestly: branch declarations are not evidence until prepared and run
+- after a recorded round, say that `research_journal.md` must be updated before another recorded round
 
 ### Run one research round
 ```bash

@@ -80,3 +80,43 @@ def test_strategy_discovery_cli_hides_edge_install_overrides() -> None:
         )
     with pytest.raises(SystemExit):
         parser.parse_args(["env", "init", "--edge-spec", "abel-edge==0.8.0"])
+
+
+def test_strategy_discovery_cli_rejects_non_positive_public_limits() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "init-session",
+                "--ticker",
+                "TSLA",
+                "--exp-id",
+                "limits",
+                "--discover-limit",
+                "0",
+            ]
+        )
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "frontier",
+                "expand",
+                "--session",
+                "research/tsla/limits",
+                "--anchor",
+                "TSLA.price",
+                "--limit",
+                "0",
+            ]
+        )
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "prepare-branch",
+                "--branch",
+                "research/tsla/limits/branches/a",
+                "--cache-limit",
+                "0",
+            ]
+        )

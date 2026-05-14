@@ -111,6 +111,8 @@ def test_frontier_expand_cli_updates_graph_frontier(tmp_path: Path, monkeypatch,
     assert "frontier_expanded" in events
     assert "new_nodes: 2" in out
     assert "Fields: price=2, volume=1" in out
+    assert "From here:" in out
+    assert "review graph_frontier.json" in out
 
 
 def test_failed_live_discovery_attempt_surfaces_as_auth_or_runtime_error(
