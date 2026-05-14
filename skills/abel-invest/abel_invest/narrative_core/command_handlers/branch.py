@@ -500,7 +500,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
     if emit_missing_hypothesis_warning:
         print(
             "Warning: recording a round without an explicit hypothesis. "
-            "State the causal claim, expected sign, and invalidation condition before the next round.",
+            "State the causal claim, graph use contract when applicable, expected sign/timing assumption, "
+            "and invalidation condition before the next round.",
             file=sys.stderr,
         )
     decision = alpha_decision(rows, result, session=session)

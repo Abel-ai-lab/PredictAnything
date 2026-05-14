@@ -140,7 +140,7 @@ def build_readiness_warning(readiness: dict) -> str:
         )
     if int(summary.get("start_covered_count", 0) or 0) <= 0:
         return (
-            "Discovered drivers are only partially available from the session requested start "
+            "Discovered graph inputs are only partially available from the session requested start "
             f"{requested_start}. Treat this as coverage context; branches that depend on strict "
             "overlap should inspect coverage hints."
         )

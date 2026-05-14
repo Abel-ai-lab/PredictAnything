@@ -25,9 +25,12 @@ reduces blind search and is more likely to survive regime change. Correlation
 signals can still be useful, but they enter as supplements or controls unless
 the branch declares and validates a stronger claim.
 
-CAP graph nodes are causal priors, not trading instructions. They do not provide
-the trading sign, lag, or a monotone strength map; deeper nodes are weaker or
-more indirect priors unless recorded evidence or domain context justifies them.
+CAP graph nodes are model-supported causal priors, not trading instructions.
+Trust that they carry target-relevant information, but do not infer disclosed
+weight, exact lag, signed effect, or tradable direction from the role alone.
+Parent and child roles disclose causal-flow orientation; Abel Invest's
+`blanket` role is a Markov-blanket discovery bucket, not a fixed causal-flow
+direction.
 
 Graph-first means using the graph to form input and mechanism hypotheses. Expand
 the graph when a frontier question remains after reading current evidence. Do
