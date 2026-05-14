@@ -667,7 +667,7 @@ Latest decision is `{latest.get("decision", "pending")}` with verdict `{latest.g
 - target: `{discovery.get("ticker", branch["ticker"])}`
 - discovery_source: `{discovery.get("source", "unknown")}`
 - direct_parents: `{parents}`
-- blanket_candidates: `{blanket}`
+- mb_bucket_candidates: `{blanket}`
 - selected_inputs: `{selected}`
 - usable_tickers: `{usable}`
 - start_covered_tickers: `{start_covered}`

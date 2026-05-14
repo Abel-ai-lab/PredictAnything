@@ -100,27 +100,38 @@ Always start by resolving workspace state before strategy work.
 16. Treat user metric targets such as Sharpe thresholds as success criteria, not
     as optimization permission. Report evidence honestly or ask for explicit
     optimization rather than widening local search just to satisfy a target.
-17. CAP graph nodes are causal priors, not trading directions. They do not
-    provide sign, lag, or monotone strength; deeper nodes are weaker or more
-    indirect priors unless recorded evidence or domain context justifies them.
-18. Abel Ask or narrative context may generate mechanism hypotheses, supplement
+17. CAP graph nodes are model-supported causal priors. Trust that they carry
+    target-relevant information, but do not infer disclosed weight, exact lag,
+    signed effect, or tradable direction from the role alone. Parent and child
+    roles disclose causal-flow orientation; Abel Invest's `blanket` role is a
+    Markov-blanket discovery bucket, not a fixed causal-flow direction.
+18. When using CAP graph nodes in a branch, state the graph use contract before
+    treating the round as graph-supported candidate evidence: selected nodes,
+    construction, intended role, unresolved assumption, and falsification
+    scope. This contract describes the agent's current use of the nodes; it is
+    not a fixed role implied by the graph.
+19. If a branch combines multiple graph nodes as one same-direction,
+    equal-weight, or same-lag basket, declare that construction explicitly. A
+    failed basket only invalidates that construction unless other evidence
+    supports a broader graph conclusion.
+20. Abel Ask or narrative context may generate mechanism hypotheses, supplement
     drivers, or graph expansion questions, but it is scout context, not
     validation evidence.
-19. Use one narrative scout pass when the next research decision is ambiguous
+21. Use one narrative scout pass when the next research decision is ambiguous
     between mechanism-deepening, graph expansion, or stopping, especially when
     the current graph neighborhood has no clear real-world mechanism. Record
     off-target, weak, unavailable, or skipped narrative scout plainly; do not
     force it into branch evidence.
-20. Every recorded round requires an agent-written `research_journal.md` entry
+22. Every recorded round requires an agent-written `research_journal.md` entry
     with the round ledger reference before the next recorded round.
-21. Treat input realization as an evidence fact: a graph-supported declaration
+23. Treat input realization as an evidence fact: a graph-supported declaration
     only becomes graph-supported evidence when runtime reads the prepared graph
     inputs. When graph-node reads are inferred from asset reads, preserve that
     source as a fact rather than overstating edge-native field-level proof.
-22. Create new sessions only after workspace context resolves. Do not use
+24. Create new sessions only after workspace context resolves. Do not use
     `--root` unless intentionally creating a legacy/offline session, and then
     pass `--allow-outside-workspace`.
-23. Do not create or refresh an online session view automatically. When the
+25. Do not create or refresh an online session view automatically. When the
     strategy context is mature enough to be useful to review visually, ask the
     user whether to visualize the session. This can be after a strong candidate
     PASS, after several informative candidate rounds, before promotion, or
@@ -146,8 +157,8 @@ Always start by resolving workspace state before strategy work.
     edit only the promoted copy named there, write `refactor-report.json`, and
     rerun the same command. Do not start a separate agent process or ask the
     user to trigger a second publish attempt.
-24. The default Abel router base URL is `https://api.abel.ai/router/`.
+26. The default Abel router base URL is `https://api.abel.ai/router/`.
     `abel-auth` owns API key setup. Do not ask the user or agent to provide a
     router URL unless they are intentionally testing another router.
-25. The framework defines evidence validity. The agent owns the strategy
+27. The framework defines evidence validity. The agent owns the strategy
     thinking.
