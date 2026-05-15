@@ -2357,6 +2357,39 @@ def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
     assert context["branch_declaration"]["evidence_intent"] == "draft"
 
 
+def test_build_branch_context_routes_grandma_validation_profile(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-grandma-context", tmp_path / "research")
+    discovery = _sample_discovery()
+    readiness = _sample_readiness()
+    ni.write_graph_frontier_from_discovery_payload(session, discovery)
+    ni.write_readiness(session, readiness)
+    branch = ni.init_branch_dir(session, "simple-return")
+
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "target": "TSLA",
+            "strategy_mode": "grandma",
+            "validation_profile": "grandma_daily",
+            "position_bounds": [-1.0, 1.0],
+        }
+    )
+    ni.write_branch_spec(branch, spec)
+
+    context = ni.build_branch_context(
+        branch=branch,
+        session=session,
+        discovery=discovery,
+        readiness=readiness,
+        round_id="round-001",
+        backtest_start="2020-01-01",
+    )
+
+    assert context["runtime_profile"]["validation_profile"] == "grandma_daily"
+    assert context["validation_context"]["profile"] == "grandma_daily"
+    assert context["_execution_constraints"]["position_bounds"] == [-1.0, 1.0]
+
+
 def test_build_branch_context_declares_session_dsr_trials(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-dsr-context", tmp_path / "research")
     discovery = _sample_discovery()

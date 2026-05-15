@@ -37,6 +37,7 @@ from abel_invest.narrative_core.state import (
     load_branch_state,
     load_discovery,
     load_readiness,
+    load_session_state,
     render_default_engine_template,
     write_branch_state,
     write_session_state,
@@ -152,7 +153,9 @@ def init_session_dir(
     discover: bool = False,
     discover_limit: int = 10,
     backtest_start: str = DEFAULT_BACKTEST_START,
+    mode: str = "standard",
 ) -> Path:
+    mode = "grandma" if str(mode or "").strip().lower() == "grandma" else "standard"
     session = root / ticker.lower() / exp_id
     session.mkdir(parents=True, exist_ok=True)
     ensure_exploration_path(session)
@@ -179,8 +182,13 @@ def init_session_dir(
         discovery_data = graph_frontier.graph_frontier_to_discovery(frontier_data)
     with SessionLock(session):
         write_tsv_header(session / "events.tsv", EVENTS_HEADER)
-        if not session_state_path(session).exists():
-            write_session_state(session, {})
+        session_state = load_session_state(session) if session_state_path(session).exists() else {}
+        session_state["mode"] = mode
+        if mode == "grandma":
+            session_state["validation_profile"] = "grandma_daily"
+        else:
+            session_state.pop("validation_profile", None)
+        write_session_state(session, session_state)
         graph_frontier.write_graph_frontier(session, frontier_data)
         if readiness_report is not None:
             write_readiness(session, readiness_report)
@@ -195,7 +203,7 @@ def init_session_dir(
                 "mode": "",
                 "verdict": "",
                 "decision": "",
-                "description": f"Initialized Abel strategy discovery narrative session (backtest start {backtest_start})",
+                "description": f"Initialized Abel strategy discovery narrative session (mode {mode}, backtest start {backtest_start})",
                 "artifact_path": "",
             },
         )
@@ -322,6 +330,7 @@ def init_branch_dir(session: Path, branch_id: str) -> Path:
     with SessionLock(session):
         discovery = load_discovery(session)
         readiness = load_readiness(session)
+        session_state = load_session_state(session)
         frontier = graph_frontier.load_graph_frontier(session)
         branch = session / "branches" / branch_id
         branch.mkdir(parents=True, exist_ok=True)
@@ -342,6 +351,8 @@ def init_branch_dir(session: Path, branch_id: str) -> Path:
                     discovery=discovery,
                     readiness=readiness,
                     graph_frontier=frontier,
+                    session_mode=str(session_state.get("mode") or "standard"),
+                    validation_profile=str(session_state.get("validation_profile") or ""),
                 ),
             )
         engine = branch / "engine.py"

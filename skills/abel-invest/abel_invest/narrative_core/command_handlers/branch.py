@@ -208,7 +208,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     cache_payload = json.loads(output_path.read_text(encoding="utf-8"))
     dependencies["cache"] = cache_payload
     output_path.write_text(json.dumps(dependencies, indent=2), encoding="utf-8")
-    runtime_profile = build_runtime_profile_payload(target=target)
+    runtime_profile = build_runtime_profile_payload(target=target, branch_spec=branch_spec)
     execution_constraints = build_execution_constraints_payload(branch_spec)
     data_manifest = build_data_manifest_payload(
         target=target,
