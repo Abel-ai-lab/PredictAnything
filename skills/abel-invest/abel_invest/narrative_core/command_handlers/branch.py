@@ -44,7 +44,6 @@ from abel_invest.narrative_core.contracts.constants import (
     EXPLORATION_PATH_FILENAME,
     EXECUTION_CONSTRAINTS_FILENAME,
     PROBE_SAMPLES_FILENAME,
-    RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
 )
 from abel_invest.narrative_core.runtime.context import (
@@ -103,8 +102,8 @@ from abel_invest.narrative_core.state import (
 SELECTION_TRIALS_AUDIT_WARNING = (
     "Selection-trials audit: --selection-trials records accidental or explicitly requested "
     "search width for DSR accounting; it does not make sweep-selected candidates part of "
-    "standard discovery. Journal the branch basis and any scout or optimization influence "
-    "before continuing."
+    "standard discovery. Record the branch basis and any scout or optimization influence "
+    f"in {EXPLORATION_PATH_FILENAME} before continuing."
 )
 
 
@@ -640,7 +639,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
     print("")
     print("From here:")
     print(
-        f"  update {session / RESEARCH_JOURNAL_FILENAME} with ledger:{branch.name}:{round_id} "
+        f"  update {session / EXPLORATION_PATH_FILENAME} with ledger:{branch.name}:{round_id} "
         "before another recorded round"
     )
     print(f"  read {session / EXPLORATION_PATH_FILENAME} and frontier.md before choosing continue/pivot/stop")

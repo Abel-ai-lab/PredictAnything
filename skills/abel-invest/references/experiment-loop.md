@@ -32,7 +32,6 @@ Then make each branch declaration explicit by reading or editing:
 - `research/<ticker>/<exp_id>/branches/<family-a-branch>/branch.yaml`
 - `research/<ticker>/<exp_id>/branches/<family-b-branch>/branch.yaml`
 - `research/<ticker>/<exp_id>/exploration_path.md` before choosing the next Edge run
-- `research/<ticker>/<exp_id>/research_journal.md` for branch basis and any scout influence
 - `research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py`
 
 Then prepare, debug, and record the agent-chosen branch round:
@@ -43,10 +42,9 @@ abel-invest debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-br
 abel-invest run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
 ```
 
-After the recorded round, update `research/<ticker>/<exp_id>/research_journal.md`
-with the round's ledger ref and insight, and keep
-`research/<ticker>/<exp_id>/exploration_path.md` covered with path, why, Edge
-feedback, and ledger ref before another recorded round.
+After the recorded round, keep `research/<ticker>/<exp_id>/exploration_path.md`
+covered with path, why, Edge feedback, and ledger ref before another recorded
+round.
 
 Only after the user asks to publish the paper-ready session, or agrees after a PASS:
 

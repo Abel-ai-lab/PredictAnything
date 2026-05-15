@@ -20,8 +20,8 @@ Use this skill for:
 - continuing an existing Abel strategy discovery workspace
 - creating sessions and branches
 - preparing, debugging, recording, and reviewing research rounds
-- interpreting `evidence_ledger.json`, `frontier.md`, `agent_context.md`,
-  `research_journal.md`, and `exploration_path.md`
+- interpreting `evidence_ledger.json`, `frontier.md`, `agent_context.md`, and
+  `exploration_path.md`
 
 ## Activation Checklist
 
@@ -53,8 +53,7 @@ Always start by resolving workspace state before strategy work.
 - Live graph discovery, graph frontier expansion, or graph-first reasoning:
   read `references/discovery-protocol.md`.
 - Creating or revising `branch.yaml`, reviewing evidence labels,
-  journal/path coverage, input realization, or research journal/exploration
-  path use:
+  path coverage, input realization, or exploration path use:
   read `references/branch-authoring.md`.
 - Writing `engine.py`, handling semantic/runtime failures, or checking
   temporal legality:
@@ -84,7 +83,6 @@ Always:
 - Report to the user with the current workspace/session/branch path, doctor
   status, blockers, what evidence exists, and the next action you will take.
 - Treat `agent_context.md` as the compact factual resume surface,
-  `research_journal.md` as agent-owned research state, and
   `exploration_path.md` as the human-facing chosen-path and Edge-feedback log.
 
 Never:
@@ -135,8 +133,6 @@ Research discipline:
 - Use one narrative scout pass when the next decision is ambiguous between
   mechanism-deepening, graph expansion, or stopping. Journal weak, off-target,
   unavailable, or skipped scout context plainly.
-- Every recorded round requires an agent-written `research_journal.md` entry
-  with the round ledger reference before the next recorded round.
 - Every recorded round requires an `exploration_path.md` entry with the chosen
   path, why it was chosen, Edge feedback, round ledger reference, and any scout
   influence before the next recorded round.

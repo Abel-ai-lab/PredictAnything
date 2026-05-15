@@ -4,6 +4,14 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.3.1] - 2026-05-10
+
+### Changed
+
+- Updated `abel-invest` to version `3.5.3`, merging research journal responsibilities into `exploration_path.md` for new sessions.
+- Added graph-first exploration path coverage, frontier tracking, and dashboard/status surfaces for the current strategy discovery workflow.
+- Refactored `abel-invest` narrative internals into smaller runtime, rendering, evidence, and command-handler modules while preserving the CLI surface.
+
 ## [1.3.0] - 2026-05-09
 
 ### Added
@@ -16,14 +24,6 @@ This project follows a repo-level release log so agents can summarize user-visib
 
 - Refactored Abel Invest narrative implementation into `narrative_core` and workspace support into `workspace_core` while preserving public CLI entrypoints.
 - Updated Abel Invest workspace bootstrap, branch authoring, discovery protocol, and experiment-loop guidance for graph-first strategy discovery.
-
-## [1.2.1] - 2026-05-10
-
-### Changed
-
-- Updated `abel-invest` to version `3.5.3`, merging research journal responsibilities into `exploration_path.md` for new sessions.
-- Added graph-first exploration path coverage, frontier tracking, and dashboard/status surfaces for the current strategy discovery workflow.
-- Refactored `abel-invest` narrative internals into smaller runtime, rendering, evidence, and command-handler modules while preserving the CLI surface.
 
 ## [1.2.0] - 2026-04-28
 

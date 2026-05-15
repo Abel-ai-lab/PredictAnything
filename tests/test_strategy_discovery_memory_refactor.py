@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import strategy_discovery_api as ni
 from abel_invest.narrative_core import promotion as promotion_helpers
+from abel_invest.narrative_core.dashboard_adapters.primary_strategy_selector import position_action
 
 
 def _candidate_result_payload() -> dict:
@@ -121,7 +122,6 @@ def _write_strategy_result_row(
             "handoff_path": str(handoff_path.relative_to(session)),
         },
     )
-
 
 def _write_strategy_artifact_inputs(
     branch: Path,
@@ -445,7 +445,7 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     )
     round_output = capsys.readouterr().out
     assert "From here:" in round_output
-    assert "research_journal.md" in round_output
+    assert "exploration_path.md" in round_output
     assert "before another recorded round" in round_output
 
     ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
@@ -468,6 +468,142 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     assert ni.check_session(session, strict=False) == 0
     assert ni.check_session(session, strict=True) == 1
     assert ni.path_coverage_warning_lines(session) == []
+
+
+def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: Path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-dashboard", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "graph-v1")
+    ni.write_branch_state(branch, {"created_at": "2026-04-24T01:00:00+00:00"})
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
+            "evidence_intent": "candidate",
+            "input_claim": "graph_supported",
+            "mechanism_family": "driver_momentum",
+            "invalidation_condition": "No AAPL reads or negative holdout IC.",
+            "selected_inputs": ["AAPL"],
+        }
+    )
+    ni.write_branch_spec(branch, spec)
+
+    result_path = branch / "outputs" / "round-001-edge-result.json"
+    report_path = branch / "outputs" / "round-001-edge-validation.md"
+    handoff_path = branch / "outputs" / "round-001-edge-handoff.json"
+    result_path.write_text(json.dumps(_candidate_result_payload()), encoding="utf-8")
+    report_path.write_text("# validation\n", encoding="utf-8")
+    handoff_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+    round_note = branch / "rounds" / "round-001.md"
+    round_note.write_text(
+        "\n".join(
+            [
+                "# round-001",
+                "- hypothesis: `AAPL driver strength leads TSLA next-day risk appetite.`",
+                "- expected_signal: `positive cross-asset lead`",
+                "- changed_dimensions: `drivers`",
+                "- summary: `candidate evidence round`",
+                "- next_step: `inspect dashboard bundle`",
+                f"- result_path: `{result_path.relative_to(session)}`",
+                f"- report_path: `{report_path.relative_to(session)}`",
+                f"- handoff_path: `{handoff_path.relative_to(session)}`",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    ni.append_tsv_row(
+        branch / "results.tsv",
+        ni.RESULTS_HEADER,
+        {
+            "exp_id": session.name,
+            "ticker": "TSLA",
+            "branch_id": branch.name,
+            "round_id": "round-001",
+            "decision": "keep",
+            "lo_adj": "2.400",
+            "ic": "0.0300",
+            "omega": "1.500",
+            "sharpe": "2.100",
+            "max_dd": "-0.0800",
+            "pnl": "42.0",
+            "K": "1",
+            "score": "7/7",
+            "verdict": "PASS",
+            "mode": "explore",
+            "description": "causal driver vote",
+            "result_path": str(result_path.relative_to(session)),
+            "report_path": str(report_path.relative_to(session)),
+            "handoff_path": str(handoff_path.relative_to(session)),
+        },
+    )
+    ni.append_tsv_row(
+        session / "events.tsv",
+        ni.EVENTS_HEADER,
+        {
+            "timestamp": "2026-04-24T01:05:00+00:00",
+            "event": "round_recorded",
+            "branch_id": branch.name,
+            "round_id": "round-001",
+            "mode": "explore",
+            "verdict": "PASS",
+            "decision": "keep",
+            "description": "causal driver vote",
+            "artifact_path": str(result_path.relative_to(session)),
+        },
+    )
+    ni.render_session(session)
+    (session / "exploration_path.md").write_text(
+        "# Exploration Path\n\n"
+        "## Entries\n\n"
+        "### graph-v1 round-001\n\n"
+        "- ledger: `ledger:graph-v1:round-001`\n"
+        "- path: causal driver vote\n"
+        "- why: Driver concentration matters more than raw parent count.\n",
+        encoding="utf-8",
+    )
+
+    bundle = ni.build_skill_dashboard_bundle(
+        branch,
+        uploaded_at="2026-04-24T01:30:00+00:00",
+    )
+
+    assert bundle["sessionId"] == "tsla-dashboard"
+    assert bundle["branchId"] == "graph-v1"
+    assert bundle["startAt"] == "2026-04-24T01:00:00+00:00"
+    assert bundle["endAt"] == "2026-04-24T01:30:00+00:00"
+    assert set(bundle["payload"]) == {
+        "session",
+        "branch",
+        "rounds",
+        "branchInsights",
+        "episodes",
+    }
+    assert bundle["payload"]["branch"]["selectedInputs"] == ["AAPL"]
+    assert bundle["payload"]["branch"]["latestEvidenceLabel"] == "candidate_causal_evidence"
+    assert bundle["payload"]["session"]["inputRealization"] == {
+        "declared_graph_supported_rounds": 1,
+        "realized_graph_supported_rounds": 1,
+        "graph_input_read_gap_count": 0,
+        "graph_input_read_gap_rows": [],
+    }
+    assert bundle["payload"]["session"]["pathCoverage"] == {
+        "recorded_round_count": 1,
+        "covered_round_count": 1,
+        "path_coverage_complete": True,
+        "missing_path_rounds": [],
+    }
+    assert bundle["payload"]["rounds"][0]["roundId"] == "round-001"
+    assert bundle["payload"]["rounds"][0]["branchId"] == "graph-v1"
+    assert bundle["payload"]["rounds"][0]["branchRoundIndex"] == 1
+    assert bundle["payload"]["rounds"][0]["sessionRoundIndex"] == 1
+    assert bundle["payload"]["rounds"][0]["evidenceLabel"] == "candidate_causal_evidence"
+    assert bundle["payload"]["rounds"][0]["inputRealization"]["realized_input_claim"] == "graph_supported"
+    assert any(
+        "Driver concentration matters" in item["summary"]
+        for item in bundle["payload"]["branchInsights"]
+    )
+    assert "replaySnapshot" not in bundle["payload"]
+    assert "promotion" not in bundle["payload"]
+
 
 def test_build_skill_dashboard_session_bundle_aggregates_branches_and_rounds(tmp_path: Path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-session-dashboard", tmp_path / "research")
@@ -594,7 +730,7 @@ def test_build_skill_dashboard_session_bundle_aggregates_branches_and_rounds(tmp
     ]
 
 
-def test_build_skill_dashboard_session_bundle_omits_primary_strategy_and_trade_log(
+def test_build_skill_dashboard_session_bundle_selects_primary_strategy_from_results_tsv(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-primary-dashboard", tmp_path / "research")
@@ -615,18 +751,15 @@ def test_build_skill_dashboard_session_bundle_omits_primary_strategy_and_trade_l
         result_path.write_text(
             json.dumps(
                 {
-                    "verdict": "PASS",
-                    "metrics": {
-                        "sharpe": float(sharpe),
-                        "lo_adjusted": float(lo_adj),
-                        "max_dd": -0.1,
-                        "total_return": float(pnl) / 100.0,
-                        "position_hit_rate": 0.75,
-                    },
                     "decision_preview": [
                         {"date": "2026-05-04", "target_close": 16.13},
                         {"date": "2026-05-05", "target_close": 17.06},
-                    ]
+                    ],
+                    "metrics": {
+                        "position_ic_stability": 0.6,
+                        "dsr": 0.99,
+                        "loss_years": 1,
+                    },
                 }
             ),
             encoding="utf-8",
@@ -683,8 +816,140 @@ def test_build_skill_dashboard_session_bundle_omits_primary_strategy_and_trade_l
         uploaded_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
     )
 
-    assert "primaryStrategy" not in bundle["payload"]
-    assert not list(session.glob("branches/*/outputs/*-trade-log.csv"))
+    primary = bundle["payload"]["primaryStrategy"]
+    assert primary["branchId"] == "graph-v3"
+    assert primary["roundId"] == "round-001"
+    assert primary["selectionRule"] == "score_desc_total_return_desc_lo_adjusted_desc_sharpe_desc_latest_v1"
+    assert primary["metrics"]["score"] == "9/9"
+    assert primary["metrics"]["totalReturn"] == 0.55
+    assert primary["metrics"]["loAdjusted"] == 1.3
+    assert primary["metrics"]["positionIcStability"] == 0.6
+    assert primary["metrics"]["dsr"] == 0.99
+    assert primary["metrics"]["lossYears"] == 1
+    assert primary["latestDecision"] == {
+        "tradingDate": "2026-05-05",
+        "previousPosition": 0.75,
+        "currentPosition": 0.3,
+        "position": 0.3,
+        "nextPosition": 0.6,
+        "delta": -0.15,
+        "action": "reduce",
+        "close": 17.06,
+        "source": "abel_invest_edge_frame_csv",
+    }
+    assert primary["backtestTradeLog"] == {
+        "source": "abel_invest_trade_log_csv",
+        "tradeLogRef": "branches/graph-v3/outputs/round-001-trade-log.csv",
+    }
+    trade_log_path = session / primary["backtestTradeLog"]["tradeLogRef"]
+    assert trade_log_path.read_text(encoding="utf-8").splitlines() == [
+        "date,asset_return,pnl,position,source,decision_time,effective_time,next_position,gross_pnl,turnover,execution_cost,cum_return",
+        "2026-05-04,,0.01,0.75,backfill,,,0.30,,,,0.010000000000000009",
+        "2026-05-05,,0.02,0.30,backfill,,,0.60,,,,0.030200000000000005",
+    ]
+
+
+def test_primary_strategy_position_action_maps_previous_to_next_position() -> None:
+    assert position_action(0, 0.3) == "buy/open_long"
+    assert position_action(0.3, 0) == "sell/close"
+    assert position_action(0.3, 0.6) == "increase"
+    assert position_action(0.75, 0.6) == "reduce"
+    assert position_action(0.3, 0.3) == "hold"
+
+
+def test_primary_strategy_selector_uses_only_recorded_kept_pass_rounds(tmp_path: Path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-primary-filter-dashboard", tmp_path / "research")
+    kept_branch = ni.init_branch_dir(session, "kept-branch")
+    discarded_branch = ni.init_branch_dir(session, "discarded-branch")
+    unrecorded_branch = ni.init_branch_dir(session, "unrecorded-branch")
+    rows = [
+        (kept_branch, "round-001", "keep", "PASS", "9/9", "20.0", True),
+        (discarded_branch, "round-001", "discard", "PASS", "9/9", "90.0", True),
+        (unrecorded_branch, "round-001", "keep", "PASS", "9/9", "95.0", False),
+    ]
+    for branch, round_id, decision, verdict, score, pnl, recorded in rows:
+        result_ref = f"branches/{branch.name}/outputs/{round_id}-edge-result.json"
+        ni.append_tsv_row(
+            branch / "results.tsv",
+            ni.RESULTS_HEADER,
+            {
+                "exp_id": session.name,
+                "ticker": "TSLA",
+                "branch_id": branch.name,
+                "round_id": round_id,
+                "decision": decision,
+                "lo_adj": "1.000",
+                "ic": "0.0100",
+                "omega": "1.100",
+                "sharpe": "1.000",
+                "max_dd": "-0.1000",
+                "pnl": pnl,
+                "K": "3",
+                "score": score,
+                "verdict": verdict,
+                "mode": "explore",
+                "description": f"{branch.name} {round_id}",
+                "result_path": result_ref,
+                "report_path": f"branches/{branch.name}/outputs/{round_id}-edge-validation.md",
+                "handoff_path": f"branches/{branch.name}/outputs/{round_id}-edge-handoff.json",
+            },
+        )
+        if recorded:
+            ni.append_tsv_row(
+                session / "events.tsv",
+                ni.EVENTS_HEADER,
+                {
+                    "timestamp": "2026-04-24T01:20:00+00:00",
+                    "event": "round_recorded",
+                    "branch_id": branch.name,
+                    "round_id": round_id,
+                    "mode": "explore",
+                    "verdict": verdict,
+                    "decision": decision,
+                    "description": f"{branch.name} {round_id}",
+                    "artifact_path": result_ref,
+                },
+            )
+
+    bundle = ni.build_skill_dashboard_session_bundle(
+        session,
+        uploaded_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    )
+
+    assert bundle["payload"]["primaryStrategy"]["branchId"] == "kept-branch"
+    assert bundle["payload"]["primaryStrategy"]["metrics"]["totalReturn"] == 0.2
+
+
+def test_post_skill_dashboard_bundle_sends_api_key_header() -> None:
+    calls = []
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"code": 200, "data": {"bundleId": "bundle-1"}}'
+
+    def fake_opener(request, timeout):
+        calls.append((request, timeout))
+        return _Response()
+
+    result = ni.post_skill_dashboard_bundle(
+        base_url="https://router.example",
+        api_key="secret-key",
+        bundle={"sessionId": "s1", "branchId": "b1", "payload": {"branch": {}}},
+        opener=fake_opener,
+    )
+
+    request, timeout = calls[0]
+    assert result["data"]["bundleId"] == "bundle-1"
+    assert request.full_url == "https://router.example/web/skill-dashboard/bundles"
+    assert request.get_header("Api-key") == "secret-key"
+    assert request.get_header("Content-type") == "application/json"
+    assert timeout == 60
 
 
 def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
@@ -717,6 +982,55 @@ def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
     assert request.get_header("Api-key") == "secret-key"
     assert request.get_header("Content-type") == "application/json"
     assert timeout == 60
+
+
+def test_post_skill_dashboard_session_uploads_trade_log_as_multipart(tmp_path: Path) -> None:
+    calls = []
+    trade_log = tmp_path / "branches" / "b1" / "outputs" / "round-001-trade-log.csv"
+    trade_log.parent.mkdir(parents=True)
+    trade_log.write_text("date,pnl,cum_return\n2026-05-05,0.1,0.1\n", encoding="utf-8")
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"code": 200, "data": {"sessionId": "s1"}}'
+
+    def fake_opener(request, timeout):
+        calls.append((request, timeout))
+        return _Response()
+
+    result = ni.post_skill_dashboard_session(
+        base_url="https://router.example",
+        api_key="secret-key",
+        bundle={
+            "sessionId": "s1",
+            "payload": {
+                "session": {},
+                "branches": [],
+                "rounds": [],
+                "primaryStrategy": {
+                    "backtestTradeLog": {
+                        "tradeLogRef": "branches/b1/outputs/round-001-trade-log.csv"
+                    }
+                },
+            },
+        },
+        session_root=tmp_path,
+        opener=fake_opener,
+    )
+
+    request, _timeout = calls[0]
+    body = request.data
+    assert result["data"]["sessionId"] == "s1"
+    assert request.get_header("Content-type").startswith("multipart/form-data; boundary=")
+    assert b'name="payload"' in body
+    assert b'name="backtestTradeLog"; filename="round-001-trade-log.csv"' in body
+    assert b"date,pnl,cum_return" in body
 
 
 def test_select_best_pass_strategy_sorts_validation_rounds_by_pass_rate_first(

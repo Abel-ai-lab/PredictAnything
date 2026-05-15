@@ -145,7 +145,6 @@ Markov-blanket discovery bucket, not a fixed causal-flow direction.
 is the single human-facing exploration log.
 
 Use the exploration path for:
-
 - the path chosen for each recorded round
 - why that path was chosen
 - Edge feedback after the round
