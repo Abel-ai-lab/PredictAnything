@@ -106,6 +106,15 @@ STRATEGY_EXTRA_FILE_SUFFIXES = {
     ".yaml",
     ".yml",
 }
+ARTIFACT_NULL_METRIC_KEYS_BY_APPLICABILITY = (
+    ("omega_applicable", ("omega",)),
+    ("position_ic_applicable", ("position_ic", "position_hit_rate")),
+    (
+        "position_ic_stability_applicable",
+        ("position_ic_stability", "position_ic_monthly_mean"),
+    ),
+    ("loss_years_applicable", ("loss_years",)),
+)
 
 
 @dataclass(frozen=True)
@@ -525,6 +534,10 @@ def _export_strategy_artifact_candidate(
     if isinstance(promotion_or_result, dict):
         return promotion_or_result
     promotion = promotion_or_result
+    candidate = _candidate_with_artifact_edge_result_metric_nulls(
+        candidate,
+        destination=destination,
+    )
     manifest = build_strategy_artifact_manifest(
         candidate,
         trade_log_path=trade_log_path,
@@ -960,6 +973,45 @@ def _run_edge_artifact_export(
     return payload if isinstance(payload, dict) else {}
 
 
+def _candidate_with_artifact_edge_result_metric_nulls(
+    candidate: StrategyArtifactCandidate,
+    *,
+    destination: Path,
+) -> StrategyArtifactCandidate:
+    edge_result = _edge_result_with_artifact_metric_nulls(candidate.edge_result)
+    if edge_result == candidate.edge_result:
+        return candidate
+
+    edge_result_path = destination / "edge-result.artifact.json"
+    edge_result_path.write_text(
+        json.dumps(edge_result, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return replace(candidate, edge_result_path=edge_result_path, edge_result=edge_result)
+
+
+def _edge_result_with_artifact_metric_nulls(edge_result: dict[str, Any]) -> dict[str, Any]:
+    metrics = edge_result.get("metrics")
+    if not isinstance(metrics, dict):
+        return edge_result
+
+    artifact_metrics = dict(metrics)
+    changed = False
+    for flag_key, metric_keys in ARTIFACT_NULL_METRIC_KEYS_BY_APPLICABILITY:
+        if artifact_metrics.get(flag_key) is not False:
+            continue
+        for metric_key in metric_keys:
+            if metric_key not in artifact_metrics or artifact_metrics.get(metric_key) is not None:
+                changed = True
+            artifact_metrics[metric_key] = None
+    if not changed:
+        return edge_result
+
+    payload = dict(edge_result)
+    payload["metrics"] = artifact_metrics
+    return payload
+
+
 def _runtime_env(path: Path) -> dict[str, str] | None:
     workspace_root = find_workspace_root(path)
     return build_workspace_runtime_env(workspace_root) if workspace_root is not None else None
@@ -1257,28 +1309,37 @@ def _manifest_backtest_metrics(
     score = _clean(candidate.score) or _clean(candidate.edge_result.get("score"))
     if score:
         payload["score"] = score
-    _set_optional_float(
+    _set_optional_artifact_metric(
         payload,
         "positionIc",
         _metric(candidate.row, metrics, row_key="ic", result_key="position_ic"),
+        applicable=metrics.get("position_ic_applicable") is not False,
     )
-    _set_optional_float(
+    _set_optional_artifact_metric(
         payload,
         "positionIcStability",
         _to_float(metrics.get("position_ic_stability")),
+        applicable=metrics.get("position_ic_stability_applicable") is not False,
     )
-    _set_optional_float(
+    _set_optional_artifact_metric(
         payload,
         "positionHitRate",
         _to_float(metrics.get("position_hit_rate")),
+        applicable=metrics.get("position_ic_applicable") is not False,
     )
-    _set_optional_float(
+    _set_optional_artifact_metric(
         payload,
         "omega",
         _metric(candidate.row, metrics, row_key="omega", result_key="omega"),
+        applicable=metrics.get("omega_applicable") is not False,
     )
     _set_optional_float(payload, "dsr", _to_float(metrics.get("dsr")))
-    _set_optional_int(payload, "lossYears", _to_int(metrics.get("loss_years")))
+    _set_optional_artifact_metric(
+        payload,
+        "lossYears",
+        _to_int(metrics.get("loss_years")),
+        applicable=metrics.get("loss_years_applicable") is not False,
+    )
     _set_optional_int(
         payload,
         "k",
@@ -1422,6 +1483,20 @@ def _to_int(value: Any) -> int | None:
 
 
 def _set_optional_float(payload: dict[str, Any], key: str, value: float | None) -> None:
+    if value is not None:
+        payload[key] = value
+
+
+def _set_optional_artifact_metric(
+    payload: dict[str, Any],
+    key: str,
+    value: Any,
+    *,
+    applicable: bool,
+) -> None:
+    if not applicable:
+        payload[key] = None
+        return
     if value is not None:
         payload[key] = value
 

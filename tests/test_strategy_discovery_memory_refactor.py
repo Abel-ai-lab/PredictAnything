@@ -1453,6 +1453,101 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
     assert manifest["promotion"]["mode"] == "zero_change"
 
 
+def test_export_selected_strategy_artifact_nulls_inapplicable_metrics(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_artifact_inputs(branch)
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    result_path = branch / "outputs" / "round-006-edge-result.json"
+    edge_result = json.loads(result_path.read_text(encoding="utf-8"))
+    edge_result["metrics"].update(
+        {
+            "omega": 0.0,
+            "omega_applicable": False,
+            "position_ic": 0.0,
+            "position_hit_rate": 0.0,
+            "position_ic_applicable": False,
+            "position_ic_stability": 0.0,
+            "position_ic_monthly_mean": 0.0,
+            "position_ic_stability_applicable": False,
+            "loss_years": 0,
+            "loss_years_applicable": False,
+        }
+    )
+    result_path.write_text(json.dumps(edge_result), encoding="utf-8")
+    _write_metric_input(branch, round_id="round-006")
+    output_dir = tmp_path / "exported-artifact"
+    captured: dict[str, object] = {}
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source\n"
+                "2020-01-01,0,0,0,0,backfill\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            edge_result_arg = Path(command[command.index("--edge-result") + 1])
+            captured["edge_result_arg"] = edge_result_arg
+            captured["edge_result"] = json.loads(edge_result_arg.read_text(encoding="utf-8"))
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 8,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert result["artifactExported"] is True
+    manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
+    metrics = manifest["backtest"]["metrics"]
+    assert metrics["positionIc"] is None
+    assert metrics["positionIcStability"] is None
+    assert metrics["positionHitRate"] is None
+    assert metrics["omega"] is None
+    assert metrics["lossYears"] is None
+    assert Path(captured["edge_result_arg"]).name == "edge-result.artifact.json"
+    artifact_edge_metrics = captured["edge_result"]["metrics"]
+    assert artifact_edge_metrics["position_ic"] is None
+    assert artifact_edge_metrics["position_ic_stability"] is None
+    assert artifact_edge_metrics["position_hit_rate"] is None
+    assert artifact_edge_metrics["position_ic_monthly_mean"] is None
+    assert artifact_edge_metrics["omega"] is None
+    assert artifact_edge_metrics["loss_years"] is None
+
+
 def test_promote_branch_strategy_uses_explicit_branch_round(
     tmp_path: Path,
 ) -> None:
