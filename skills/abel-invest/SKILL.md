@@ -34,10 +34,11 @@ Always start by resolving workspace state before strategy work.
      under the current directory, use that child workspace
    - else bootstrap a workspace before deep research work
 3. Prefer `abel-invest workspace context --path . --json` once a CLI is
-   available; if `abel-invest` is not on PATH but an existing workspace has a
-   venv, use `<workspace-root>/.venv/bin/abel-invest` for this command.
-   Use the returned `workspace_root`, `research_root`, and `command_prefix`
-   instead of guessing from directory names or assuming a global PATH.
+   available. If `abel-invest` is not on PATH and an existing workspace has a
+   venv, use `<workspace-root>/.venv/bin/abel-invest workspace context --path . --json`
+   for this first context check. Use the returned `workspace_root`,
+   `research_root`, and `command_prefix` instead of guessing from directory
+   names or assuming a global PATH.
 4. Run `<command_prefix> doctor --path <workspace-root>`.
 5. If doctor reports `runtime_stale`, `env_missing`, `edge_missing`, or
    `edge_contract_missing`, run the exact command from `next_step`, then rerun
@@ -148,7 +149,7 @@ Always start by resolving workspace state before strategy work.
     whenever the agent would naturally summarize that the strategy is worth a
     visual review. Do not print a command for the user to run. If the user
     agrees, or if the user explicitly asks to visualize the session, run
-    `abel-invest visualize-session --session <session> --with-strategy-artifact`
+    `<command_prefix> visualize-session --session <session> --with-strategy-artifact`
     yourself and share the returned Markdown link. This is the default
     visualization path because the online review should include the selected
     best `PASS` strategy artifact when one is available. Use narrative-only

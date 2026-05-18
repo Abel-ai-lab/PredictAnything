@@ -22,7 +22,7 @@ Write against DecisionContext instead of raw research helpers:
   - ctx.feed(name).asof_series("close")
   - ctx.points()
   - ctx.decisions(next_position)
-If data or runtime setup is broken, let the error surface and inspect it with `abel-invest debug-branch`;
+If data or runtime setup is broken, let the error surface and inspect it with debug-branch;
 do not hide setup failures behind synthetic outputs.
 Current readiness warning: {readiness_warning}
 Coverage hints: {coverage_hints_text}
@@ -40,7 +40,7 @@ class BranchEngine(StrategyEngine):
             raise RuntimeError(
                 "The default Abel strategy discovery baseline loaded no usable target bars. "
                 "Confirm the requested window in branch.yaml, then rerun "
-                "`abel-invest prepare-branch`."
+                "prepare-branch with the workspace command prefix."
             )
         # Debug-safe starting point: a simple target-trend starter baseline.
         # It exists to make the first branch runnable and comparable, not to

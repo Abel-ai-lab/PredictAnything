@@ -32,12 +32,13 @@ From the user's current directory:
 abel-invest workspace bootstrap --path abel-invest-workspace
 ```
 
-4. Then resolve context and run doctor. If `abel-invest` is not on PATH but the
-   workspace venv exists, use `<workspace-root>/.venv/bin/abel-invest` for the
-   first context command.
+4. Then resolve context and run doctor. Use `abel-invest` as `<context-cli>`
+   when it is on PATH. If it is not on PATH but the workspace venv exists, use
+   `<workspace-root>/.venv/bin/abel-invest` as `<context-cli>` for the first
+   context command.
 
 ```bash
-abel-invest workspace context --path . --json
+<context-cli> workspace context --path . --json
 <command_prefix> doctor --path <workspace-root>
 ```
 
@@ -77,7 +78,7 @@ doctor is ready.
 ## Common Commands
 
 ```bash
-abel-invest workspace context --path . --json
+<context-cli> workspace context --path . --json
 <command_prefix> workspace status --path <workspace-root>
 <command_prefix> doctor --path <workspace-root>
 <command_prefix> env init

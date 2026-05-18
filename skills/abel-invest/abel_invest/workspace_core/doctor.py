@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -21,7 +22,6 @@ from abel_invest.workspace_core.workspace import (
     load_workspace_manifest,
     resolve_workspace_entry,
     resolve_workspace_env_file,
-    resolve_runtime_cli,
     resolve_runtime_python,
 )
 
@@ -47,14 +47,19 @@ def shell_join(parts: list[str]) -> str:
 
 def workspace_command(root: Path, manifest: dict | None, *args: str) -> str:
     """Build an agent-facing command that prefers the workspace-local CLI."""
-    python_path = resolve_runtime_python(root, manifest)
-    cli_path = resolve_runtime_cli(root, manifest)
-    if cli_path.exists():
-        prefix = [str(cli_path)]
-    elif python_path.exists():
-        prefix = [str(python_path), "-m", "abel_invest"]
-    else:
+    try:
+        python_path = resolve_runtime_python(root, manifest)
+    except Exception:
         prefix = ["abel-invest"]
+    else:
+        cli_name = "abel-invest.exe" if os.name == "nt" else "abel-invest"
+        cli_path = python_path.with_name(cli_name)
+        if cli_path.exists():
+            prefix = [str(cli_path)]
+        elif python_path.exists():
+            prefix = [str(python_path), "-m", "abel_invest"]
+        else:
+            prefix = ["abel-invest"]
     return shell_join([*prefix, *args])
 
 
@@ -110,7 +115,8 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
         }
 
     python_path = resolve_runtime_python(root, manifest)
-    cli_path = resolve_runtime_cli(root, manifest)
+    cli_name = "abel-invest.exe" if os.name == "nt" else "abel-invest"
+    cli_path = python_path.with_name(cli_name)
     command_prefix = workspace_command(root, manifest)
     checks: dict[str, object] = {
         "workspace_manifest": "pass",

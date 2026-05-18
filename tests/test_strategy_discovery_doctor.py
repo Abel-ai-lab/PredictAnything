@@ -130,6 +130,6 @@ def test_run_doctor_runtime_stale_routes_to_env_refresh(
 
     assert result["status"] == "runtime_stale"
     assert result["checks"]["package_freshness"] == "fail"
-    assert result["next_step"] == f"abel-invest env refresh --path {root}"
+    assert result["next_step"] == f"{python_path} -m abel_invest env refresh --path {root}"
     assert "Package freshness: Workspace runtime has abel-edge 0.8.4" in report
 

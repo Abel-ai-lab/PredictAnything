@@ -11,6 +11,7 @@ from abel_invest.workspace_core.doctor import (
     doctor_exit_code,
     render_doctor_report,
     run_doctor,
+    workspace_command,
 )
 from abel_invest.workspace_core.env import init_workspace_env
 from abel_invest.workspace_core.workspace import (
@@ -41,16 +42,18 @@ def handle_workspace_command(args: argparse.Namespace) -> int:
             print(f"Existing workspace root for this area: {related_root}")
             print("")
             print("Continue there instead:")
-            print(f"  abel-invest workspace status --path {related_root}")
-            print(f"  abel-invest doctor --path {related_root}")
+            prefix = workspace_command(related_root, None)
+            print(f"  {prefix} workspace status --path {related_root}")
+            print(f"  {prefix} doctor --path {related_root}")
             return 1
         if target_state == "launch_root_child_workspace" and related_root is not None:
             print(f"Workspace already exists at the default child path: {related_root}")
             print("Reuse it instead of creating another workspace for the same area.")
             print("")
             print("Continue there instead:")
-            print(f"  abel-invest workspace status --path {related_root}")
-            print(f"  abel-invest doctor --path {related_root}")
+            prefix = workspace_command(related_root, None)
+            print(f"  {prefix} workspace status --path {related_root}")
+            print(f"  {prefix} doctor --path {related_root}")
             return 1
         root = scaffold_workspace(args.name, target_root=target_root)
         manifest = build_default_manifest(args.name)
@@ -85,16 +88,18 @@ def handle_workspace_command(args: argparse.Namespace) -> int:
             print(f"Existing workspace root for this area: {related_root}")
             print("")
             print("Continue there instead:")
-            print(f"  abel-invest workspace status --path {related_root}")
-            print(f"  abel-invest doctor --path {related_root}")
+            prefix = workspace_command(related_root, None)
+            print(f"  {prefix} workspace status --path {related_root}")
+            print(f"  {prefix} doctor --path {related_root}")
             return 1
         if target_state == "launch_root_child_workspace" and related_root is not None:
             print(f"Workspace already exists at the default child path: {related_root}")
             print("Reuse it instead of bootstrapping another workspace for the same area.")
             print("")
             print("Continue there instead:")
-            print(f"  abel-invest workspace status --path {related_root}")
-            print(f"  abel-invest doctor --path {related_root}")
+            prefix = workspace_command(related_root, None)
+            print(f"  {prefix} workspace status --path {related_root}")
+            print(f"  {prefix} doctor --path {related_root}")
             return 1
         reused_workspace = False
         if target_root.exists():
@@ -214,7 +219,7 @@ def build_workspace_context(start: Path) -> dict[str, object]:
     resolved = resolve_workspace_paths(root, manifest)
     doctor_result = run_doctor(root)
     cli_path = resolve_runtime_cli(root, manifest)
-    command_prefix = str(doctor_result.get("command_prefix") or cli_path)
+    command_prefix = str(doctor_result.get("command_prefix") or workspace_command(root, manifest))
     return {
         "entry_path": str(entry_path),
         "workspace_resolution": resolution_mode,
