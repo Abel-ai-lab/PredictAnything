@@ -4,6 +4,39 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.4.0] - 2026-05-18
+
+### Added
+
+- Added Abel Invest hosted strategy artifact promotion, upload, manifest, and replay flows so session visualization can include selected PASS strategy artifacts.
+- Added workspace runtime freshness checks so updated Abel Invest skills can detect stale existing workspaces and route agents through `env refresh`.
+- Added expanded strategy-artifact and workspace environment tests covering refactor handoffs, doctor freshness reporting, and workspace-local command behavior.
+
+### Changed
+
+- Updated Abel Invest to version `3.5.3` and raised the Abel Edge minimum dependency to the current supported runtime line.
+- Updated Abel Invest guidance to prefer workspace-local command prefixes instead of assuming `abel-invest` is available on the global PATH.
+- Tightened Abel auth and router skill probe guidance so shared Abel helper commands resolve relative to the installed skill root rather than the current working directory.
+- Refined graph-use, discovery-discipline, visualization timing, and strategy-artifact guidance for agent-led Abel Invest research.
+
+### Fixed
+
+- Preserved null values for inapplicable artifact metrics instead of forcing misleading numeric values.
+- Removed stale visualization and promote-branch fallbacks that conflicted with the strategy-artifact-first publishing path.
+
+## [1.3.0] - 2026-05-09
+
+### Added
+
+- Added Abel Invest graph-frontier strategy discovery flows, session-first dashboard upload support, and primary strategy selection for dashboard sessions.
+- Added primary strategy trade-log CSV generation and upload support so downstream dashboard strategy detail can render backtest time series from stored trade logs.
+- Added DSR accounting audit trail support and expanded primary strategy metrics, including DSR, loss years, and position IC stability.
+
+### Changed
+
+- Refactored Abel Invest narrative implementation into `narrative_core` and workspace support into `workspace_core` while preserving public CLI entrypoints.
+- Updated Abel Invest workspace bootstrap, branch authoring, discovery protocol, and experiment-loop guidance for graph-first strategy discovery.
+
 ## [1.2.0] - 2026-04-28
 
 ### Added

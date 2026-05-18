@@ -7,8 +7,12 @@ Base URL: `https://api.abel.ai/router/`
 Before using this guide, verify auth state with:
 
 ```bash
-python ../abel-common/python/abel_common/cap/graph_probe.py auth-status
+python3 <abel-auth-skill-root>/../abel-common/python/abel_common/cap/graph_probe.py auth-status
 ```
+
+Resolve `<abel-auth-skill-root>` to the installed `abel-auth` skill directory.
+Do not run a current-working-directory relative `../abel-common` command from a
+project workspace.
 
 Only continue into this guide after that check shows live Abel auth is missing
 or needs repair.
@@ -41,7 +45,7 @@ The callback page is only a confirmation page. The API key comes from the result
 Preferred shared auth file for the installed collection:
 
 ```dotenv
-skills/abel-auth/.env.skill
+<abel-auth-skill-root>/.env.skill
 ABEL_API_KEY=abel_xxx
 ```
 

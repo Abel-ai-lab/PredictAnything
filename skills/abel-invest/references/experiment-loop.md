@@ -1,12 +1,13 @@
 # Experiment Loop
 
-Use this reference after workspace preflight is complete and
-`abel-invest doctor` is ready.
+Use this reference after workspace preflight is complete and doctor is ready.
+Commands below use the workspace `command_prefix` returned by
+`workspace context --json` or doctor.
 
 Before creating a new session, confirm the workspace context:
 
 ```bash
-abel-invest workspace context --path . --json
+<command_prefix> workspace context --path . --json
 ```
 
 Use the resolved workspace `research_root`. Do not pass `--root` unless this
@@ -21,10 +22,10 @@ relative to that root.
 Run:
 
 ```bash
-abel-invest init-session --ticker <TICKER> --exp-id <exp-id>
-abel-invest frontier status --session research/<ticker>/<exp_id>
-abel-invest init-branch --session research/<ticker>/<exp_id> --branch-id <family-a-branch>
-abel-invest init-branch --session research/<ticker>/<exp_id> --branch-id <family-b-branch>
+<command_prefix> init-session --ticker <TICKER> --exp-id <exp-id>
+<command_prefix> frontier status --session research/<ticker>/<exp_id>
+<command_prefix> init-branch --session research/<ticker>/<exp_id> --branch-id <family-a-branch>
+<command_prefix> init-branch --session research/<ticker>/<exp_id> --branch-id <family-b-branch>
 ```
 
 Then make each branch declaration explicit by reading or editing:
@@ -37,9 +38,9 @@ Then make each branch declaration explicit by reading or editing:
 Then prepare, debug, and record the agent-chosen branch round:
 
 ```bash
-abel-invest prepare-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
-abel-invest debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
-abel-invest run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
+<command_prefix> prepare-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
+<command_prefix> debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
+<command_prefix> run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
 ```
 
 After the recorded round, keep `research/<ticker>/<exp_id>/exploration_path.md`
@@ -49,7 +50,7 @@ round.
 Only after the user asks to publish the paper-ready session, or agrees after a PASS:
 
 ```bash
-abel-invest visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
+<command_prefix> visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
 ```
 
 New sessions run live graph discovery by default. Use `--no-discover` only when
@@ -60,7 +61,7 @@ When current evidence leaves a frontier question unresolved, expand the
 frontier before cutting more strategy variants:
 
 ```bash
-abel-invest frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_ID> --mode all --limit 20
+<command_prefix> frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_ID> --mode all --limit 20
 ```
 
 Frontier expansion changes `graph_frontier.json`; it does not record evidence
@@ -183,7 +184,7 @@ agrees, or if the user explicitly asks to visualize the session, pass the
 session folder to the command:
 
 ```bash
-abel-invest visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
+<command_prefix> visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
 ```
 
 The command builds the online view from local session evidence and uploads the

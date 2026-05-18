@@ -76,6 +76,7 @@ from abel_invest.narrative_core.rendering.renderers import (
     render_round_note,
 )
 from abel_invest.narrative_core.session_lifecycle import (
+    command_prefix_for_path,
     resolve_workspace_arg_path,
 )
 from abel_invest.narrative_core.rendering.session_rendering import (
@@ -194,10 +195,11 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
             sys.stderr.write(completed.stdout)
         runtime_error_text = (completed.stderr or completed.stdout or "").strip()
         if "Abel API key not found" in runtime_error_text:
+            command_prefix = command_prefix_for_path(branch)
             raise RuntimeError(
                 "Branch preparation is blocked on Abel auth. "
                 "Use abel-auth, then rerun "
-                f"`abel-invest prepare-branch --branch {branch}`."
+                f"`{command_prefix} prepare-branch --branch {branch}`."
             )
         raise RuntimeError(
             "Abel-edge warm-cache did not produce dependencies output. "
@@ -302,19 +304,20 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     )
     print("")
     print("From here:")
+    command_prefix = command_prefix_for_path(branch)
     if auth_handoff_needed:
         print("  Use abel-auth")
-        print(f"  abel-invest prepare-branch --branch {branch}")
+        print(f"  {command_prefix} prepare-branch --branch {branch}")
     elif warm_fail:
         print("  Fix cache failures before debug/run; unresolved prepared inputs should not become evidence.")
         print(f"  inspect {output_path.relative_to(session)}")
         print(f"  revise {branch / BRANCH_SPEC_FILENAME} or auth/data access if needed")
-        print(f"  abel-invest prepare-branch --branch {branch}")
+        print(f"  {command_prefix} prepare-branch --branch {branch}")
         return completed.returncode or 1
     else:
         print("  The branch inputs are ready; use debug preflight first, then record a round once the engine reflects the branch thesis.")
-        print(f"  abel-invest debug-branch --branch {branch}")
-        print(f"  abel-invest run-branch --branch {branch} -d \"baseline\"")
+        print(f"  {command_prefix} debug-branch --branch {branch}")
+        print(f"  {command_prefix} run-branch --branch {branch} -d \"baseline\"")
     return completed.returncode
 
 
@@ -336,9 +339,10 @@ def run_branch_round(args: argparse.Namespace) -> int:
         )
         return 2
     if not branch_inputs_ready(branch):
+        command_prefix = command_prefix_for_path(branch)
         print(
             "Branch inputs have not been prepared yet. "
-            "Run `abel-invest prepare-branch --branch ...` before recording a round.",
+            f"Run `{command_prefix} prepare-branch --branch ...` before recording a round.",
             file=sys.stderr,
         )
         return 2

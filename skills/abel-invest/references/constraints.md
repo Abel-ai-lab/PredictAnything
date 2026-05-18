@@ -2,6 +2,8 @@
 
 Use this reference when writing `engine.py`, reading semantic preflight, or
 debugging runtime validity.
+Commands below use the workspace `command_prefix` returned by
+`workspace context --json` or doctor.
 
 The branch-default safety story is:
 
@@ -55,8 +57,8 @@ Do not rediscover or override them in `engine.py`.
 ## Feedback Loop
 
 ```bash
-abel-invest prepare-branch --branch ...
-abel-invest debug-branch --branch ...
+<command_prefix> prepare-branch --branch ...
+<command_prefix> debug-branch --branch ...
 ```
 
 After `prepare-branch`, inspect:

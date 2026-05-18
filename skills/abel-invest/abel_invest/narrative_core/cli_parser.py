@@ -95,7 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     env_parser = sub.add_parser("env", help="Manage the local workspace Python environment")
     env_sub = env_parser.add_subparsers(dest="env_command", required=True)
-    env_init = env_sub.add_parser("init", help="Create the workspace venv and install dependencies")
+    env_init = env_sub.add_parser("init", help="Create the workspace venv and install or upgrade dependencies")
     env_init.add_argument(
         "--path",
         default=".",
@@ -118,6 +118,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use an existing interpreter instead of creating the workspace venv",
     )
     env_init.add_argument(
+        "--no-editable",
+        action="store_true",
+        help="Install Abel strategy discovery from local source in regular mode instead of editable mode",
+    )
+    env_refresh = env_sub.add_parser(
+        "refresh",
+        help="Upgrade the existing workspace runtime to match the current Abel Invest skill",
+    )
+    env_refresh.add_argument(
+        "--path",
+        default=".",
+        help="Directory inside the target workspace",
+    )
+    env_refresh.add_argument(
+        "--python",
+        dest="base_python",
+        default=None,
+        help="Base interpreter used if the workspace venv must be created",
+    )
+    env_refresh.add_argument(
+        "--alpha-source",
+        default=None,
+        help="Local Abel strategy discovery source tree used for installation",
+    )
+    env_refresh.add_argument(
+        "--runtime-python",
+        default=None,
+        help="Use an existing interpreter instead of creating the workspace venv",
+    )
+    env_refresh.add_argument(
         "--no-editable",
         action="store_true",
         help="Install Abel strategy discovery from local source in regular mode instead of editable mode",

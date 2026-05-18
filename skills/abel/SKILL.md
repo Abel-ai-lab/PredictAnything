@@ -1,6 +1,6 @@
 ---
 name: abel
-version: 1.2.0
+version: 1.4.0
 description: >
   Use when the user asks for Abel or starts an Abel workflow and you need to
   check auth state, initialize Abel if needed, and route to the right Abel
@@ -9,7 +9,7 @@ metadata:
   openclaw:
     requires:
       bins:
-        - python
+        - python3
     primaryEnv: ABEL_API_KEY
     homepage: https://github.com/Abel-ai-causality/Abel-skills
 ---
@@ -18,7 +18,13 @@ Use `Abel` as the main entrypoint.
 
 Before routing, verify auth state by running:
 
-`python ../abel-common/python/abel_common/cap/graph_probe.py auth-status`
+```bash
+python3 <abel-skill-root>/../abel-common/python/abel_common/cap/graph_probe.py auth-status
+```
+
+Resolve `<abel-skill-root>` to this installed skill directory before running
+the command. Do not use a current-working-directory relative `../abel-common`
+path.
 
 Do not guess from shell environment alone.
 

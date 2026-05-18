@@ -71,7 +71,7 @@ def test_dry_run_uses_clawhub_package_publish_for_bundle(
     assert "clawhub package publish" in out
     assert "--name abel" in out
     assert "--display-name Abel" in out
-    assert "--version 1.2.0" in out
+    assert "--version 1.4.0" in out
     assert "--source-repo Abel-ai-causality/Abel-skills" in out
     assert "--source-commit abc123" in out
     assert "--source-ref develop" in out

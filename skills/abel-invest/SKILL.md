@@ -33,12 +33,18 @@ Always start by resolving workspace state before strategy work.
    - else if `abel-invest-workspace/alpha.workspace.yaml` exists
      under the current directory, use that child workspace
    - else bootstrap a workspace before deep research work
-3. Prefer `abel-invest workspace context --path . --json` once the CLI is
-   installed; use its `workspace_root` and `research_root` instead of guessing
-   from directory names.
-4. Run `abel-invest doctor --path <workspace-root>`.
-5. If doctor reports `auth_missing`, use `abel-auth`, then rerun doctor.
-6. Only start or continue session/branch work after doctor is ready, unless the
+3. Prefer `abel-invest workspace context --path . --json` once a CLI is
+   available. If `abel-invest` is not on PATH and an existing workspace has a
+   venv, use `<workspace-root>/.venv/bin/abel-invest workspace context --path . --json`
+   for this first context check. Use the returned `workspace_root`,
+   `research_root`, and `command_prefix` instead of guessing from directory
+   names or assuming a global PATH.
+4. Run `<command_prefix> doctor --path <workspace-root>`.
+5. If doctor reports `runtime_stale`, `env_missing`, `edge_missing`, or
+   `edge_contract_missing`, run the exact command from `next_step`, then rerun
+   doctor. `doctor` diagnoses runtime drift; `env` commands repair it.
+6. If doctor reports `auth_missing`, use `abel-auth`, then rerun doctor.
+7. Only start or continue session/branch work after doctor is ready, unless the
    user explicitly asks you to inspect or repair setup.
 
 ## Reference Routing
@@ -70,11 +76,15 @@ Always:
 - Reuse the default workspace when it already exists; reuse any resolved
   existing workspace before bootstrapping another one.
 - Bootstrap the workspace before deep strategy work when no workspace exists.
-- Use `abel-invest` commands, not old aliases.
+- Use Abel Invest commands through the workspace `command_prefix` when
+  available, not old aliases.
 - On a fresh install where `abel-invest` is not installed, run
   `python3 <abel-invest-skill-root>/scripts/bootstrap_workspace.py --path abel-invest-workspace`.
   Do not import `abel_invest` with the system interpreter for first-run
   bootstrap.
+- If a skill update changed the workspace runtime contract, `doctor` reports
+  `runtime_stale`. Run the suggested `next_step` command and rerun doctor before
+  research work. Do not refresh on every entry when doctor is already ready.
 - Reuse existing Abel auth first. If live access is missing, use `abel-auth` and
   rerun `doctor`.
 - Report to the user with the current workspace/session/branch path, doctor
@@ -103,6 +113,11 @@ Research discipline:
 
 - New sessions are graph-first: live causal graph discovery initializes
   `graph_frontier.json`.
+- Standard discovery chooses branches from graph context, mechanism reasoning,
+  recorded evidence, or explicit control/ablation purpose before metric search.
+  Do not run local parameter, threshold, window, filter, sizing, driver, or asset
+  sweeps to choose a branch candidate unless the user explicitly requests
+  optimization.
 - CAP graph nodes are model-supported causal priors. Trust that they carry
   target-relevant information, but do not infer disclosed weight, exact lag,
   signed effect, monotone strength, or tradable direction from the role alone.
@@ -128,8 +143,8 @@ Research discipline:
 - Abel Ask or narrative context can scout mechanism ideas, supplemental drivers,
   or graph expansion questions. It is not validation evidence.
 - Use one narrative scout pass when the next decision is ambiguous between
-  mechanism-deepening, graph expansion, or stopping. Journal weak, off-target,
-  unavailable, or skipped scout context plainly.
+  mechanism-deepening, graph expansion, or stopping. Record weak, off-target,
+  unavailable, or skipped scout context plainly in `exploration_path.md`.
 - Every recorded round requires an `exploration_path.md` entry with the chosen
   path, why it was chosen, Edge feedback, round ledger reference, and any scout
   influence before the next recorded round.
@@ -138,13 +153,14 @@ Research discipline:
   When graph-node reads are inferred from asset reads, preserve that source as a
   fact rather than overstating edge-native field-level proof.
 - The framework defines evidence validity. The agent owns the strategy thinking.
+
 Visualization and promotion:
 
 - Do not create or refresh an online session view automatically.
 - When the strategy context is mature enough for visual review, ask the user
   whether to visualize it.
 - If the user agrees or explicitly asks, run
-  `abel-invest visualize-session --session <session> --with-strategy-artifact`
+  `<command_prefix> visualize-session --session <session> --with-strategy-artifact`
   yourself and share the returned Markdown link.
 - Use narrative-only `visualize-session` only when the user explicitly asks for a
   session view without strategy artifact upload.

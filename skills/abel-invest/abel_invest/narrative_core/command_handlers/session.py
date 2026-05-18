@@ -25,6 +25,7 @@ from abel_invest.narrative_core.rendering.session_rendering import (
     render_session,
 )
 from abel_invest.narrative_core.session_lifecycle import (
+    command_prefix_for_path,
     init_branch_dir,
     init_session_dir,
     render_breadth_first_start_lines,
@@ -106,9 +107,10 @@ def handle_set_backtest_start(args: argparse.Namespace) -> int:
     warning = build_readiness_warning(readiness)
     if warning:
         print(f"  warning: {warning}")
+    command_prefix = command_prefix_for_path(session)
     print("")
     print("From here:")
-    print(f"  abel-invest status --session {session}")
+    print(f"  {command_prefix} status --session {session}")
     return 0
 
 
@@ -140,10 +142,11 @@ def handle_set_hypothesis(args: argparse.Namespace) -> int:
         render_session(session)
     print(f"Updated branch hypothesis for {branch}")
     print(f"  hypothesis: {hypothesis}")
+    command_prefix = command_prefix_for_path(branch)
     print("")
     print("From here:")
-    print(f"  abel-invest debug-branch --branch {branch}")
-    print(f"  abel-invest run-branch --branch {branch} -d \"baseline\"")
+    print(f"  {command_prefix} debug-branch --branch {branch}")
+    print(f"  {command_prefix} run-branch --branch {branch} -d \"baseline\"")
     return 0
 
 
@@ -182,9 +185,10 @@ def handle_init_branch(args: argparse.Namespace) -> int:
     print("  If you fetch bars, keep `limit=...` explicit and avoid blanket `dropna()` before confirming the target column survives.")
     print("")
     print("From here:")
+    command_prefix = command_prefix_for_path(branch)
     print(f"  edit {branch / BRANCH_SPEC_FILENAME}")
-    print(f"  abel-invest prepare-branch --branch {branch}")
-    print(f"  abel-invest debug-branch --branch {branch}")
-    print(f"  abel-invest run-branch --branch {branch} -d \"baseline\"")
+    print(f"  {command_prefix} prepare-branch --branch {branch}")
+    print(f"  {command_prefix} debug-branch --branch {branch}")
+    print(f"  {command_prefix} run-branch --branch {branch} -d \"baseline\"")
     print(f"  edit {branch / 'engine.py'}")
     return 0

@@ -1,6 +1,8 @@
 # Graph Frontier Protocol
 
 Use this reference after workspace preflight is complete.
+Commands below use the workspace `command_prefix` returned by
+`workspace context --json` or doctor.
 
 ## Purpose
 
@@ -15,14 +17,14 @@ candidate node pool through CAP without pretending to pre-solve the strategy.
 Live graph discovery is the normal session opening:
 
 ```bash
-abel-invest init-session --ticker <TICKER> --exp-id <exp-id>
+<command_prefix> init-session --ticker <TICKER> --exp-id <exp-id>
 ```
 
 Use an explicit no-discovery fallback only when auth, service access, or
 continuity constraints make live graph discovery unavailable:
 
 ```bash
-abel-invest init-session --ticker <TICKER> --exp-id <exp-id> --no-discover
+<command_prefix> init-session --ticker <TICKER> --exp-id <exp-id> --no-discover
 ```
 
 ## Session Model
@@ -79,8 +81,8 @@ When current evidence leaves a frontier question unresolved, expand the graph
 itself before spending rounds on strategy variants:
 
 ```bash
-abel-invest frontier status --session research/<ticker>/<exp_id>
-abel-invest frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_ID> --mode all --limit 20
+<command_prefix> frontier status --session research/<ticker>/<exp_id>
+<command_prefix> frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_ID> --mode all --limit 20
 ```
 
 Use `--mode parents`, `--mode blanket`, or `--mode all` according to the causal

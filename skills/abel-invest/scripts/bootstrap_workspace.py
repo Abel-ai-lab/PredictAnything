@@ -31,15 +31,16 @@ def main() -> int:
     command = [str(python_path), "-m", "abel_invest", "doctor", "--path", str(root)]
     print(f"Running workspace doctor with {python_path}")
     completed = subprocess.run(command, text=True)
+    cli_path = runtime_cli_path(python_path)
     print("")
     print("From here:")
     if completed.returncode == 0:
         print(f"  cd {root}")
         print(f"  {default_activate_command()}")
-        print("  abel-invest init-session --ticker <TICKER> --exp-id <session-id>")
+        print(f"  {cli_path} init-session --ticker <TICKER> --exp-id <session-id>")
     else:
         print(f"  cd {root}")
-        print("  abel-invest doctor")
+        print(f"  {cli_path} doctor")
     return completed.returncode
 
 
@@ -153,7 +154,15 @@ def ensure_workspace_runtime(
 
     run_command([str(python_path), "-m", "pip", "install", "--upgrade", "pip"], cwd=root)
 
-    install_command = [str(python_path), "-m", "pip", "install"]
+    install_command = [
+        str(python_path),
+        "-m",
+        "pip",
+        "install",
+        "--upgrade",
+        "--upgrade-strategy",
+        "eager",
+    ]
     if editable:
         install_command.extend(["-e", str(skill_root)])
     else:
@@ -252,18 +261,15 @@ def render_readme(name: str) -> str:
 
 This is an Abel strategy discovery workspace.
 
-Run these checks before creating a session:
+From this workspace root, use `./.venv/bin/abel-invest` as the command prefix,
+or activate `.venv` first and then use `abel-invest`.
 
-```bash
-abel-invest workspace context --path . --json
-abel-invest doctor
-```
-
-Sessions belong under this workspace's `research/` directory unless you
-intentionally use `--root` with `--allow-outside-workspace` for offline or legacy
-work. After each recorded round, update `exploration_path.md` with the chosen
-path, why, Edge feedback, and ledger reference before running another recorded
-round.
+Run `./.venv/bin/abel-invest workspace context --path . --json` and
+`./.venv/bin/abel-invest doctor` before creating a session. Sessions belong
+under this workspace's `research/` directory unless you intentionally use an
+explicit outside-workspace escape hatch. After each recorded round, update
+`exploration_path.md` with the chosen path, why, Edge feedback, and ledger
+reference before running another recorded round.
 """
 
 
@@ -272,7 +278,8 @@ def render_agents() -> str:
 
 Use this directory as the workspace root. If `alpha.workspace.yaml` is present,
 do not create a child `abel-invest-workspace` here. Run
-`abel-invest workspace context --path . --json` before creating a new session.
+`./.venv/bin/abel-invest workspace context --path . --json` before creating a
+new session.
 
 Report to the user:
 - workspace root and doctor status
@@ -309,6 +316,11 @@ def default_python_path() -> str:
     if os.name == "nt":
         return ".venv/Scripts/python.exe"
     return ".venv/bin/python"
+
+
+def runtime_cli_path(python_path: Path) -> Path:
+    cli_name = "abel-invest.exe" if os.name == "nt" else "abel-invest"
+    return python_path.with_name(cli_name)
 
 
 def default_activate_command() -> str:

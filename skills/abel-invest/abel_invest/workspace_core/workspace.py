@@ -119,6 +119,13 @@ def resolve_runtime_python(root: Path, manifest: dict | None = None) -> Path:
     return root / configured
 
 
+def resolve_runtime_cli(root: Path, manifest: dict | None = None) -> Path:
+    """Resolve the expected Abel Invest CLI path beside the workspace Python."""
+    python_path = resolve_runtime_python(root, manifest)
+    cli_name = "abel-invest.exe" if os.name == "nt" else "abel-invest"
+    return python_path.with_name(cli_name)
+
+
 def scaffold_workspace(
     name: str,
     *,
@@ -236,6 +243,8 @@ This is an Abel strategy discovery research workspace.
 
 Treat this directory as the canonical workspace for this working area.
 Treat this workspace's `.venv` as the canonical runtime for daily research.
+From this workspace root, use `./.venv/bin/abel-invest` as the command prefix,
+or activate `.venv` first and then use `abel-invest`.
 If `alpha.workspace.yaml` already exists here, this directory is already the
 workspace root. Do not bootstrap `./abel-invest-workspace` inside it.
 
@@ -249,13 +258,13 @@ into branch evidence.
 Run these commands from the workspace root:
 
 ```bash
-abel-invest workspace context --path . --json
-abel-invest doctor
+./.venv/bin/abel-invest workspace context --path . --json
+./.venv/bin/abel-invest doctor
 {default_activate_command()}
-abel-invest init-session --ticker TSLA --exp-id tsla-v1
-abel-invest frontier status --session research/tsla/tsla-v1
-abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
-abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
+./.venv/bin/abel-invest init-session --ticker TSLA --exp-id tsla-v1
+./.venv/bin/abel-invest frontier status --session research/tsla/tsla-v1
+./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
+./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
 ```
 
 Read or edit these files before the first recorded round:
@@ -268,9 +277,9 @@ Read or edit these files before the first recorded round:
 Then run the branch preflight and recorded round:
 
 ```bash
-abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
-abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
-abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+./.venv/bin/abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+./.venv/bin/abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 ```
 
 After every recorded round, keep `exploration_path.md` covered with path, why,
@@ -279,7 +288,7 @@ Edge feedback, and ledger ref before another recorded round.
 Only after asking the user and getting agreement for visual review, run:
 
 ```bash
-abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
+./.venv/bin/abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
 ```
 
 Use that path as orientation, not as a rigid script. The important boundary is:
@@ -330,20 +339,24 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - Do not run `abel-edge init` inside this workspace.
 - If you need a standalone Abel-edge project, create it in a separate directory outside this workspace.
 
-If the workspace runtime is missing or you want to replace it, run
-`abel-invest env init` again.
+If the workspace runtime is missing or you want to replace it, run the env
+repair command from `doctor`'s `next_step`.
+If `doctor` reports `runtime_stale`, run the command from `next_step`, then
+rerun `doctor`.
 If your environment cannot create a new venv, point alpha at an existing
-interpreter with `abel-invest env init --runtime-python /path/to/python`.
+interpreter by adding `--runtime-python /path/to/python` to that env repair
+command.
 
 ## Readiness Gate
 
-Run `abel-invest workspace context --path . --json` and `abel-invest doctor`
+Run `./.venv/bin/abel-invest workspace context --path . --json` and `./.venv/bin/abel-invest doctor`
 before opening a session.
 
 - `ready`: you can start research
 - `ready` means continue with `init-session -> init-branch -> branch.yaml -> prepare-branch`
 - `auth_missing`: no reusable auth was found; use `abel-auth`, then rerun `doctor`
-- `env_missing`, `edge_missing`, or `edge_contract_missing`: rerun `abel-invest env init`
+- `runtime_stale`, `env_missing`, `edge_missing`, or `edge_contract_missing`:
+  run the exact env repair command from `next_step`, then rerun `doctor`
 """
 
 
@@ -355,14 +368,16 @@ Use this workspace as the default place to continue research for this working
 area. The CLI commands below are tools for operating inside this workspace, but
 the goal is to keep the current branch state understandable rather than to
 follow a rigid script.
+From this workspace root, use `./.venv/bin/abel-invest` as the command prefix,
+or activate `.venv` first and then use `abel-invest`.
 
 ## I want to...
 
 ### Check whether this directory is a valid workspace
 ```bash
-abel-invest workspace context --path . --json
-abel-invest workspace status
-abel-invest doctor
+./.venv/bin/abel-invest workspace context --path . --json
+./.venv/bin/abel-invest workspace status
+./.venv/bin/abel-invest doctor
 ```
 
 If `alpha.workspace.yaml` is already present in this directory, this directory
@@ -372,12 +387,12 @@ is the workspace root. Do not create `./abel-invest-workspace` inside it.
 Run these commands from the workspace root:
 
 ```bash
-abel-invest workspace context --path . --json
-abel-invest doctor
-abel-invest init-session --ticker TSLA --exp-id tsla-v1
-abel-invest frontier status --session research/tsla/tsla-v1
-abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
-abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
+./.venv/bin/abel-invest workspace context --path . --json
+./.venv/bin/abel-invest doctor
+./.venv/bin/abel-invest init-session --ticker TSLA --exp-id tsla-v1
+./.venv/bin/abel-invest frontier status --session research/tsla/tsla-v1
+./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
+./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
 ```
 
 Read or edit these files before branch execution:
@@ -390,20 +405,24 @@ Read or edit these files before branch execution:
 Then run:
 
 ```bash
-abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
-abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
-abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+./.venv/bin/abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+./.venv/bin/abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
 ```
 
 Keep `exploration_path.md` covered before another recorded round. Ask the user
 before creating an online session view. If the user agrees:
 
 ```bash
-abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
+./.venv/bin/abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
 ```
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
 `abel-auth`, then rerun `doctor`.
+If it reports `runtime_stale`, `env_missing`, `edge_missing`, or
+`edge_contract_missing`, run the exact env repair command from
+`next_step`, then rerun `doctor`. Do not refresh the runtime when `doctor` is
+already ready.
 Run `workspace context --path . --json` before creating a session so the
 session lands under this workspace's `research/` directory. Do not pass
 `--root` unless intentionally creating a legacy/offline session outside the
@@ -441,9 +460,9 @@ separate directory.
 
 ### Run one research round
 ```bash
-abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
-abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
-abel-invest promote-strategy --branch research/tsla/tsla-v1/branches/<chosen-branch> --round <round-id>
+./.venv/bin/abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
+./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+./.venv/bin/abel-invest promote-strategy --branch research/tsla/tsla-v1/branches/<chosen-branch> --round <round-id>
 ```
 
 ### Understand the workspace layout
@@ -456,7 +475,7 @@ abel-invest promote-strategy --branch research/tsla/tsla-v1/branches/<chosen-bra
 - if `alpha.workspace.yaml` is in the current directory, continue here directly and do not bootstrap a child workspace
 - if you are already in this workspace root, continue here directly
 - if you are in the parent launch directory, reuse its `abel-invest-workspace` child before creating another one
-- run `abel-invest workspace context --path . --json` before creating a session
+- run `./.venv/bin/abel-invest workspace context --path . --json` before creating a session
 """
 
 
