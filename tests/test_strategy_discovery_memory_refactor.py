@@ -984,7 +984,7 @@ def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
     assert timeout == 60
 
 
-def test_post_skill_dashboard_session_uploads_trade_log_as_multipart(tmp_path: Path) -> None:
+def test_post_skill_dashboard_session_sends_json_when_trade_log_exists(tmp_path: Path) -> None:
     calls = []
     trade_log = tmp_path / "branches" / "b1" / "outputs" / "round-001-trade-log.csv"
     trade_log.parent.mkdir(parents=True)
@@ -1027,10 +1027,11 @@ def test_post_skill_dashboard_session_uploads_trade_log_as_multipart(tmp_path: P
     request, _timeout = calls[0]
     body = request.data
     assert result["data"]["sessionId"] == "s1"
-    assert request.get_header("Content-type").startswith("multipart/form-data; boundary=")
-    assert b'name="payload"' in body
-    assert b'name="backtestTradeLog"; filename="round-001-trade-log.csv"' in body
-    assert b"date,pnl,cum_return" in body
+    assert request.get_header("Content-type") == "application/json"
+    uploaded = json.loads(body.decode("utf-8"))
+    assert uploaded["sessionId"] == "s1"
+    assert "primaryStrategy" not in uploaded["payload"]
+    assert b"date,pnl,cum_return" not in body
 
 
 def test_select_best_pass_strategy_sorts_validation_rounds_by_pass_rate_first(
