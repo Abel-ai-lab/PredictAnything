@@ -74,5 +74,3 @@ Optional project-local auth file:
 ```bash
 abel-invest workspace bootstrap --path ./abel-invest-workspace
 ```
-
-

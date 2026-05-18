@@ -239,27 +239,3 @@ def test_public_cli_debug_branch_blocker_smoke(
     assert "No narrative round was recorded." in capsys.readouterr().out
 
 
-def test_public_cli_dashboard_bundle_dry_run_smoke(
-    tmp_path: Path,
-    monkeypatch,
-    capsys,
-) -> None:
-    session = ni.init_session_dir("TSLA", "dashboard-smoke", tmp_path / "research")
-    branch = ni.init_branch_dir(session, "graph-v1")
-    output_json = tmp_path / "bundle.json"
-
-    assert _run_cli(
-        monkeypatch,
-        [
-            "upload-dashboard-bundle",
-            "--branch",
-            str(branch),
-            "--dry-run",
-            "--output-json",
-            str(output_json),
-        ],
-    ) == 0
-
-    bundle = json.loads(output_json.read_text(encoding="utf-8"))
-    assert bundle["branchId"] == "graph-v1"
-    assert '"branchId": "graph-v1"' in capsys.readouterr().out

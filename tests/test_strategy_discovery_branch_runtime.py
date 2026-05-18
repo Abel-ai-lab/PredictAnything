@@ -904,7 +904,7 @@ def test_starter_scaffold_round_is_diagnostic_only_not_candidate(tmp_path, monke
     assert row["evidence_label"] == "diagnostic_only"
 
 
-def test_run_branch_round_records_dsr_k_accounting(tmp_path, monkeypatch) -> None:
+def test_run_branch_round_records_dsr_k_accounting(tmp_path, monkeypatch, capsys) -> None:
     session = ni.init_session_dir("TSLA", "tsla-dsr-k-audit", tmp_path / "research")
     ni.write_graph_frontier_from_discovery_payload(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
@@ -964,6 +964,10 @@ def test_run_branch_round_records_dsr_k_accounting(tmp_path, monkeypatch) -> Non
     )
 
     assert result == 0
+    captured = capsys.readouterr()
+    assert "Selection-trials audit" in captured.err
+    assert "does not make sweep-selected candidates part of standard discovery" in captured.err
+
     dsr_rows = _read_jsonl(session / "dsr_trials.jsonl")
     assert len(dsr_rows) == 1
     dsr_row = dsr_rows[0]

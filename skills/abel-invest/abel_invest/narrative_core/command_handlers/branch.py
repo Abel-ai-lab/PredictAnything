@@ -1,10 +1,9 @@
-"""Branch preparation, execution, debug, and promotion command handlers."""
+"""Branch preparation, execution, and debug command handlers."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
 import sys
 
@@ -41,16 +40,12 @@ from abel_invest.narrative_core.runtime.workflow_blockers import (
 )
 from abel_invest.narrative_core.contracts.constants import (
     BRANCH_SPEC_FILENAME,
-    CONTEXT_GUIDE_FILENAME,
-    DATA_MANIFEST_FILENAME,
-    DEPENDENCIES_FILENAME,
     EVENTS_HEADER,
     EXPLORATION_PATH_FILENAME,
     EXECUTION_CONSTRAINTS_FILENAME,
     PROBE_SAMPLES_FILENAME,
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
-    RUNTIME_PROFILE_FILENAME,
 )
 from abel_invest.narrative_core.runtime.context import (
     alpha_decision,
@@ -67,7 +62,6 @@ from abel_invest.narrative_core.io import (
     read_tsv_rows,
 )
 from abel_invest.narrative_core.contracts.paths import (
-    branch_spec_path,
     context_guide_path,
     data_manifest_path,
     dependencies_path,
@@ -80,10 +74,10 @@ from abel_invest.narrative_core.readiness import (
     readiness_coverage_hint_lines,
 )
 from abel_invest.narrative_core.rendering.renderers import (
-    build_promotion_bundle_readme,
     render_round_note,
 )
 from abel_invest.narrative_core.session_lifecycle import (
+    command_prefix_for_path,
     resolve_workspace_arg_path,
 )
 from abel_invest.narrative_core.rendering.session_rendering import (
@@ -105,6 +99,20 @@ from abel_invest.narrative_core.state import (
     should_emit_missing_hypothesis_warning,
     should_emit_readiness_warning,
 )
+
+
+SELECTION_TRIALS_AUDIT_WARNING = (
+    "Selection-trials audit: --selection-trials records accidental or explicitly requested "
+    "search width for DSR accounting; it does not make sweep-selected candidates part of "
+    "standard discovery. Journal the branch basis and any scout or optimization influence "
+    "before continuing."
+)
+
+
+def selection_trials_audit_warning(selection_trials: int) -> str | None:
+    if selection_trials <= 1:
+        return None
+    return SELECTION_TRIALS_AUDIT_WARNING
 
 
 def prepare_branch_inputs(args: argparse.Namespace) -> int:
@@ -188,10 +196,11 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
             sys.stderr.write(completed.stdout)
         runtime_error_text = (completed.stderr or completed.stdout or "").strip()
         if "Abel API key not found" in runtime_error_text:
+            command_prefix = command_prefix_for_path(branch)
             raise RuntimeError(
                 "Branch preparation is blocked on Abel auth. "
                 "Use abel-auth, then rerun "
-                f"`abel-invest prepare-branch --branch {branch}`."
+                f"`{command_prefix} prepare-branch --branch {branch}`."
             )
         raise RuntimeError(
             "Abel-edge warm-cache did not produce dependencies output. "
@@ -296,78 +305,15 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     )
     print("")
     print("From here:")
+    command_prefix = command_prefix_for_path(branch)
     if auth_handoff_needed:
         print("  Use abel-auth")
-        print(f"  abel-invest prepare-branch --branch {branch}")
+        print(f"  {command_prefix} prepare-branch --branch {branch}")
     else:
         print("  The branch inputs are ready; use debug preflight first, then record a round once the engine reflects the branch thesis.")
-        print(f"  abel-invest debug-branch --branch {branch}")
-        print(f"  abel-invest run-branch --branch {branch} -d \"baseline\"")
+        print(f"  {command_prefix} debug-branch --branch {branch}")
+        print(f"  {command_prefix} run-branch --branch {branch} -d \"baseline\"")
     return completed.returncode
-
-
-def promote_branch_bundle(args: argparse.Namespace) -> int:
-    branch = resolve_workspace_arg_path(args.branch).resolve()
-    session = branch.parent.parent
-    rows = read_tsv_rows(branch / "results.tsv")
-    latest = rows[-1] if rows else {}
-    branch_spec = load_branch_spec(branch)
-    if not branch_spec:
-        raise RuntimeError(f"Missing {BRANCH_SPEC_FILENAME} under {branch}")
-    if args.output_dir:
-        destination = resolve_workspace_arg_path(args.output_dir).resolve()
-    else:
-        destination = session / "promotions" / branch.name
-    destination.mkdir(parents=True, exist_ok=True)
-
-    shutil.copy2(branch / "engine.py", destination / "engine.py")
-    shutil.copy2(branch_spec_path(branch), destination / BRANCH_SPEC_FILENAME)
-    if branch_inputs_ready(branch):
-        shutil.copy2(dependencies_path(branch), destination / DEPENDENCIES_FILENAME)
-        shutil.copy2(runtime_profile_path(branch), destination / RUNTIME_PROFILE_FILENAME)
-        shutil.copy2(execution_constraints_path(branch), destination / EXECUTION_CONSTRAINTS_FILENAME)
-        shutil.copy2(data_manifest_path(branch), destination / DATA_MANIFEST_FILENAME)
-        shutil.copy2(context_guide_path(branch), destination / CONTEXT_GUIDE_FILENAME)
-        shutil.copy2(probe_samples_path(branch), destination / PROBE_SAMPLES_FILENAME)
-
-    bundle_readme = build_promotion_bundle_readme(
-        branch=branch,
-        branch_spec=branch_spec,
-        latest=latest,
-    )
-    (destination / "PROMOTION.md").write_text(bundle_readme, encoding="utf-8")
-
-    with SessionLock(session):
-        append_tsv_row(
-            session / "events.tsv",
-            EVENTS_HEADER,
-            {
-                "timestamp": _now(),
-                "event": "branch_promoted",
-                "branch_id": branch.name,
-                "round_id": latest.get("round_id", ""),
-                "mode": latest.get("mode", ""),
-                "verdict": latest.get("verdict", ""),
-                "decision": latest.get("decision", ""),
-                "description": f"Created promotion bundle for {branch.name}",
-                "artifact_path": str(destination.relative_to(session)),
-            },
-        )
-        render_session(session)
-    print(f"Promotion bundle: {destination}")
-    print("")
-    print("Included:")
-    print(f"  {destination / 'engine.py'}")
-    print(f"  {destination / BRANCH_SPEC_FILENAME}")
-    if (destination / DEPENDENCIES_FILENAME).exists():
-        print(f"  {destination / DEPENDENCIES_FILENAME}")
-        print(f"  {destination / RUNTIME_PROFILE_FILENAME}")
-        print(f"  {destination / EXECUTION_CONSTRAINTS_FILENAME}")
-        print(f"  {destination / DATA_MANIFEST_FILENAME}")
-        print(f"  {destination / CONTEXT_GUIDE_FILENAME}")
-        print(f"  {destination / PROBE_SAMPLES_FILENAME}")
-    print(f"  {destination / 'PROMOTION.md'}")
-    return 0
 
 
 def run_branch_round(args: argparse.Namespace) -> int:
@@ -388,9 +334,10 @@ def run_branch_round(args: argparse.Namespace) -> int:
         )
         return 2
     if not branch_inputs_ready(branch):
+        command_prefix = command_prefix_for_path(branch)
         print(
             "Branch inputs have not been prepared yet. "
-            "Run `abel-invest prepare-branch --branch ...` before recording a round.",
+            f"Run `{command_prefix} prepare-branch --branch ...` before recording a round.",
             file=sys.stderr,
         )
         return 2
@@ -437,6 +384,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
     frame_path = branch / "outputs" / f"{round_id}-edge-frame.csv"
     handoff_path = branch / "outputs" / f"{round_id}-edge-handoff.json"
     context_path = branch / "outputs" / f"{round_id}-alpha-context.json"
+    selection_trials = getattr(args, "selection_trials", 1)
     context = build_branch_context(
         branch=branch,
         session=session,
@@ -444,9 +392,12 @@ def run_branch_round(args: argparse.Namespace) -> int:
         readiness=readiness,
         round_id=round_id,
         backtest_start=backtest_start,
-        selection_trials=getattr(args, "selection_trials", 1),
+        selection_trials=selection_trials,
     )
     context_path.write_text(json.dumps(context, indent=2), encoding="utf-8")
+    selection_warning = selection_trials_audit_warning(selection_trials)
+    if selection_warning:
+        print(selection_warning, file=sys.stderr)
     emit_readiness_warning = False
     session_start = _get_backtest_start(discovery)
     if warning and backtest_start == session_start:
@@ -553,7 +504,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
     if emit_missing_hypothesis_warning:
         print(
             "Warning: recording a round without an explicit hypothesis. "
-            "State the causal claim, expected sign, and invalidation condition before the next round.",
+            "State the causal claim, graph use contract when applicable, expected sign/timing assumption, "
+            "and invalidation condition before the next round.",
             file=sys.stderr,
         )
     decision = alpha_decision(rows, result, session=session)
@@ -661,6 +613,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
     print(f"Edge result: {result_path.relative_to(session)}")
     print(f"Edge validation: {report_path.relative_to(session)}")
     print(f"Edge handoff: {handoff_path.relative_to(session)}")
+    if frame_path.exists():
+        print(f"Edge frame: {frame_path.relative_to(session)}")
     print(f"Exploration path: {session / EXPLORATION_PATH_FILENAME}")
     semantic = result.get("semantic") or {}
     if isinstance(semantic, dict) and semantic:

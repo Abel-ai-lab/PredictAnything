@@ -32,6 +32,8 @@ agent-owned research notes for session `{session.name}`
 - This journal is for the agent's hypotheses, observations, pivots, and stop/continue reasoning.
 - Every recorded round requires an agent-written note below with its ledger evidence reference.
 - Capture what changed, what happened, what was learned, and what that implies for the next exploration step.
+- Before a new candidate branch, record the branch basis and whether any performance-like scout influenced the choice.
+- Treat Abel Ask or narrative context as hypothesis context, not validation evidence; note when it is off-target or weak.
 - The generated header above this marker never counts as journal coverage.
 
 {JOURNAL_GENERATED_HEADER_END}

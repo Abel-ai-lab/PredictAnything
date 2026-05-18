@@ -2,6 +2,8 @@
 
 Use this reference when writing `engine.py`, reading semantic preflight, or
 debugging runtime validity.
+Commands below use the workspace `command_prefix` returned by
+`workspace context --json` or doctor.
 
 The branch-default safety story is:
 
@@ -23,6 +25,22 @@ invalid.
 
 That is the legal authoring surface for branch-default strategies.
 
+## Stateful Strategies
+
+Strategies may use rolling model files, checkpoints, scalers, and lightweight
+caches when the mechanism needs state across paper runs. Put durable mutable
+state behind the runtime state surface:
+
+```python
+model_path = ctx.state_dir / "model/latest.joblib"
+scaler_path = ctx.state_dir / "model/feature_scaler.json"
+```
+
+Do not write durable state beside `engine.py`, under `inputs/`, or in ad hoc
+temporary directories. Promotion can package declared initial state for the
+first paper run, but hosted paper execution will only persist files that live
+under the runner state directory.
+
 ## System-Owned Inputs
 
 Treat these files as runtime facts supplied by the system:
@@ -39,8 +57,8 @@ Do not rediscover or override them in `engine.py`.
 ## Feedback Loop
 
 ```bash
-abel-invest prepare-branch --branch ...
-abel-invest debug-branch --branch ...
+<command_prefix> prepare-branch --branch ...
+<command_prefix> debug-branch --branch ...
 ```
 
 After `prepare-branch`, inspect:

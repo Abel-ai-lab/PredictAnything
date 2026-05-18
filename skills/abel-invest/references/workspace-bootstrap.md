@@ -16,7 +16,8 @@ python3 <abel-invest-skill-root>/scripts/bootstrap_workspace.py --path abel-inve
 The shim creates or reuses the workspace, prepares the workspace runtime,
 installs `abel-invest` there, and then runs doctor from that runtime.
 
-After the CLI is installed, use normal `abel-invest` commands.
+After the CLI is installed, use the workspace-local command prefix reported by
+doctor or `workspace context`. Do not assume `abel-invest` is on the global PATH.
 
 ## Preflight
 
@@ -31,14 +32,23 @@ From the user's current directory:
 abel-invest workspace bootstrap --path abel-invest-workspace
 ```
 
-4. Then resolve context and run doctor:
+4. Then resolve context and run doctor. Use `abel-invest` as `<context-cli>`
+   when it is on PATH. If it is not on PATH but the workspace venv exists, use
+   `<workspace-root>/.venv/bin/abel-invest` as `<context-cli>` for the first
+   context command.
 
 ```bash
-abel-invest workspace context --path . --json
-abel-invest doctor --path <workspace-root>
+<context-cli> workspace context --path . --json
+<command_prefix> doctor --path <workspace-root>
 ```
 
 Only move into session or branch work when doctor reports `Status: ready`.
+
+If doctor reports `runtime_stale`, `env_missing`, `edge_missing`, or
+`edge_contract_missing`, run the exact env repair command shown in
+`next_step`, then rerun doctor. `doctor` only diagnoses workspace runtime
+state; `env init` and `env refresh` are the commands that install or upgrade
+packages.
 
 ## Auth
 
@@ -68,11 +78,13 @@ doctor is ready.
 ## Common Commands
 
 ```bash
-abel-invest workspace context --path . --json
-abel-invest workspace status --path <workspace-root>
-abel-invest doctor --path <workspace-root>
-abel-invest env init
+<context-cli> workspace context --path . --json
+<command_prefix> workspace status --path <workspace-root>
+<command_prefix> doctor --path <workspace-root>
+<command_prefix> env init
+<command_prefix> env refresh --path <workspace-root>
 ```
 
-Use `env init` only when doctor reports an environment or edge-runtime setup
-problem.
+Use `env init` or `env refresh` only when doctor reports an environment,
+runtime freshness, or edge-runtime setup problem. Prefer the exact command in
+doctor's `next_step`.

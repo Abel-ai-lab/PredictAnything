@@ -501,7 +501,7 @@ def build_debug_snapshot(
     next_step = (
         hints[0]
         if hints
-        else "Fix the semantic blocker in engine.py, then rerun `abel-invest debug-branch`."
+        else "Fix the semantic blocker in engine.py, then rerun debug-branch with the workspace command prefix."
     )
     return {
         "updated_at": _now(),

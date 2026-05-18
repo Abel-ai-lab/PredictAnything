@@ -93,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     env_parser = sub.add_parser("env", help="Manage the local workspace Python environment")
     env_sub = env_parser.add_subparsers(dest="env_command", required=True)
-    env_init = env_sub.add_parser("init", help="Create the workspace venv and install dependencies")
+    env_init = env_sub.add_parser("init", help="Create the workspace venv and install or upgrade dependencies")
     env_init.add_argument(
         "--path",
         default=".",
@@ -116,6 +116,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use an existing interpreter instead of creating the workspace venv",
     )
     env_init.add_argument(
+        "--no-editable",
+        action="store_true",
+        help="Install Abel strategy discovery from local source in regular mode instead of editable mode",
+    )
+    env_refresh = env_sub.add_parser(
+        "refresh",
+        help="Upgrade the existing workspace runtime to match the current Abel Invest skill",
+    )
+    env_refresh.add_argument(
+        "--path",
+        default=".",
+        help="Directory inside the target workspace",
+    )
+    env_refresh.add_argument(
+        "--python",
+        dest="base_python",
+        default=None,
+        help="Base interpreter used if the workspace venv must be created",
+    )
+    env_refresh.add_argument(
+        "--alpha-source",
+        default=None,
+        help="Local Abel strategy discovery source tree used for installation",
+    )
+    env_refresh.add_argument(
+        "--runtime-python",
+        default=None,
+        help="Use an existing interpreter instead of creating the workspace venv",
+    )
+    env_refresh.add_argument(
         "--no-editable",
         action="store_true",
         help="Install Abel strategy discovery from local source in regular mode instead of editable mode",
@@ -265,24 +295,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--selection-trials",
         type=_positive_int,
         default=1,
-        help="Effective strategy or parameter configurations tried before selecting this round output",
+        help=(
+            "Audit count for accidental or explicitly requested strategy or "
+            "parameter configurations tried before this round output"
+        ),
     )
     run_branch.add_argument(
         "--python-bin",
         default=None,
         help="Interpreter used to run abel-edge evaluate (defaults to the workspace python when available)",
     )
-    promote_branch = sub.add_parser(
-        "promote-branch",
-        help="Create a promotion bundle from a prepared research branch",
-    )
-    promote_branch.add_argument("--branch", required=True)
-    promote_branch.add_argument(
-        "--output-dir",
-        default=None,
-        help="Optional destination directory (defaults to <session>/promotions/<branch-id>)",
-    )
-
     visualize_session = sub.add_parser(
         "visualize-session",
         help="Create an online Abel skill dashboard view for a session",
@@ -307,6 +329,61 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Build and print the payload without sending it.",
+    )
+    visualize_session.add_argument(
+        "--with-strategy-artifact",
+        action="store_true",
+        help=(
+            "Prepare the session's best ranked hostable strategy artifact, then upload "
+            "narrative and artifact."
+        ),
+    )
+    visualize_session.add_argument(
+        "--artifact-output-dir",
+        default=None,
+        help="Optional local directory for generated strategy artifact files.",
+    )
+    visualize_session.add_argument(
+        "--python-bin",
+        default=None,
+        help="Interpreter used to run Abel-edge artifact helpers (defaults to workspace python).",
+    )
+
+    export_strategy_artifact = sub.add_parser(
+        "export-strategy-artifact",
+        help="Export the best ranked hostable strategy artifact for a session without uploading it",
+    )
+    export_strategy_artifact.add_argument("--session", required=True)
+    export_strategy_artifact.add_argument(
+        "--output-dir",
+        default=None,
+        help="Destination directory for manifest.json, trade-log.csv, and artifact.zip",
+    )
+    export_strategy_artifact.add_argument(
+        "--python-bin",
+        default=None,
+        help="Interpreter used to run Abel-edge export helpers (defaults to workspace python)",
+    )
+
+    promote_strategy = sub.add_parser(
+        "promote-strategy",
+        help="Promote an explicit branch/round into a paper-ready artifact",
+    )
+    promote_strategy.add_argument("--branch", required=True)
+    promote_strategy.add_argument(
+        "--round",
+        default=None,
+        help="Promotion source round. Required when the branch has multiple validation rounds.",
+    )
+    promote_strategy.add_argument(
+        "--output-dir",
+        default=None,
+        help="Destination directory for manifest.json, trade-log.csv, and artifact.zip",
+    )
+    promote_strategy.add_argument(
+        "--python-bin",
+        default=None,
+        help="Interpreter used to run Abel-edge export helpers (defaults to workspace python)",
     )
 
     debug_branch = sub.add_parser(

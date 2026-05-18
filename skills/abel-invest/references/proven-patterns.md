@@ -12,6 +12,10 @@ These notes are not the primary legality contract.
 - Use `debug-branch` semantic preflight before trusting a recorded round.
 - Treat the temporal caveats below as pattern-specific implementation notes, not
   as a universal authoring checklist.
+- Do not treat pattern-specific lags, weights, or causal pairs below as
+  currently disclosed CAP fields. Current CAP graph roles disclose structural
+  orientation where specific enough, while exact lag, edge weight, signed
+  effect, and tradable direction remain hidden.
 
 ---
 
@@ -22,7 +26,7 @@ These notes are not the primary legality contract.
 **Why it works**: Single-lag xcorr is fragile — it's sensitive to the exact lag choice
 and picks up one causal harmonic. Averaging lag-14 and lag-21 captures both primary
 and secondary harmonics and averages out noise. Equal weighting (0.5/0.5) outperformed
-biased weighting (0.7/0.3) — the lags carry equal causal weight.
+biased weighting (0.7/0.3) in that constructed signal.
 
 **When**: SSTK→ETH causal pair. Dual-lag xcorr is a core component of Dual Resonance
 (ETH Sharpe 4.27, Lo 2.48). Systematic lag sweep confirmed: lag-7 added noise and
