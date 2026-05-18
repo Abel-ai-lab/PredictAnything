@@ -317,6 +317,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 
 If the workspace runtime is missing or you want to replace it, run
 `abel-invest env init` again.
+If `doctor` reports `runtime_stale`, run the `abel-invest env refresh --path ...`
+command from `next_step`, then rerun `doctor`.
 If your environment cannot create a new venv, point alpha at an existing
 interpreter with `abel-invest env init --runtime-python /path/to/python`.
 
@@ -328,7 +330,8 @@ before opening a session.
 - `ready`: you can start research
 - `ready` means continue with `init-session -> init-branch -> branch.yaml -> prepare-branch`
 - `auth_missing`: no reusable auth was found; use `abel-auth`, then rerun `doctor`
-- `env_missing`, `edge_missing`, or `edge_contract_missing`: rerun `abel-invest env init`
+- `runtime_stale`, `env_missing`, `edge_missing`, or `edge_contract_missing`:
+  run the exact `abel-invest env ...` command from `next_step`, then rerun `doctor`
 """
 
 
@@ -376,6 +379,10 @@ abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-ar
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
 `abel-auth`, then rerun `doctor`.
+If it reports `runtime_stale`, `env_missing`, `edge_missing`, or
+`edge_contract_missing`, run the exact `abel-invest env ...` command from
+`next_step`, then rerun `doctor`. Do not refresh the runtime when `doctor` is
+already ready.
 Run `workspace context --path . --json` before creating a session so the
 session lands under this workspace's `research/` directory. Do not pass
 `--root` unless intentionally creating a legacy/offline session outside the

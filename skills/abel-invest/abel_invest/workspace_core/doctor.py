@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
+import subprocess
+import tomllib
 from pathlib import Path
 
 from abel_invest.workspace_core.edge_runtime import (
@@ -22,6 +26,7 @@ from abel_invest.workspace_core.workspace import (
 
 SUCCESS_STATUSES = {"ready"}
 WORKSPACE_MODE = "alpha-managed branch research"
+PACKAGE_CHECK = "package_freshness"
 
 
 def build_auth_recovery_instruction(root: Path | str) -> str:
@@ -50,6 +55,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             "checks": {
                 "workspace_manifest": "fail",
                 "python_env": "not_run",
+                PACKAGE_CHECK: "not_run",
                 "abel_edge_import": "not_run",
                 "abel_edge_cli": "not_run",
                 "edge_discovery_payload": "not_run",
@@ -72,6 +78,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             "checks": {
                 "workspace_manifest": "fail",
                 "python_env": "not_run",
+                PACKAGE_CHECK: "not_run",
                 "abel_edge_import": "not_run",
                 "abel_edge_cli": "not_run",
                 "edge_discovery_payload": "not_run",
@@ -85,6 +92,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
     checks: dict[str, object] = {
         "workspace_manifest": "pass",
         "python_env": "pass" if python_path.exists() else "fail",
+        PACKAGE_CHECK: "not_run",
         "abel_edge_import": "not_run",
         "abel_edge_cli": "not_run",
         "edge_discovery_payload": "not_run",
@@ -107,7 +115,23 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             {
                 "status": "env_missing",
                 "summary": f"Workspace python does not exist at {python_path}",
-                "next_step": "abel-invest env init  # or use --runtime-python /path/to/python",
+                "next_step": f"abel-invest env init --path {root}  # or use --runtime-python /path/to/python",
+            }
+        )
+        return result
+
+    freshness = probe_package_freshness(python_path)
+    checks[PACKAGE_CHECK] = "pass" if freshness.get("ok") else "fail"
+    result["package_freshness"] = freshness
+    if not freshness.get("ok"):
+        result.update(
+            {
+                "status": "runtime_stale",
+                "summary": str(
+                    freshness.get("summary")
+                    or "Workspace runtime package metadata is stale for this Abel Invest skill."
+                ),
+                "next_step": f"abel-invest env refresh --path {root}",
             }
         )
         return result
@@ -119,7 +143,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             {
                 "status": "edge_missing",
                 "summary": f"Workspace python cannot import abel_edge: {import_check.get('error', 'unknown error')}",
-                "next_step": "abel-invest env init  # or use --runtime-python /path/to/python",
+                "next_step": f"abel-invest env refresh --path {root}  # or use --runtime-python /path/to/python",
             }
         )
         return result
@@ -146,7 +170,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
                     "Workspace Python can import Abel-edge, but the installed runtime is missing "
                     "required alpha contracts such as structured discovery or `--context-json`."
                 ),
-                "next_step": "abel-invest env init  # reinstall the workspace runtime dependencies",
+                "next_step": f"abel-invest env refresh --path {root}  # reinstall the workspace runtime dependencies",
             }
         )
         return result
@@ -208,6 +232,134 @@ def classify_auth_scope(root: Path, auth_result: dict[str, object]) -> str:
     return "unknown"
 
 
+def probe_package_freshness(python_path: Path) -> dict[str, object]:
+    """Check whether the workspace runtime satisfies this skill's package contract."""
+    contract = load_current_package_contract()
+    probe = probe_installed_package_versions(python_path)
+    if not probe.get("ok"):
+        return {
+            "ok": False,
+            "summary": f"Could not inspect workspace package versions: {probe.get('error', 'unknown error')}",
+            "contract": contract,
+            "installed": probe.get("installed", {}),
+        }
+
+    installed = probe.get("installed", {})
+    if not isinstance(installed, dict):
+        installed = {}
+
+    installed_invest = str(installed.get("abel-invest") or "").strip()
+    required_invest = str(contract.get("abel-invest") or "").strip()
+    if required_invest and installed_invest != required_invest:
+        return {
+            "ok": False,
+            "summary": (
+                "Workspace runtime has abel-invest "
+                f"{installed_invest or '<missing>'}, but this skill declares {required_invest}."
+            ),
+            "contract": contract,
+            "installed": installed,
+        }
+
+    installed_edge = str(installed.get("abel-edge") or "").strip()
+    required_edge_min = str(contract.get("abel-edge-min") or "").strip()
+    if required_edge_min and not version_at_least(installed_edge, required_edge_min):
+        return {
+            "ok": False,
+            "summary": (
+                "Workspace runtime has abel-edge "
+                f"{installed_edge or '<missing>'}, below this skill's required >= {required_edge_min}."
+            ),
+            "contract": contract,
+            "installed": installed,
+        }
+
+    return {
+        "ok": True,
+        "summary": "Workspace runtime package metadata satisfies this Abel Invest skill.",
+        "contract": contract,
+        "installed": installed,
+    }
+
+
+def load_current_package_contract() -> dict[str, str]:
+    """Load the Abel Invest package version and Abel Edge lower bound from pyproject."""
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    project = data.get("project") or {}
+    dependencies = project.get("dependencies") or []
+    return {
+        "abel-invest": str(project.get("version") or ""),
+        "abel-edge-min": extract_min_version(dependencies, "abel-edge"),
+    }
+
+
+def extract_min_version(dependencies: list[object], package: str) -> str:
+    """Return the first >= lower bound for a package dependency string."""
+    normalized = package.lower().replace("_", "-")
+    for dependency in dependencies:
+        spec = str(dependency)
+        name = spec.split(";", 1)[0].strip().lower().replace("_", "-")
+        if not name.startswith(normalized):
+            continue
+        match = re.search(r">=\s*([0-9][A-Za-z0-9.!\-+_]*)", spec)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def probe_installed_package_versions(python_path: Path) -> dict[str, object]:
+    """Ask the workspace Python which package versions are installed."""
+    code = """
+import importlib.metadata as metadata
+import json
+
+installed = {}
+for name in ("abel-invest", "abel-edge"):
+    try:
+        installed[name] = metadata.version(name)
+    except metadata.PackageNotFoundError:
+        installed[name] = None
+print(json.dumps({"installed": installed}, sort_keys=True))
+""".strip()
+    try:
+        completed = subprocess.run(
+            [str(python_path), "-c", code],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return {"ok": False, "error": str(exc), "installed": {}}
+
+    output_lines = [line for line in completed.stdout.splitlines() if line.strip()]
+    try:
+        payload = json.loads(output_lines[-1] if output_lines else "")
+    except (IndexError, json.JSONDecodeError) as exc:
+        return {"ok": False, "error": f"invalid version probe output: {exc}", "installed": {}}
+    installed = payload.get("installed", {})
+    return {"ok": True, "installed": installed if isinstance(installed, dict) else {}}
+
+
+def version_at_least(installed: str, required: str) -> bool:
+    """Compare simple public versions without requiring packaging in stale runtimes."""
+    if not installed:
+        return False
+    return version_key(installed) >= version_key(required)
+
+
+def version_key(value: str) -> tuple[int, ...]:
+    """Build a conservative comparison key from leading numeric version parts."""
+    parts = re.split(r"[.\-+_!]", value)
+    numbers: list[int] = []
+    for part in parts:
+        match = re.match(r"(\d+)", part)
+        if match is None:
+            break
+        numbers.append(int(match.group(1)))
+    return tuple(numbers)
+
+
 def render_doctor_report(result: dict[str, object]) -> str:
     """Render a human-readable doctor report."""
     lines = [
@@ -240,6 +392,9 @@ def render_doctor_report(result: dict[str, object]) -> str:
     if isinstance(checks, dict):
         for key, value in checks.items():
             lines.append(f"  - {key}: {value}")
+    package_freshness = result.get("package_freshness")
+    if isinstance(package_freshness, dict):
+        lines.append(f"Package freshness: {package_freshness.get('summary', '')}")
     auth = result.get("auth")
     if isinstance(auth, dict):
         lines.append(

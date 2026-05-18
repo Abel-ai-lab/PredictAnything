@@ -252,7 +252,7 @@ def render_workspace_context(context: dict[str, object]) -> str:
 
 
 def handle_env_command(args: argparse.Namespace) -> int:
-    if args.env_command != "init":
+    if args.env_command not in {"init", "refresh"}:
         return 1
     result = init_workspace_env(
         start=Path(args.path).expanduser(),
@@ -261,7 +261,8 @@ def handle_env_command(args: argparse.Namespace) -> int:
         runtime_python=args.runtime_python,
         alpha_editable=not args.no_editable,
     )
-    print(f"Workspace environment ready at {result.workspace_root}")
+    action = "refreshed" if args.env_command == "refresh" else "ready"
+    print(f"Workspace environment {action} at {result.workspace_root}")
     print(f"  venv: {result.venv_path}")
     print(f"  python: {result.python_path}")
     print(f"  alpha_source: {result.alpha_source}")
@@ -281,7 +282,7 @@ def handle_env_command(args: argparse.Namespace) -> int:
     if result.edge_discovery_payload_capable is False or result.edge_context_json_capable is False:
         print("Warning:")
         print("  Installed Abel-edge is missing required alpha contracts.")
-        print("  Run `abel-invest doctor` and upgrade the workspace runtime before starting research.")
+        print("  Run `abel-invest env refresh`, then rerun `abel-invest doctor` before starting research.")
         print("")
     print("From here:")
     print("  abel-invest doctor")

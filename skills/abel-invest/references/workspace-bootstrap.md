@@ -40,6 +40,12 @@ abel-invest doctor --path <workspace-root>
 
 Only move into session or branch work when doctor reports `Status: ready`.
 
+If doctor reports `runtime_stale`, `env_missing`, `edge_missing`, or
+`edge_contract_missing`, run the exact `abel-invest env ...` command shown in
+`next_step`, then rerun doctor. `doctor` only diagnoses workspace runtime
+state; `env init` and `env refresh` are the commands that install or upgrade
+packages.
+
 ## Auth
 
 Reuse existing Abel auth first. If doctor reports `auth_missing`, do not start
@@ -72,7 +78,9 @@ abel-invest workspace context --path . --json
 abel-invest workspace status --path <workspace-root>
 abel-invest doctor --path <workspace-root>
 abel-invest env init
+abel-invest env refresh --path <workspace-root>
 ```
 
-Use `env init` only when doctor reports an environment or edge-runtime setup
-problem.
+Use `env init` or `env refresh` only when doctor reports an environment,
+runtime freshness, or edge-runtime setup problem. Prefer the exact command in
+doctor's `next_step`.

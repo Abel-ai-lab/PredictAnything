@@ -153,7 +153,15 @@ def ensure_workspace_runtime(
 
     run_command([str(python_path), "-m", "pip", "install", "--upgrade", "pip"], cwd=root)
 
-    install_command = [str(python_path), "-m", "pip", "install"]
+    install_command = [
+        str(python_path),
+        "-m",
+        "pip",
+        "install",
+        "--upgrade",
+        "--upgrade-strategy",
+        "eager",
+    ]
     if editable:
         install_command.extend(["-e", str(skill_root)])
     else:

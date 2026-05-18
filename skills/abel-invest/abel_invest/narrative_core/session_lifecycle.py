@@ -242,7 +242,8 @@ def fetch_live_discovery(ticker: str, *, limit: int) -> dict:
     except ImportError as exc:
         raise RuntimeError(
             "Live Abel discovery requires abel-edge with the Abel plugin installed. "
-            "Run `abel-invest env init` in the workspace, then retry."
+            "Run `abel-invest doctor` in the workspace, follow its env next_step, "
+            "rerun doctor, then retry."
         ) from exc
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:
