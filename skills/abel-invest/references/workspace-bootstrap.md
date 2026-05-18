@@ -16,7 +16,8 @@ python3 <abel-invest-skill-root>/scripts/bootstrap_workspace.py --path abel-inve
 The shim creates or reuses the workspace, prepares the workspace runtime,
 installs `abel-invest` there, and then runs doctor from that runtime.
 
-After the CLI is installed, use normal `abel-invest` commands.
+After the CLI is installed, use the workspace-local command prefix reported by
+doctor or `workspace context`. Do not assume `abel-invest` is on the global PATH.
 
 ## Preflight
 
@@ -31,17 +32,19 @@ From the user's current directory:
 abel-invest workspace bootstrap --path abel-invest-workspace
 ```
 
-4. Then resolve context and run doctor:
+4. Then resolve context and run doctor. If `abel-invest` is not on PATH but the
+   workspace venv exists, use `<workspace-root>/.venv/bin/abel-invest` for the
+   first context command.
 
 ```bash
 abel-invest workspace context --path . --json
-abel-invest doctor --path <workspace-root>
+<command_prefix> doctor --path <workspace-root>
 ```
 
 Only move into session or branch work when doctor reports `Status: ready`.
 
 If doctor reports `runtime_stale`, `env_missing`, `edge_missing`, or
-`edge_contract_missing`, run the exact `abel-invest env ...` command shown in
+`edge_contract_missing`, run the exact env repair command shown in
 `next_step`, then rerun doctor. `doctor` only diagnoses workspace runtime
 state; `env init` and `env refresh` are the commands that install or upgrade
 packages.
@@ -75,10 +78,10 @@ doctor is ready.
 
 ```bash
 abel-invest workspace context --path . --json
-abel-invest workspace status --path <workspace-root>
-abel-invest doctor --path <workspace-root>
-abel-invest env init
-abel-invest env refresh --path <workspace-root>
+<command_prefix> workspace status --path <workspace-root>
+<command_prefix> doctor --path <workspace-root>
+<command_prefix> env init
+<command_prefix> env refresh --path <workspace-root>
 ```
 
 Use `env init` or `env refresh` only when doctor reports an environment,

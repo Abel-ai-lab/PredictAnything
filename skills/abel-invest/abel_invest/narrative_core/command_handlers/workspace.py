@@ -22,6 +22,7 @@ from abel_invest.workspace_core.workspace import (
     load_workspace_manifest,
     resolve_workspace_entry,
     render_workspace_status,
+    resolve_runtime_cli,
     resolve_runtime_python,
     resolve_workspace_paths,
     scaffold_workspace,
@@ -136,6 +137,8 @@ def handle_workspace_command(args: argparse.Namespace) -> int:
         )
         print(f"  manifest: {root / 'alpha.workspace.yaml'}")
         print(f"  canonical_runtime_python: {env_result.python_path}")
+        cli_path = resolve_runtime_cli(root, manifest)
+        print(f"  canonical_cli: {cli_path}")
         print(f"  activation: {default_activate_command()}")
         print(f"  runtime_mode: {env_result.runtime_mode}")
         print(f"  venv_provider: {env_result.venv_provider}")
@@ -154,7 +157,7 @@ def handle_workspace_command(args: argparse.Namespace) -> int:
         if doctor_exit_code(doctor_result) == 0:
             print(f"  cd {root}")
             print(f"  {default_activate_command()}")
-            print("  abel-invest init-session --ticker <TICKER> --exp-id <session-id>  # runs live graph discovery by default")
+            print(f"  {cli_path} init-session --ticker <TICKER> --exp-id <session-id>  # runs live graph discovery by default")
         else:
             print(f"  cd {root}")
             next_step = str(doctor_result.get("next_step") or "").strip()
@@ -199,6 +202,8 @@ def build_workspace_context(start: Path) -> dict[str, object]:
             "workspace_root": None,
             "research_root": None,
             "runtime_python": None,
+            "cli_path": None,
+            "command_prefix": None,
             "doctor_status": "workspace_missing",
             "default_workspace_path": str(default_path),
             "session_command_prefix": None,
@@ -208,16 +213,20 @@ def build_workspace_context(start: Path) -> dict[str, object]:
     manifest = load_workspace_manifest(root)
     resolved = resolve_workspace_paths(root, manifest)
     doctor_result = run_doctor(root)
+    cli_path = resolve_runtime_cli(root, manifest)
+    command_prefix = str(doctor_result.get("command_prefix") or cli_path)
     return {
         "entry_path": str(entry_path),
         "workspace_resolution": resolution_mode,
         "workspace_root": str(root),
         "research_root": str(resolved["research_root"]),
         "runtime_python": str(resolve_runtime_python(root, manifest)),
+        "cli_path": str(cli_path),
+        "command_prefix": command_prefix,
         "doctor_status": str(doctor_result.get("status") or "unknown"),
         "workspace_mode": doctor_result.get("workspace_mode"),
         "default_workspace_path": str(default_workspace_path(entry_path)),
-        "session_command_prefix": "abel-invest init-session",
+        "session_command_prefix": f"{command_prefix} init-session",
         "next_step": doctor_result.get("next_step"),
     }
 
@@ -235,6 +244,8 @@ def render_workspace_context(context: dict[str, object]) -> str:
                 f"Workspace root: {workspace_root}",
                 f"Research root: {context.get('research_root')}",
                 f"Runtime python: {context.get('runtime_python')}",
+                f"CLI path: {context.get('cli_path')}",
+                f"Command prefix: {context.get('command_prefix')}",
                 f"Doctor status: {context.get('doctor_status')}",
                 f"Session command prefix: {context.get('session_command_prefix')}",
             ]
@@ -272,6 +283,8 @@ def handle_env_command(args: argparse.Namespace) -> int:
     print(f"  alpha_install_mode: {'editable' if result.alpha_editable else 'regular'}")
     print("  alpha_install_reason: installs the packaged abel-invest CLI and declared dependencies into this workspace runtime")
     print("  canonical_runtime_note: use this workspace runtime as the canonical environment for daily research work")
+    cli_path = resolve_runtime_cli(result.workspace_root)
+    print(f"  canonical_cli: {cli_path}")
     if result.runtime_mode == "existing_python":
         print("  runtime_override_note: using an existing interpreter instead of creating the workspace .venv")
     if result.edge_discovery_payload_capable is not None:
@@ -282,10 +295,10 @@ def handle_env_command(args: argparse.Namespace) -> int:
     if result.edge_discovery_payload_capable is False or result.edge_context_json_capable is False:
         print("Warning:")
         print("  Installed Abel-edge is missing required alpha contracts.")
-        print("  Run `abel-invest env refresh`, then rerun `abel-invest doctor` before starting research.")
+        print(f"  Run `{cli_path} env refresh`, then rerun `{cli_path} doctor` before starting research.")
         print("")
     print("From here:")
-    print("  abel-invest doctor")
+    print(f"  {cli_path} doctor")
     print(f"  {default_activate_command()}")
     print(
         "  # once doctor is ready: init-session -> declare branches -> "

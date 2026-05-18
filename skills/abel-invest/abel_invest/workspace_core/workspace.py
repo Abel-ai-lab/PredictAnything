@@ -119,6 +119,13 @@ def resolve_runtime_python(root: Path, manifest: dict | None = None) -> Path:
     return root / configured
 
 
+def resolve_runtime_cli(root: Path, manifest: dict | None = None) -> Path:
+    """Resolve the expected Abel Invest CLI path beside the workspace Python."""
+    python_path = resolve_runtime_python(root, manifest)
+    cli_name = "abel-invest.exe" if os.name == "nt" else "abel-invest"
+    return python_path.with_name(cli_name)
+
+
 def scaffold_workspace(
     name: str,
     *,

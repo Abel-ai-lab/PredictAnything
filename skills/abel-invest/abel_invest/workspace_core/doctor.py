@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import subprocess
 import tomllib
 from pathlib import Path
@@ -20,6 +21,7 @@ from abel_invest.workspace_core.workspace import (
     load_workspace_manifest,
     resolve_workspace_entry,
     resolve_workspace_env_file,
+    resolve_runtime_cli,
     resolve_runtime_python,
 )
 
@@ -31,10 +33,29 @@ PACKAGE_CHECK = "package_freshness"
 
 def build_auth_recovery_instruction(root: Path | str) -> str:
     """Return the agent-facing recovery instruction when reusable auth is missing."""
+    root_path = Path(root)
     return (
         "Use abel-auth, then rerun "
-        f"abel-invest doctor --path {Path(root)}."
+        f"{workspace_command(root_path, None, 'doctor', '--path', str(root_path))}."
     )
+
+
+def shell_join(parts: list[str]) -> str:
+    """Return a shell-safe single command string."""
+    return " ".join(shlex.quote(str(part)) for part in parts)
+
+
+def workspace_command(root: Path, manifest: dict | None, *args: str) -> str:
+    """Build an agent-facing command that prefers the workspace-local CLI."""
+    python_path = resolve_runtime_python(root, manifest)
+    cli_path = resolve_runtime_cli(root, manifest)
+    if cli_path.exists():
+        prefix = [str(cli_path)]
+    elif python_path.exists():
+        prefix = [str(python_path), "-m", "abel_invest"]
+    else:
+        prefix = ["abel-invest"]
+    return shell_join([*prefix, *args])
 
 
 def run_doctor(start: Path | None = None) -> dict[str, object]:
@@ -89,6 +110,8 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
         }
 
     python_path = resolve_runtime_python(root, manifest)
+    cli_path = resolve_runtime_cli(root, manifest)
+    command_prefix = workspace_command(root, manifest)
     checks: dict[str, object] = {
         "workspace_manifest": "pass",
         "python_env": "pass" if python_path.exists() else "fail",
@@ -106,6 +129,8 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
         "workspace_root": str(root),
         "workspace_mode": WORKSPACE_MODE,
         "python_path": str(python_path),
+        "cli_path": str(cli_path),
+        "command_prefix": command_prefix,
         "workspace_env_file": str(resolve_workspace_env_file(root)),
         "checks": checks,
     }
@@ -115,7 +140,10 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             {
                 "status": "env_missing",
                 "summary": f"Workspace python does not exist at {python_path}",
-                "next_step": f"abel-invest env init --path {root}  # or use --runtime-python /path/to/python",
+                "next_step": (
+                    f"{workspace_command(root, manifest, 'env', 'init', '--path', str(root))} "
+                    "# or use --runtime-python /path/to/python"
+                ),
             }
         )
         return result
@@ -131,7 +159,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
                     freshness.get("summary")
                     or "Workspace runtime package metadata is stale for this Abel Invest skill."
                 ),
-                "next_step": f"abel-invest env refresh --path {root}",
+                "next_step": workspace_command(root, manifest, "env", "refresh", "--path", str(root)),
             }
         )
         return result
@@ -143,7 +171,10 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             {
                 "status": "edge_missing",
                 "summary": f"Workspace python cannot import abel_edge: {import_check.get('error', 'unknown error')}",
-                "next_step": f"abel-invest env refresh --path {root}  # or use --runtime-python /path/to/python",
+                "next_step": (
+                    f"{workspace_command(root, manifest, 'env', 'refresh', '--path', str(root))} "
+                    "# or use --runtime-python /path/to/python"
+                ),
             }
         )
         return result
@@ -170,7 +201,10 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
                     "Workspace Python can import Abel-edge, but the installed runtime is missing "
                     "required alpha contracts such as structured discovery or `--context-json`."
                 ),
-                "next_step": f"abel-invest env refresh --path {root}  # reinstall the workspace runtime dependencies",
+                "next_step": (
+                    f"{workspace_command(root, manifest, 'env', 'refresh', '--path', str(root))} "
+                    "# reinstall the workspace runtime dependencies"
+                ),
             }
         )
         return result
@@ -198,7 +232,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
                 "for alpha-managed branch research."
             ),
             "next_step": (
-                "abel-invest init-session --ticker <TICKER> --exp-id <session-id>  "
+                f"{workspace_command(root, manifest, 'init-session')} --ticker <TICKER> --exp-id <session-id>  "
                 "# runs live graph discovery by default, then init-branch -> edit branch.yaml -> prepare-branch"
             ),
         }
@@ -384,6 +418,12 @@ def render_doctor_report(result: dict[str, object]) -> str:
     python_path = result.get("python_path")
     if python_path:
         lines.append(f"Python path: {python_path}")
+    cli_path = result.get("cli_path")
+    if cli_path:
+        lines.append(f"CLI path: {cli_path}")
+    command_prefix = result.get("command_prefix")
+    if command_prefix:
+        lines.append(f"Command prefix: {command_prefix}")
     workspace_env_file = result.get("workspace_env_file")
     if workspace_env_file:
         lines.append(f"Workspace env file: {workspace_env_file}")

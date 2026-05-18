@@ -33,14 +33,15 @@ Always start by resolving workspace state before strategy work.
    - else if `abel-invest-workspace/alpha.workspace.yaml` exists
      under the current directory, use that child workspace
    - else bootstrap a workspace before deep research work
-3. Prefer `abel-invest workspace context --path . --json` once the CLI is
-   installed; use its `workspace_root` and `research_root` instead of guessing
-   from directory names.
-4. Run `abel-invest doctor --path <workspace-root>`.
+3. Prefer `abel-invest workspace context --path . --json` once a CLI is
+   available; if `abel-invest` is not on PATH but an existing workspace has a
+   venv, use `<workspace-root>/.venv/bin/abel-invest` for this command.
+   Use the returned `workspace_root`, `research_root`, and `command_prefix`
+   instead of guessing from directory names or assuming a global PATH.
+4. Run `<command_prefix> doctor --path <workspace-root>`.
 5. If doctor reports `runtime_stale`, `env_missing`, `edge_missing`, or
-   `edge_contract_missing`, run the exact `abel-invest env ...` command from
-   `next_step`, then rerun doctor. `doctor` diagnoses runtime drift; `env`
-   commands repair it.
+   `edge_contract_missing`, run the exact command from `next_step`, then rerun
+   doctor. `doctor` diagnoses runtime drift; `env` commands repair it.
 6. If doctor reports `auth_missing`, use `abel-auth`, then rerun doctor.
 7. Only start or continue session/branch work after doctor is ready, unless the
    user explicitly asks you to inspect or repair setup.
@@ -70,14 +71,15 @@ Always start by resolving workspace state before strategy work.
 1. Treat this as a workspace-first flow, not a one-shot answer flow.
 2. Reuse the default workspace when it already exists.
 3. Bootstrap the workspace before deep strategy work when it does not exist yet.
-4. Use `abel-invest` commands, not old command aliases.
+4. Use `abel-invest` commands through the workspace `command_prefix` when
+   available, not old command aliases.
 5. On a fresh skill install where `abel-invest` is not available yet, use
    `python3 <abel-invest-skill-root>/scripts/bootstrap_workspace.py --path abel-invest-workspace`.
    Do not import `abel_invest` with the system interpreter for bootstrap.
 6. If a skill update changed the workspace runtime contract, `doctor` reports
-   `runtime_stale`. Run the suggested `abel-invest env refresh --path ...`
-   command and rerun doctor before research work. Do not refresh on every entry
-   when doctor is already ready.
+   `runtime_stale`. Run the suggested `next_step` command and rerun doctor
+   before research work. Do not refresh on every entry when doctor is already
+   ready.
 7. Reuse existing Abel auth first. If live access is still missing, use
    `abel-auth`.
 8. Treat `branch.yaml` as a research declaration, not evidence truth.
