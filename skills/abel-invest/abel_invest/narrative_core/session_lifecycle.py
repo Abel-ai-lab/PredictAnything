@@ -20,7 +20,7 @@ from abel_invest.narrative_core.contracts.constants import (
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
 )
-from abel_invest.workspace_core.doctor import build_auth_recovery_instruction
+from abel_invest.workspace_core.doctor import build_auth_recovery_instruction, workspace_command
 from abel_invest.narrative_core.runtime.edge_commands import run_edge_verify_data
 from abel_invest.workspace_core.edge_runtime import resolve_runtime_auth_env_file
 from abel_invest.narrative_core.io import (
@@ -75,10 +75,11 @@ def resolve_session_root(
             return explicit_root
         if allow_outside_workspace:
             return explicit_root
+        command_prefix = workspace_command(workspace_root, None)
         raise RuntimeError(
             "Refusing to create an Abel strategy discovery session outside the "
             f"resolved workspace root {workspace_root}. "
-            "Use plain `abel-invest init-session --ticker ... --exp-id ...` to "
+            f"Use plain `{command_prefix} init-session --ticker ... --exp-id ...` to "
             f"create under {workspace_research_root}, or add "
             "`--allow-outside-workspace` when this is an intentional offline or "
             "legacy session."
@@ -94,7 +95,7 @@ def resolve_session_root(
         f"Entry path: {entry_path}. "
         f"Default workspace path: {target}. "
         "Run `abel-invest workspace context --path . --json` to inspect the "
-        "current workspace, or bootstrap one with "
+        "current workspace if the CLI is on PATH, or bootstrap one with "
         f"`abel-invest workspace bootstrap --path {target}`. "
         "For an intentional offline or legacy session, pass both `--root` and "
         "`--allow-outside-workspace`."
@@ -102,15 +103,26 @@ def resolve_session_root(
 
 
 def render_breadth_first_start_lines(session: Path) -> list[str]:
+    command_prefix = command_prefix_for_path(session)
     return [
         "graph-first research loop:",
         f"read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing the next branch or round",
         f"edit {session / RESEARCH_JOURNAL_FILENAME}",
-        f"abel-invest init-branch --session {session} --branch-id <family-a-branch>",
-        f"abel-invest init-branch --session {session} --branch-id <family-b-branch>",
+        f"{command_prefix} init-branch --session {session} --branch-id <family-a-branch>",
+        f"{command_prefix} init-branch --session {session} --branch-id <family-b-branch>",
         "edit each branch.yaml with graph/input hypotheses and agent-chosen mechanism-family declarations",
         "after evidence accumulates, update research_journal.md with evidence-linked reflection before deep local refinement",
     ]
+
+
+def command_prefix_for_path(path: Path | None = None) -> str:
+    """Return the preferred Abel Invest command prefix for a workspace path."""
+    workspace_root = find_workspace_root(path) if path is not None else None
+    if workspace_root is None:
+        workspace_root, _ = resolve_workspace_entry()
+    if workspace_root is None:
+        return "abel-invest"
+    return workspace_command(workspace_root, None)
 
 
 def resolve_workspace_arg_path(value: str) -> Path:
@@ -240,9 +252,12 @@ def fetch_live_discovery(ticker: str, *, limit: int) -> dict:
         )
         from abel_edge.plugins.abel.discover import discover_graph_payload
     except ImportError as exc:
+        workspace_root, _ = resolve_workspace_entry()
+        command_prefix = workspace_command(workspace_root, None) if workspace_root else "abel-invest"
         raise RuntimeError(
             "Live Abel discovery requires abel-edge with the Abel plugin installed. "
-            "Run `abel-invest env init` in the workspace, then retry."
+            f"Run `{command_prefix} doctor` in the workspace, follow its env next_step, "
+            "rerun doctor, then retry."
         ) from exc
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:
@@ -253,11 +268,12 @@ def fetch_live_discovery(ticker: str, *, limit: int) -> dict:
     try:
         require_api_key()
     except MissingAbelApiKeyError as exc:
+        command_prefix = workspace_command(workspace_root, None) if workspace_root else "abel-invest"
         raise RuntimeError(
             "init-session live graph discovery is blocked on Abel auth. "
             "No reusable auth was found. "
             f"{build_auth_recovery_instruction(workspace_root or Path.cwd())}\n\n"
-            "After auth is ready, retry `abel-invest init-session --ticker "
+            f"After auth is ready, retry `{command_prefix} init-session --ticker "
             f"{ticker.upper()} --exp-id <exp-id>`."
         ) from exc
 

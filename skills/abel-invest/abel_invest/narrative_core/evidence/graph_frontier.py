@@ -19,7 +19,7 @@ from abel_invest.narrative_core.contracts.constants import (
 )
 from abel_invest.narrative_core.evidence.frontier import increment_count, render_inline_counts
 from abel_invest.narrative_core.io import _now
-from abel_invest.workspace_core.doctor import build_auth_recovery_instruction
+from abel_invest.workspace_core.doctor import build_auth_recovery_instruction, workspace_command
 from abel_invest.workspace_core.edge_runtime import resolve_runtime_auth_env_file
 from abel_invest.workspace_core.workspace import resolve_workspace_entry
 
@@ -37,9 +37,12 @@ def fetch_live_graph_frontier(
         )
         from abel_edge.plugins.abel.discover import discover_graph_payload
     except ImportError as exc:
+        workspace_root, _ = resolve_workspace_entry()
+        command_prefix = workspace_command(workspace_root, None) if workspace_root else "abel-invest"
         raise RuntimeError(
             "Live Abel discovery requires abel-edge with the Abel plugin installed. "
-            "Run `abel-invest env init` in the workspace, then retry."
+            f"Run `{command_prefix} doctor` in the workspace, follow its env next_step, "
+            "rerun doctor, then retry."
         ) from exc
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:
@@ -50,11 +53,12 @@ def fetch_live_graph_frontier(
     try:
         require_api_key()
     except MissingAbelApiKeyError as exc:
+        command_prefix = workspace_command(workspace_root, None) if workspace_root else "abel-invest"
         raise RuntimeError(
             "init-session live graph discovery is blocked on Abel auth. "
             "No reusable auth was found. "
             f"{build_auth_recovery_instruction(workspace_root or Path.cwd())}\n\n"
-            "After auth is ready, retry `abel-invest init-session --ticker "
+            f"After auth is ready, retry `{command_prefix} init-session --ticker "
             f"{ticker.upper()} --exp-id <exp-id>`."
         ) from exc
 
@@ -80,9 +84,12 @@ def fetch_live_graph_expansion(
         )
         from abel_edge.plugins.abel.discover import discover_graph_payload
     except ImportError as exc:
+        workspace_root, _ = resolve_workspace_entry()
+        command_prefix = workspace_command(workspace_root, None) if workspace_root else "abel-invest"
         raise RuntimeError(
             "Live Abel frontier expansion requires abel-edge with the Abel plugin installed. "
-            "Run `abel-invest env init` in the workspace, then retry."
+            f"Run `{command_prefix} doctor` in the workspace, follow its env next_step, "
+            "rerun doctor, then retry."
         ) from exc
     workspace_root, _ = resolve_workspace_entry()
     if workspace_root is not None:

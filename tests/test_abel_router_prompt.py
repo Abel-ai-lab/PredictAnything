@@ -6,7 +6,11 @@ def test_abel_router_skill_has_explicit_three_way_routing() -> None:
     assert "main entrypoint" in text
     assert "starts an abel workflow" in text
     assert "initialize abel if needed" in text
-    assert "python ../abel-common/python/abel_common/cap/graph_probe.py auth-status" in text
+    assert (
+        "python3 <abel-skill-root>/../abel-common/python/abel_common/cap/graph_probe.py auth-status"
+        in text
+    )
+    assert "do not use a current-working-directory relative" in text
     assert "abel-invest" in text
     assert "abel-ask" in text
     assert "abel-auth" in text

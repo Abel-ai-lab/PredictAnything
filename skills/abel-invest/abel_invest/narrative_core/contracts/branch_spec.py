@@ -621,7 +621,7 @@ def build_context_guide_markdown(
         "## Protocol Checklist",
         "1. Inspect `probe_samples.json` and `data_manifest.json`.",
         "2. Edit `engine.py` against `DecisionContext`.",
-        "3. Run `abel-invest debug-branch --branch ...` first to read semantic preflight.",
+        "3. Run debug-branch with the workspace command prefix first to read semantic preflight.",
         "4. Only record a round after the branch expresses a real mechanism.",
     ]
     return "\n".join(lines) + "\n"

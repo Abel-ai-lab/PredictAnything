@@ -52,7 +52,7 @@ def test_strategy_discovery_dependencies_constrain_edge_major_version() -> None:
     pyproject = Path(__file__).resolve().parents[1] / "skills" / "abel-invest" / "pyproject.toml"
     data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
 
-    assert "abel-edge>=0.8.3,<0.9.0" in data["project"]["dependencies"]
+    assert "abel-edge>=0.8.5,<0.9.0" in data["project"]["dependencies"]
 
 
 def test_strategy_discovery_bootstrap_lets_pyproject_install_dependencies() -> None:
@@ -62,6 +62,8 @@ def test_strategy_discovery_bootstrap_lets_pyproject_install_dependencies() -> N
     assert "git+https://github.com/Abel-ai-causality/Abel-edge.git@main" not in source
     assert "pip\", \"install\", \"PyYAML" not in source
     assert "--no-deps" not in source
+    assert "--upgrade-strategy" in source
+    assert "eager" in source
 
 
 def test_strategy_discovery_cli_hides_edge_install_overrides() -> None:
@@ -80,3 +82,13 @@ def test_strategy_discovery_cli_hides_edge_install_overrides() -> None:
         )
     with pytest.raises(SystemExit):
         parser.parse_args(["env", "init", "--edge-spec", "abel-edge==0.8.0"])
+
+
+def test_strategy_discovery_cli_exposes_env_refresh() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["env", "refresh", "--path", "abel-invest-workspace"])
+
+    assert args.command == "env"
+    assert args.env_command == "refresh"
+    assert args.path == "abel-invest-workspace"

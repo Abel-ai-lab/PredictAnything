@@ -42,6 +42,7 @@ def init_workspace_env(
     alpha_source: str | Path | None = None,
     runtime_python: str | Path | None = None,
     alpha_editable: bool = True,
+    upgrade: bool = True,
 ) -> EnvInitResult:
     """Create the workspace venv and install Abel strategy discovery plus dependencies."""
     workspace_root, _ = resolve_workspace_entry(start)
@@ -100,6 +101,7 @@ def init_workspace_env(
             python_path,
             resolved_alpha_source,
             editable=alpha_editable,
+            upgrade=upgrade,
         ),
         cwd=workspace_root,
     )
@@ -126,9 +128,12 @@ def build_local_install_command(
     source: Path,
     *,
     editable: bool,
+    upgrade: bool = True,
 ) -> list[str]:
     """Build the pip install command for a local source tree."""
     command = [str(python_path), "-m", "pip", "install"]
+    if upgrade:
+        command.extend(["--upgrade", "--upgrade-strategy", "eager"])
     if editable:
         command.extend(["-e", str(source)])
     else:

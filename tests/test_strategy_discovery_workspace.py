@@ -9,7 +9,7 @@ import pytest
 import strategy_discovery_api as strategy_api
 from abel_invest.narrative_core.command_handlers import workspace as workspace_handlers
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
-from abel_invest.workspace_core.env import resolve_alpha_source
+from abel_invest.workspace_core.env import build_local_install_command, resolve_alpha_source
 from abel_invest.workspace_core.workspace import (
     build_default_manifest,
     render_workspace_status,
@@ -90,6 +90,18 @@ def test_resolve_alpha_source_defaults_to_skill_root() -> None:
 
     assert resolved == expected.resolve()
     assert (resolved / "pyproject.toml").exists()
+
+
+def test_workspace_install_command_upgrades_runtime_dependencies(tmp_path: Path) -> None:
+    command = build_local_install_command(
+        tmp_path / ".venv" / "bin" / "python",
+        tmp_path / "skills" / "abel-invest",
+        editable=True,
+    )
+
+    assert "--upgrade" in command
+    assert command[command.index("--upgrade-strategy") + 1] == "eager"
+    assert "-e" in command
 
 
 def test_workspace_context_json_reports_resolved_research_root(
