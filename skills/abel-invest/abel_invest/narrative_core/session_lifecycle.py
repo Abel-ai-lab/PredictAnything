@@ -153,9 +153,11 @@ def init_session_dir(
     discover: bool = False,
     discover_limit: int = 10,
     backtest_start: str = DEFAULT_BACKTEST_START,
-    mode: str = "standard",
+    mode: str | None = None,
 ) -> Path:
-    mode = "grandma" if str(mode or "").strip().lower() == "grandma" else "standard"
+    requested_mode = None
+    if mode is not None and str(mode).strip():
+        requested_mode = "grandma" if str(mode).strip().lower() == "grandma" else "standard"
     session = root / ticker.lower() / exp_id
     session.mkdir(parents=True, exist_ok=True)
     ensure_exploration_path(session)
@@ -183,8 +185,13 @@ def init_session_dir(
     with SessionLock(session):
         write_tsv_header(session / "events.tsv", EVENTS_HEADER)
         session_state = load_session_state(session) if session_state_path(session).exists() else {}
-        session_state["mode"] = mode
-        if mode == "grandma":
+        effective_mode = requested_mode or (
+            "grandma"
+            if str(session_state.get("mode") or "").strip().lower() == "grandma"
+            else "standard"
+        )
+        session_state["mode"] = effective_mode
+        if effective_mode == "grandma":
             session_state["validation_profile"] = "grandma_daily"
         else:
             session_state.pop("validation_profile", None)
@@ -203,7 +210,7 @@ def init_session_dir(
                 "mode": "",
                 "verdict": "",
                 "decision": "",
-                "description": f"Initialized Abel strategy discovery narrative session (mode {mode}, backtest start {backtest_start})",
+                "description": f"Initialized Abel strategy discovery narrative session (mode {effective_mode}, backtest start {backtest_start})",
                 "artifact_path": "",
             },
         )
