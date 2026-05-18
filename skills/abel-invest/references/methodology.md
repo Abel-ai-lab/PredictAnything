@@ -43,14 +43,30 @@ unresolved sign, lag, regime, interaction, control, or risk-shaping question. A
 mechanism-deepening branch is preferable when it can answer one of those
 questions without becoming parameter search.
 
-**Mechanism-led discovery beats metric-led search.**
-Standard discovery chooses a branch from graph context, mechanism reasoning,
-recorded evidence, or a control/ablation purpose before metric search. Local
-parameter, threshold, window, filter, sizing, driver, or asset sweeps are
-optimization behavior unless the user explicitly requests them.
+**Mechanism seeds; the gauntlet gates; optimization is first-class.**
+Graph and mechanism priors seed candidates. That is what keeps the search
+space small enough for DSR to survive at scale: the causal prior is a
+multiple-testing regularizer on the driver-selection axis (a large
+multiplicative factor in K). Optimization toward the objective is then a
+first-class path, not a deviation, provided every candidate clears the full
+gauntlet (semantic, gate/DSR/triangle, leakage, walk-forward) and
+`--selection-trials` accounts the true K. The failure mode to avoid is
+selecting on a raw metric OUTSIDE the gauntlet — not optimization itself.
 
-`--selection-trials` audits accidental or explicitly requested search width. It
-does not make brute-force candidate selection part of standard discovery.
+**Data-driven entry; mechanism is post-hoc.**
+A candidate enters on gauntlet / OOS survival, never on the strength of its
+mechanism story. The mechanism narrative is a post-hoc Insight Card written
+after a candidate survives — it explains, it does not admit. Graph and
+mechanism priors *seed and bound* the search (the causal regularizer); they
+do not gate entry — survival does. This is the construction stance behind the
+production track record: many machine-engineered weak signals combined as a
+diversity-gated ensemble, judged by survival, not a single
+narrative-confirmed signal. See `references/data-driven-construction.md`.
+
+`--selection-trials` is the honest K-accounting that makes guarded
+optimization legitimate, not a marker that search is illegitimate. abel-invest
+runs guarded optimization self-contained; it does not hand off to any external
+skill.
 
 **Narrative scout is context, not evidence.**
 Abel Ask and narrative context can generate mechanism hypotheses, supplement

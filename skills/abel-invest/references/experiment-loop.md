@@ -85,10 +85,12 @@ Each round should answer a mechanism question, not just consume compute.
    recorded round. Cite the round ledger ref and capture what changed, what
    happened, what was learned, and what that implies next.
 
-Standard discovery chooses one declared branch before metric search. Do not run
-local parameter, threshold, window, filter, sizing, driver, or asset sweeps to
-choose the branch candidate unless the user explicitly requests optimization.
-User metric targets are success criteria, not permission to widen local search.
+Discovery seeds candidates from graph/mechanism priors. A hard user metric
+target is an optimization request: pursue it as guarded optimization
+(`references/guarded-optimization.md`) — the causal prior bounds the space and
+every candidate must clear the full gauntlet with `--selection-trials`
+accounting the true K. The failure mode is selecting on a raw metric outside
+the gauntlet, not optimization itself.
 
 ## Layer Ownership
 
@@ -110,8 +112,9 @@ round defaults to `1`. If accidental search width or explicitly requested
 optimization selected one submitted strategy from a parameter, threshold,
 filter, sizing, driver, asset, or window sweep, pass `--selection-trials N` so
 DSR reflects the Alpha search width instead of only the final `engine.py` shape.
-`--selection-trials` is audit and penalty accounting, not permission to select
-standard-discovery candidates from brute-force sweeps.
+`--selection-trials` is the honest K-accounting that makes guarded
+optimization legitimate: always pass it for any search width so DSR deflates
+by the true number of variants tried.
 Each edge result also appends a session-level `dsr_trials.jsonl` audit row.
 Recorded PASS/FAIL validation rounds count toward future DSR; debug runs,
 semantic errors, and workflow blockers are recorded for audit but do not increase

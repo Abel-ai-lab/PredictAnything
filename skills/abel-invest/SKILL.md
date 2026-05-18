@@ -36,9 +36,13 @@ Always start by resolving workspace state before strategy work.
 3. Prefer `abel-invest workspace context --path . --json` once the CLI is
    installed; use its `workspace_root` and `research_root` instead of guessing
    from directory names.
-4. Run `abel-invest doctor --path <workspace-root>`.
-5. If doctor reports `auth_missing`, use `abel-auth`, then rerun doctor.
-6. Only start or continue session/branch work after doctor is ready, unless the
+4. Baseline-first: before from-scratch discovery, check whether a validated
+   strategy for this target already exists in any baseline / strategy catalog
+   the user maintains. If one exists, treat it as the baseline and ceiling and
+   iterate from it; do not rediscover from scratch.
+5. Run `abel-invest doctor --path <workspace-root>`.
+6. If doctor reports `auth_missing`, use `abel-auth`, then rerun doctor.
+7. Only start or continue session/branch work after doctor is ready, unless the
    user explicitly asks you to inspect or repair setup.
 
 ## Reference Routing
@@ -57,9 +61,13 @@ Always start by resolving workspace state before strategy work.
   read `references/constraints.md`.
 - Explaining why the workflow is graph-first or evidence-boundary oriented:
   optionally read `references/methodology.md`.
-- Looking for mechanism inspiration after the branch workflow is already
-  runnable:
-  optionally read `references/proven-patterns.md`.
+- Forming the candidate space (entry stance, feature generation, ensemble):
+  read `references/data-driven-construction.md`. Core path.
+- Choosing concrete constructions while writing the engine:
+  read `references/proven-patterns.md` (battle-tested patterns). Core path.
+- A hard Sharpe / MaxDD / PnL target is set:
+  read `references/guarded-optimization.md` (self-contained gauntlet-gated
+  optimization). Core path — not optional — when a performance bar is set.
 
 ## Operating Rules
 
@@ -89,17 +97,24 @@ Always start by resolving workspace state before strategy work.
 12. Do not treat branch count as proof of breadth. Graph-node concentration,
    strategy-variant coverage, and local refinement pressure are separate facts.
 13. Do not call parameter, sizing, threshold, filter, or window tweaks broad
-    exploration.
-14. Standard discovery chooses branches from graph context, mechanism
-    reasoning, recorded evidence, or explicit control/ablation purpose before
-    metric search. Do not run local parameter, threshold, window, filter,
-    sizing, driver, or asset sweeps to choose a branch candidate unless the user
-    explicitly requests optimization.
-15. Treat `--selection-trials` as DSR audit and penalty accounting, not as
-    permission to use brute-force candidate selection in standard discovery.
-16. Treat user metric targets such as Sharpe thresholds as success criteria, not
-    as optimization permission. Report evidence honestly or ask for explicit
-    optimization rather than widening local search just to satisfy a target.
+    exploration. Name search width honestly; do not relabel it.
+14. Mechanism and graph priors SEED candidates; optimization toward the
+    objective is a first-class path, not a deviation, when it runs as GUARDED
+    optimization: the causal-graph prior bounds the search space, and every
+    candidate must clear the full gauntlet (semantic preflight, the standard
+    gate/DSR/triangle profile, leakage, walk-forward) before it can be selected.
+    The failure mode to avoid is selecting on a raw metric WITHOUT the gauntlet,
+    not optimization itself. See `references/guarded-optimization.md`.
+15. `--selection-trials N` is the honest K-accounting that MAKES guarded
+    optimization legitimate: it deflates DSR by the true number of variants
+    tried. Always pass it for any search width. It is mandatory for guarded
+    optimization, not a marker of misbehavior.
+16. A hard user metric target (Sharpe / MaxDD / PnL) IS an optimization
+    request. Pursue it via guarded optimization (gauntlet-gated,
+    causal-prior-bounded, K-accounted) — not by widening un-gated local search,
+    and not by declining and reporting short. Report the gauntlet-surviving
+    optimum honestly; never game a metric outside the gauntlet. abel-invest runs
+    this itself; do not depend on any external skill.
 17. CAP graph nodes are model-supported causal priors. Trust that they carry
     target-relevant information, but do not infer disclosed weight, exact lag,
     signed effect, or tradable direction from the role alone. Parent and child
