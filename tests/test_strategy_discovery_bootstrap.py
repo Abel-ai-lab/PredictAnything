@@ -52,7 +52,11 @@ def test_strategy_discovery_dependencies_constrain_edge_major_version() -> None:
     pyproject = Path(__file__).resolve().parents[1] / "skills" / "abel-invest" / "pyproject.toml"
     data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
 
-    assert "abel-edge>=0.8.5,<0.9.0" in data["project"]["dependencies"]
+    assert "abel-edge>=0.8.5" in data["project"]["dependencies"]
+    assert not any(
+        dependency.startswith("abel-edge") and "<0.9.0" in dependency
+        for dependency in data["project"]["dependencies"]
+    )
 
 
 def test_strategy_discovery_bootstrap_lets_pyproject_install_dependencies() -> None:

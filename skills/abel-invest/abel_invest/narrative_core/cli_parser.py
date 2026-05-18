@@ -184,6 +184,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_BACKTEST_START,
         help="Session-level backtest start date passed to abel-edge evaluate",
     )
+    init_session.add_argument(
+        "--mode",
+        default=None,
+        choices=["standard", "grandma"],
+        help="Session strategy mode. Grandma mode routes branches to the conservative grandma_daily profile.",
+    )
     discovery_group = init_session.add_mutually_exclusive_group()
     discovery_group.add_argument(
         "--discover",

@@ -359,12 +359,17 @@ def build_default_branch_spec(
     discovery: dict,
     readiness: dict,
     graph_frontier: dict | None = None,
+    session_mode: str = "standard",
+    validation_profile: str = "",
 ) -> dict:
     frontier = graph_frontier or {}
     suggested_nodes = graph_frontier_candidate_node_ids(frontier, readiness, limit=5)
     selected_nodes = suggested_nodes[: min(3, len(suggested_nodes))]
+    grandma_mode = str(session_mode or "").strip().lower() == "grandma"
+    if grandma_mode:
+        selected_nodes = []
     graph_first = bool(selected_nodes)
-    return {
+    spec = {
         "version": 2,
         "branch_id": branch.name,
         "target": discovery.get("ticker", branch.parent.parent.parent.name.upper()),
@@ -390,6 +395,19 @@ def build_default_branch_spec(
             "fields": ["close"],
         },
     }
+    if grandma_mode:
+        spec.update(
+            {
+                "strategy_mode": "grandma",
+                "validation_profile": validation_profile or "grandma_daily",
+                "position_bounds": [-1.0, 1.0],
+                "model_family": "rule_signal",
+                "complexity_class": "simple_signal",
+                "mechanism_family": "simple_return",
+                "input_claim": "target_only",
+            }
+        )
+    return spec
 
 
 def branch_dependencies_payload(
@@ -435,14 +453,18 @@ def canonicalize_dependencies_payload(payload: dict) -> dict:
     return dependencies
 
 
-def build_runtime_profile_payload(*, target: str) -> dict:
-    return {
+def build_runtime_profile_payload(*, target: str, branch_spec: dict | None = None) -> dict:
+    payload = {
         "profile": "daily",
         "target": target,
         "decision_event": "bar_close",
         "execution_delay_bars": 1,
         "return_basis": "close_to_close",
     }
+    validation_profile = str((branch_spec or {}).get("validation_profile") or "").strip()
+    if validation_profile:
+        payload["validation_profile"] = validation_profile
+    return payload
 
 
 def build_execution_constraints_payload(branch_spec: dict) -> dict:
@@ -596,6 +618,7 @@ def build_context_guide_markdown(
         "",
         "## Runtime",
         f"- profile: `{runtime_profile.get('profile', 'daily')}`",
+        f"- validation_profile: `{runtime_profile.get('validation_profile', 'auto')}`",
         f"- decision_event: `{runtime_profile.get('decision_event', 'bar_close')}`",
         f"- execution_delay_bars: `{runtime_profile.get('execution_delay_bars', 1)}`",
         f"- return_basis: `{runtime_profile.get('return_basis', 'close_to_close')}`",

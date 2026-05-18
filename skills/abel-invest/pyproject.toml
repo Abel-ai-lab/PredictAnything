@@ -5,7 +5,7 @@ description = "Workspace-oriented research orchestration for Abel-driven strateg
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
-    "abel-edge>=0.8.5,<0.9.0",
+    "abel-edge>=0.8.5",
     "PyYAML>=6.0",
 ]
 

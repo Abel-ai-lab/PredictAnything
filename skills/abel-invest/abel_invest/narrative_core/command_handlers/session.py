@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from abel_invest.narrative_core.contracts.branch_spec import has_explicit_hypothesis
 from abel_invest.narrative_core.contracts.constants import (
@@ -35,6 +36,7 @@ from abel_invest.narrative_core.session_lifecycle import (
 from abel_invest.narrative_core.state import (
     load_discovery,
     load_readiness,
+    load_session_state,
     persist_branch_hypothesis,
     resolve_backtest_start_request,
     update_backtest_start,
@@ -42,6 +44,7 @@ from abel_invest.narrative_core.state import (
 
 
 def handle_init_session(args: argparse.Namespace) -> int:
+    mode = resolve_session_mode(getattr(args, "mode", None))
     session = init_session_dir(
         args.ticker,
         args.exp_id,
@@ -52,11 +55,15 @@ def handle_init_session(args: argparse.Namespace) -> int:
         discover=args.discover,
         discover_limit=args.discover_limit,
         backtest_start=args.backtest_start,
+        mode=mode,
     )
     discovery = load_discovery(session)
     readiness = load_readiness(session)
+    session_state = load_session_state(session)
+    effective_mode = str(session_state.get("mode") or mode or "standard")
     print(f"Created Abel strategy discovery session at {session}")
     print(f"  ticker: {discovery.get('ticker', args.ticker.upper())}")
+    print(f"  mode: {effective_mode}")
     print(f"  graph_frontier: {session / GRAPH_FRONTIER_FILENAME}")
     print(f"  exploration_path: {session / EXPLORATION_PATH_FILENAME}")
     print(f"  events: {session / 'events.tsv'}")
@@ -82,6 +89,14 @@ def handle_init_session(args: argparse.Namespace) -> int:
     for line in render_breadth_first_start_lines(session):
         print(f"  {line}")
     return 0
+
+def resolve_session_mode(raw_mode: str | None) -> str | None:
+    raw = raw_mode if raw_mode is not None else os.environ.get("ABEL_EXPERIMENT_MODE")
+    if raw is None or not str(raw).strip():
+        return None
+    mode = str(raw).strip().lower()
+    return "grandma" if mode == "grandma" else "standard"
+
 
 def handle_set_backtest_start(args: argparse.Namespace) -> int:
     session = resolve_workspace_arg_path(args.session)

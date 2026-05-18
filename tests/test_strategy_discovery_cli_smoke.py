@@ -64,6 +64,165 @@ def test_public_cli_session_branch_render_status_check_smoke(
     assert "Narrative check passed for" in output
 
 
+def test_init_session_grandma_mode_routes_default_branch_to_grandma_profile(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "research"
+
+    assert _run_cli(
+        monkeypatch,
+        [
+            "init-session",
+            "--ticker",
+            "TSLA",
+            "--exp-id",
+            "grandma-smoke",
+            "--root",
+            str(root),
+            "--allow-outside-workspace",
+            "--no-discover",
+            "--mode",
+            "grandma",
+        ],
+    ) == 0
+    session = root / "tsla" / "grandma-smoke"
+
+    assert _run_cli(
+        monkeypatch,
+        [
+            "init-branch",
+            "--session",
+            str(session),
+            "--branch-id",
+            "simple-return",
+        ],
+    ) == 0
+
+    state = json.loads((session / "session_state.json").read_text(encoding="utf-8"))
+    spec = ni.load_branch_spec(session / "branches" / "simple-return")
+
+    assert state["mode"] == "grandma"
+    assert state["validation_profile"] == "grandma_daily"
+    assert spec["strategy_mode"] == "grandma"
+    assert spec["validation_profile"] == "grandma_daily"
+    assert spec["position_bounds"] == [-1.0, 1.0]
+    assert spec["model_family"] == "rule_signal"
+    assert spec["complexity_class"] == "simple_signal"
+    assert spec["input_claim"] == "target_only"
+
+
+def test_init_session_uses_experiment_env_for_grandma_mode(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "research"
+    monkeypatch.setenv("ABEL_EXPERIMENT_MODE", "grandma")
+
+    assert _run_cli(
+        monkeypatch,
+        [
+            "init-session",
+            "--ticker",
+            "TSLA",
+            "--exp-id",
+            "grandma-env",
+            "--root",
+            str(root),
+            "--allow-outside-workspace",
+            "--no-discover",
+        ],
+    ) == 0
+
+    state = json.loads(
+        (root / "tsla" / "grandma-env" / "session_state.json").read_text(encoding="utf-8")
+    )
+    assert state["mode"] == "grandma"
+    assert state["validation_profile"] == "grandma_daily"
+
+
+def test_init_session_preserves_existing_grandma_mode_without_explicit_mode(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "research"
+    base_args = [
+        "init-session",
+        "--ticker",
+        "TSLA",
+        "--exp-id",
+        "grandma-rerun",
+        "--root",
+        str(root),
+        "--allow-outside-workspace",
+        "--no-discover",
+    ]
+
+    assert _run_cli(monkeypatch, [*base_args, "--mode", "grandma"]) == 0
+    assert _run_cli(monkeypatch, base_args) == 0
+    session = root / "tsla" / "grandma-rerun"
+
+    assert _run_cli(
+        monkeypatch,
+        [
+            "init-branch",
+            "--session",
+            str(session),
+            "--branch-id",
+            "after-rerun",
+        ],
+    ) == 0
+
+    state = json.loads((session / "session_state.json").read_text(encoding="utf-8"))
+    spec = ni.load_branch_spec(session / "branches" / "after-rerun")
+
+    assert state["mode"] == "grandma"
+    assert state["validation_profile"] == "grandma_daily"
+    assert spec["strategy_mode"] == "grandma"
+    assert spec["validation_profile"] == "grandma_daily"
+
+
+def test_init_session_explicit_standard_downgrades_existing_grandma_mode(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "research"
+    base_args = [
+        "init-session",
+        "--ticker",
+        "TSLA",
+        "--exp-id",
+        "grandma-standard",
+        "--root",
+        str(root),
+        "--allow-outside-workspace",
+        "--no-discover",
+    ]
+
+    assert _run_cli(monkeypatch, [*base_args, "--mode", "grandma"]) == 0
+    assert _run_cli(monkeypatch, [*base_args, "--mode", "standard"]) == 0
+    session = root / "tsla" / "grandma-standard"
+
+    assert _run_cli(
+        monkeypatch,
+        [
+            "init-branch",
+            "--session",
+            str(session),
+            "--branch-id",
+            "after-standard",
+        ],
+    ) == 0
+
+    state = json.loads((session / "session_state.json").read_text(encoding="utf-8"))
+    spec = ni.load_branch_spec(session / "branches" / "after-standard")
+
+    assert state["mode"] == "standard"
+    assert "validation_profile" not in state
+    assert "strategy_mode" not in spec
+    assert "validation_profile" not in spec
+
+
 def test_public_cli_version_option(monkeypatch, capsys) -> None:
     assert _run_cli(monkeypatch, ["--version"]) == 0
 
