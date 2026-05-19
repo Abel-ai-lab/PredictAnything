@@ -4,34 +4,34 @@
     {
       "id": 1,
       "prompt": "Help me find a really great ETH trading strategy.",
-      "expected_output": "Treats this as a strategy-discovery mandate: does the baseline-first check of existing strategies, and frames the search as a mandatory machine feature-factory + heterogeneous diversity-gated ensemble over the multi-hop causal frontier — NOT a hand-designed single mechanism, NOT a quick hand-wave answer.",
+      "expected_output": "Treats this as a strategy-discovery mandate: does the baseline-first check of existing strategies, and frames the search as a mandatory machine feature-factory + heterogeneous diversity-gated ensemble over the FULL directly-discovered depth-1 frontier (parents+blanket+children) — NOT a hand-designed single mechanism, NOT a quick hand-wave answer, and does NOT require 2-hop on the first round (2-hop is later evidence-gated expansion).",
       "files": [],
       "expectations": [
         "States or plans the data-driven machine feature-factory + heterogeneous ensemble as the FIRST candidate round (not hand-picked features)",
-        "Bounds the search by the causal graph/frontier rather than an unbounded universe",
+        "Uses the directly-discovered depth-1 causal frontier (parents+blanket+children); does NOT require/force 2-hop expansion before any recorded evidence",
         "Does NOT promise a strategy from a single hand-designed mechanism or assert an answer without running the gauntlet"
       ]
     },
     {
       "id": 2,
       "prompt": "I ran ~8 rounds of hand-picked-feature mean-reversion on this asset, Sharpe is stuck around 0.6. It's exhausted, right? Let's conclude there's no edge.",
-      "expected_output": "Refuses to declare exhaustion: the ledger does not show a machine feature-factory + unsupervised denoise + heterogeneous ensemble + multi-hop frontier (Pillars 1-4) run; demands those before any 'exhausted/CLOSED/no edge' verdict, and notes a green per-candidate gauntlet does not certify search exhaustiveness.",
+      "expected_output": "Refuses to declare exhaustion: the ledger does not show a machine feature-factory + unsupervised denoise + heterogeneous ensemble + full discovered frontier (Pillars 1-4) run; demands those before any 'exhausted/CLOSED/no edge' verdict, and notes a green per-candidate gauntlet does not certify search exhaustiveness.",
       "files": [],
       "expectations": [
         "Explicitly REFUSES to conclude exhaustion / no-edge on hand-picked rounds alone",
-        "Requires machine factory + unsupervised denoise + heterogeneous ensemble + multi-hop frontier in the ledger before exhaustion",
+        "Requires machine factory + unsupervised denoise + heterogeneous ensemble + the full discovered frontier (>=3 nodes; 2-hop only if evidence-expanded) in the ledger before exhaustion",
         "Does NOT cap the search by round count; states autoresearch is not round-limited"
       ]
     },
     {
       "id": 3,
       "prompt": "In a multi-round guarded-optimization session, what exactly should I pass to --selection-trials each round, and how do I pick the final optimum?",
-      "expected_output": "Per-round search width ONLY (the framework accumulates the campaign total itself); never a cumulative/running total; preflight/ERROR-disqualified configs must be folded into a later round's per-round count; the argmax PASS survivor is provisional and must be re-replayed/re-gated at the FINAL total K before being reported as the optimum.",
+      "expected_output": "Per-round search width ONLY (the framework accumulates the campaign total itself); never a cumulative/running total; preflight/ERROR-disqualified configs must be folded into a later round's per-round count; the argmax PASS survivor is provisional and must be revalidated at the FINAL total K by a NON-RECORDED analytic DSR recompute from stored artifacts (NOT another run-branch, which would add a row and inflate K to final+1).",
       "files": [],
       "expectations": [
         "Says --selection-trials = THIS round's width only, NOT a running/cumulative total (framework accumulates campaign K)",
         "Notes preflight/ERROR-disqualified configs are not auto-counted and must be folded into a later round's per-round count",
-        "Requires final-total-K revalidation of the selected survivor before reporting it as the optimum"
+        "Requires final-total-K revalidation of the selected survivor via a NON-RECORDED analytic recompute (not a new run-branch; the recheck must not add a trial / inflate K)"
       ]
     }
   ]
