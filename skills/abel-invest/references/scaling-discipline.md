@@ -61,7 +61,12 @@ abelian / external skill.
   less to protect K" — it is: run the mandatory data-driven entry, account K
   per-round honestly, and let the gauntlet reject weak Sharpe. Force the loop;
   trust the gate.
-  Do not mistake "more compute" for "more alpha".
+- **Autoresearch is NOT round-limited.** There is no round cap, round budget,
+  or "stop after N rounds / 1-2 tries". Keep iterating data-driven mechanisms
+  for as long as untested high-quality directions remain. The ONLY stops are:
+  (a) a gauntlet-PASS candidate at the target, or (b) ledger-proven exhaustion
+  (Pillars 1-4 covered AND materially-different mechanism classes tried, all
+  honest-K accounted). Never stop by round count — that is vibe, not ledger.
 
 ## Exhaustion is ledger-proven, never asserted
 
@@ -88,6 +93,10 @@ justification.
 - Hand-picked features as the baseline; machine factory as a "late lever".
 - Declaring exhaustion without Pillars 1-4 in the ledger (premature CLOSED is
   the cardinal process violation — the recurring conclude-before-verify).
+- Stopping by round count / round budget / "1-2 rounds then stop" instead of
+  gauntlet-PASS or ledger-proven exhaustion. Rounds are unbounded.
+- Letting preflight/ERROR-disqualified configs vanish from K (undercount):
+  fold them into a later round's per-round `--selection-trials`.
 - Un-K'd HPO / denoise / model-zoo search.
 - Treating `data-driven-construction.md` as advice rather than contract.
 - Inferring a standard instead of reading it (skill artifacts → read

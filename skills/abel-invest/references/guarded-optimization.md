@@ -39,7 +39,14 @@ Fail any → disqualified regardless of objective value.
    `run-branch --selection-trials <THIS config/round's search width only —
    NOT a running total; the framework accumulates campaign K from prior
    rounds itself (see K rule)>`.
-5. Discard non-gauntlet-PASS candidates (they still increment K).
+5. Discard non-gauntlet-PASS candidates. A gauntlet-EVALUATED FAIL (verdict
+   PASS/FAIL) is auto-counted by the framework in future K. But a config
+   disqualified BEFORE Edge validation (semantic-preflight / workflow-blocker
+   ERROR) is written as ERROR and is NOT in `completed_rows` → the framework
+   will NOT count it. To keep K honest you MUST fold every such preflight/ERROR
+   variant into a later round's per-round `--selection-trials` (else true
+   search width is undercounted). Honest-K cuts both ways: never double-count
+   (cumulative), never drop (preflight ERRORs).
 6. Select `argmax(single objective)` over PASS survivors.
 7. Journal: search width, K, gauntlet outcomes, selected optimum.
 
