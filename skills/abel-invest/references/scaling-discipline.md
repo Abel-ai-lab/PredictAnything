@@ -35,8 +35,14 @@ abelian / external skill.
 ## Mandatory data-driven entry — not advice
 
 - The FIRST recorded `candidate` round MUST be a machine feature factory over
-  the **multi-hop** causal frontier (parents + blanket + children + 2-hop),
-  fed to a **heterogeneous** ensemble (≥2 model families, diversity-gated).
+  the **full directly-discovered frontier** (the depth-1 nodes `init-session`
+  returns: parents + blanket + children — already a multi-node causal set,
+  not a single parent), fed to a **heterogeneous** ensemble (≥2 model
+  families, diversity-gated). Do NOT require 2-hop on the first round: depth-2
+  nodes only exist after `frontier expand`, which `discovery-protocol.md`
+  gates on an unresolved frontier question + recorded evidence. 2-hop
+  enrichment is a later evidence-gated expansion, never a precondition for
+  the first factory round.
 - Hand-designed single-mechanism rounds are DIAGNOSTICS, never the baseline.
   A hand-picked-feature round before a machine-factory round is a violation.
 - Denoise is first-class, ranked by evidence: unsupervised (PCA/ICA/AE)
@@ -61,11 +67,15 @@ abelian / external skill.
   less to protect K" — it is: run the mandatory data-driven entry, account K
   per-round honestly, and let the gauntlet reject weak Sharpe. Force the loop;
   trust the gate.
-- **Final-K revalidation before any reported optimum.** K only grows; early
-  survivors were gated at a smaller mid-campaign K and stored-metric ranking
-  (`select_best_pass_strategy`) does NOT re-deflate them. The chosen argmax
-  survivor is provisional until re-replayed and re-gated at the FINAL total
-  campaign K. Never report a candidate validated only at a stale smaller K.
+- **Final-K revalidation before any reported optimum — non-recorded.** K only
+  grows; early survivors were gated at a smaller mid-campaign K and stored-
+  metric ranking (`select_best_pass_strategy`) does NOT re-deflate them. The
+  chosen argmax survivor is provisional until its DSR/gate is recomputed
+  **analytically at the FINAL total K from its stored round artifacts**
+  (`*-edge-frame.csv` pnl + `abel_edge._dsr`). Do NOT `run-branch` the recheck
+  — a recorded re-run becomes final+1 and escalates with each failed-survivor
+  recheck. The revalidation adds zero trials. Never report a candidate
+  validated only at a stale smaller K, nor let the recheck inflate K.
 - **Autoresearch is NOT round-limited.** There is no round cap, round budget,
   or "stop after N rounds / 1-2 tries". Keep iterating data-driven mechanisms
   for as long as untested high-quality directions remain. The ONLY stops are:
@@ -81,7 +91,8 @@ ledger MUST show, all K-accounted:
 1. machine feature factory ✓
 2. ≥1 unsupervised denoise ✓
 3. heterogeneous diversity-gated ensemble ✓
-4. multi-hop frontier (≥3 graph nodes) ✓
+4. full discovered frontier used (≥3 graph nodes: parents+blanket+children;
+   2-hop only if it was evidence-expanded per `discovery-protocol.md`) ✓
 
 Missing any → the verdict is premature; run it first. A green per-candidate
 gauntlet does NOT certify search exhaustiveness — it never has.

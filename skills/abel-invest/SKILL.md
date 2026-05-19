@@ -1,9 +1,14 @@
 ---
 name: abel-invest
 description: >
-  Use when the user wants Abel strategy discovery, candidate screening,
-  graph-grounded trading research, or continuing/preparing/debugging an Abel
-  strategy discovery workspace.
+  Causal-graph-grounded quant strategy discovery, screening, and guarded
+  optimization. Use this skill whenever the user wants to find, improve,
+  screen, backtest, or stress a trading strategy / alpha / signal, hit a
+  Sharpe-or-drawdown target, run data-driven feature-factory + ensemble
+  research, or continue/prepare/debug an Abel strategy-discovery workspace —
+  even if they don't say "Abel" and even when they just ask for "a good
+  strategy for X" or "is there alpha in Y". Prefer this over ad-hoc
+  hand-designed strategy work.
 metadata:
   openclaw:
     requires:

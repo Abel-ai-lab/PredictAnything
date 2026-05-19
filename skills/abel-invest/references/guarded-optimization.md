@@ -48,14 +48,20 @@ Fail any → disqualified regardless of objective value.
    search width is undercounted). Honest-K cuts both ways: never double-count
    (cumulative), never drop (preflight ERRORs).
 6. Select `argmax(single objective)` over PASS survivors — PROVISIONAL only.
-7. **Final-K revalidation (mandatory before reporting an optimum).** Early
-   survivors were DSR-validated at a smaller mid-campaign K; the framework
-   never retro-deflates prior rows, and `select_best_pass_strategy` ranks
-   stored metrics WITHOUT recomputing the gate. So re-replay the argmax
-   survivor at the FINAL total campaign K and re-run the full gauntlet. If it
-   no longer clears DSR/the gate at final K, it is NOT the optimum — drop it
-   and revalidate the next survivor. Never report a campaign optimum that was
-   only validated at a stale (smaller) K.
+7. **Final-K revalidation (mandatory before reporting an optimum) — NON-
+   RECORDED.** Early survivors were DSR-validated at a smaller mid-campaign K;
+   the framework never retro-deflates prior rows and `select_best_pass_strategy`
+   ranks stored metrics WITHOUT recomputing the gate. Recompute the argmax
+   survivor's DSR/gate **analytically at the FINAL total campaign K** from its
+   already-stored round artifacts (its `*-edge-frame.csv` pnl + `abel_edge`
+   `_dsr(pnl, T, K_final)`) — do NOT issue another `run-branch` for the check.
+   A `run-branch` re-run is recorded as a new PASS/FAIL row, so K becomes
+   final+1 and each failed-survivor recheck deflates the next stricter — that
+   corrupts the verdict. If the survivor fails the gate at K_final, it is NOT
+   the optimum — analytically recheck the next survivor (still non-recorded).
+   K_final = the campaign K already implied by the recorded rounds; the
+   revalidation itself adds zero trials. Never report an optimum validated
+   only at a stale (smaller) K, and never let the revalidation inflate K.
 8. Journal: search width, K, gauntlet outcomes, the final-K revalidation, the
    selected optimum.
 
