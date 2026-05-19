@@ -132,7 +132,7 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
     base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
     artifact_export_result = None
-    if getattr(args, "with_strategy_artifact", False):
+    if not getattr(args, "without_strategy_artifact", False):
         artifact_export_result = export_selected_strategy_artifact(
             session,
             output_dir=Path(args.artifact_output_dir)

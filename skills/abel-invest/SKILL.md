@@ -165,10 +165,10 @@ Visualization and promotion:
 - When the strategy context is mature enough for visual review, ask the user
   whether to visualize it.
 - If the user agrees or explicitly asks, run
-  `<command_prefix> visualize-session --session <session> --with-strategy-artifact`
+  `<command_prefix> visualize-session --session <session>`
   yourself and share the returned Markdown link.
-- Use narrative-only `visualize-session` only when the user explicitly asks for a
-  session view without strategy artifact upload.
+- Use `visualize-session --without-strategy-artifact` only when the user
+  explicitly asks for a session view without strategy artifact upload.
 - If visualization reports `needs_agent_refactor`, handle the emitted
   `refactor-request.json` in this same skill loop. For `state_intent_self_check`,
   write `state_intent.json`. For `agent_assisted`, edit only the promoted copy,

@@ -2515,7 +2515,7 @@ def test_upload_strategy_artifact_for_session_returns_upload_summary(
     assert result["selectedBranchId"] == "momentum_lead"
 
 
-def test_visualize_session_uploads_narrative_only_by_default(
+def test_visualize_session_uploads_narrative_only_with_without_strategy_artifact(
     tmp_path: Path,
     monkeypatch,
     capsys,
@@ -2537,8 +2537,8 @@ def test_visualize_session_uploads_narrative_only_by_default(
     )
     monkeypatch.setitem(
         ni.upload_skill_dashboard_session.__globals__,
-        "upload_strategy_artifact_for_session",
-        lambda **kwargs: artifact_calls.append(kwargs),
+        "export_selected_strategy_artifact",
+        lambda *args, **kwargs: artifact_calls.append((args, kwargs)),
     )
 
     ni.upload_skill_dashboard_session(
@@ -2547,7 +2547,7 @@ def test_visualize_session_uploads_narrative_only_by_default(
             api_key="secret-key",
             output_json=None,
             dry_run=False,
-            with_strategy_artifact=False,
+            without_strategy_artifact=True,
             artifact_output_dir=None,
             python_bin=None,
         )
@@ -2557,7 +2557,7 @@ def test_visualize_session_uploads_narrative_only_by_default(
     assert "Online session view" in capsys.readouterr().out
 
 
-def test_visualize_session_uploads_strategy_artifact_with_flag(
+def test_visualize_session_uploads_strategy_artifact_by_default(
     tmp_path: Path,
     monkeypatch,
     capsys,
@@ -2615,7 +2615,7 @@ def test_visualize_session_uploads_strategy_artifact_with_flag(
             api_key="secret-key",
             output_json=None,
             dry_run=False,
-            with_strategy_artifact=True,
+            without_strategy_artifact=False,
             artifact_output_dir=None,
             python_bin=None,
         )
@@ -2673,7 +2673,7 @@ def test_visualize_session_aborts_before_upload_when_agent_refactor_fails(
                 api_key="secret-key",
                 output_json=None,
                 dry_run=False,
-                with_strategy_artifact=True,
+                without_strategy_artifact=False,
                 artifact_output_dir=None,
                 python_bin=None,
             )
