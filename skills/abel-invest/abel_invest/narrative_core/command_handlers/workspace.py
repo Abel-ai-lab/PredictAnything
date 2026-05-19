@@ -307,7 +307,7 @@ def handle_env_command(args: argparse.Namespace) -> int:
     print(f"  {default_activate_command()}")
     print(
         "  # once doctor is ready: init-session -> declare branches -> "
-        "use frontier facts and research_journal.md to guide pivots"
+        "use frontier facts and exploration_path.md to guide pivots"
     )
     return 0
 

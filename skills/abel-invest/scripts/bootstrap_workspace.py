@@ -267,7 +267,9 @@ or activate `.venv` first and then use `abel-invest`.
 Run `./.venv/bin/abel-invest workspace context --path . --json` and
 `./.venv/bin/abel-invest doctor` before creating a session. Sessions belong
 under this workspace's `research/` directory unless you intentionally use an
-explicit outside-workspace escape hatch.
+explicit outside-workspace escape hatch. After each recorded round, update
+`exploration_path.md` with the chosen path, why, Edge feedback, and ledger
+reference before running another recorded round.
 """
 
 
@@ -278,6 +280,15 @@ Use this directory as the workspace root. If `alpha.workspace.yaml` is present,
 do not create a child `abel-invest-workspace` here. Run
 `./.venv/bin/abel-invest workspace context --path . --json` before creating a
 new session.
+
+Report to the user:
+- workspace root and doctor status
+- auth or runtime blockers
+- current session and branch path
+- the next action you will run or the one blocker that needs user input
+
+Do not treat `branch.yaml` as evidence. Prepare and debug branch inputs before a
+recorded round, and update `exploration_path.md` after every recorded round.
 """
 
 

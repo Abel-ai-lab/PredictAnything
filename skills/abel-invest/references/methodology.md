@@ -15,7 +15,7 @@ agent = strategy judgment and research insight
 
 `abel-edge` owns runtime legality and validation metrics.
 `abel-invest` owns branch declarations, evidence labels, frontier
-facts, and the research journal surface.
+facts, and the exploration path surface.
 
 ## Core Principles
 
@@ -77,8 +77,8 @@ substitute for Edge validation.
 Use one narrative scout pass when the next research decision is ambiguous
 between mechanism-deepening, graph expansion, or stopping. This is most useful
 when graph nodes are hard to interpret, the current neighborhood lacks a clear
-industry or supply-demand mechanism, or the journal cannot state what sign,
-lag, regime, interaction, control, or risk-shaping question remains. If Abel Ask
+industry or supply-demand mechanism, or `exploration_path.md` cannot state what
+sign, lag, regime, interaction, control, or risk-shaping question remains. If Abel Ask
 is unavailable, off-target, or weak, record that plainly and continue with the
 best graph/frontier evidence; do not launder narrative text into validation
 evidence.
@@ -101,10 +101,10 @@ fragile, concentrated, or illegal.
 Each round should update the agent's understanding. Static parameter grids can
 hide whether the search is learning or just overfitting a neighborhood.
 
-**The journal is agent-owned.**
-`research_journal.md` preserves hypotheses, observations, pivots, and stop/keep
-reasoning between turns. Evidence references make journal insights durable, but
-the journal itself is not evidence truth.
+**The exploration path is agent-readable and evidence-linked.**
+`exploration_path.md` preserves the chosen path, why it was chosen, Edge
+feedback, and ledger/artifact references between turns. It is the human-facing
+research log, while evidence truth remains in the ledger and raw artifacts.
 
 ## Current Workflow Consequence
 
@@ -112,7 +112,7 @@ The branch-default path is:
 
 1. resolve workspace and doctor readiness
 2. start or resume a graph-first session
-3. read ledger, frontier, and journal facts
+3. read ledger, frontier, and exploration path facts
 4. use one narrative scout pass when the next decision is ambiguous between
    mechanism-deepening, graph expansion, or stopping
 5. deepen the current mechanism when unresolved sign, lag, regime, interaction,
@@ -125,4 +125,4 @@ The branch-default path is:
 10. run semantic preflight
 11. record evidence
 12. inspect ledger/frontier facts
-13. update the research journal before deep local refinement
+13. keep `exploration_path.md` covered before deep local refinement

@@ -16,25 +16,40 @@ is an intentional legacy/offline session outside a workspace; in that case pass
 
 ## Standard Path
 
+Examples assume the current directory is `<workspace_root>` and session paths are
+relative to that root.
+
+Run:
+
 ```bash
 <command_prefix> init-session --ticker <TICKER> --exp-id <exp-id>
 <command_prefix> frontier status --session research/<ticker>/<exp_id>
 <command_prefix> init-branch --session research/<ticker>/<exp_id> --branch-id <family-a-branch>
 <command_prefix> init-branch --session research/<ticker>/<exp_id> --branch-id <family-b-branch>
+```
 
-# make each branch declaration explicit
-edit research/<ticker>/<exp_id>/branches/<family-a-branch>/branch.yaml
-edit research/<ticker>/<exp_id>/branches/<family-b-branch>/branch.yaml
-edit research/<ticker>/<exp_id>/research_journal.md  # branch basis and any scout influence
+Then make each branch declaration explicit by reading or editing:
 
-# implement, prepare, debug, and record the agent-chosen branch round
-edit research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py
+- `research/<ticker>/<exp_id>/branches/<family-a-branch>/branch.yaml`
+- `research/<ticker>/<exp_id>/branches/<family-b-branch>/branch.yaml`
+- `research/<ticker>/<exp_id>/exploration_path.md` before choosing the next Edge run
+- `research/<ticker>/<exp_id>/branches/<chosen-branch>/engine.py`
+
+Then prepare, debug, and record the agent-chosen branch round:
+
+```bash
 <command_prefix> prepare-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 <command_prefix> debug-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch>
 <command_prefix> run-branch --branch research/<ticker>/<exp_id>/branches/<chosen-branch> -d "baseline"
-edit research/<ticker>/<exp_id>/research_journal.md  # add the round's ledger ref and insight before another run
+```
 
-# only after the user asks to publish the paper-ready session, or agrees after a PASS
+After the recorded round, keep `research/<ticker>/<exp_id>/exploration_path.md`
+covered with path, why, Edge feedback, and ledger ref before another recorded
+round.
+
+Only after the user asks to publish the paper-ready session, or agrees after a PASS:
+
+```bash
 <command_prefix> visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
 ```
 
@@ -64,15 +79,17 @@ Each round should answer a mechanism question, not just consume compute.
 
 1. Read `agent_context.md` when resuming.
 2. Use `frontier.md` to understand coverage, concentration, input
-   realization, and research reflection facts.
-3. Use `research_journal.md` for your own hypotheses, observations, open
-   questions, and pivot/continue reasoning.
+   realization, path coverage, and exploration-shape facts.
+3. Use `exploration_path.md` as the single human-facing log of chosen paths,
+   why each path was chosen, Edge feedback, ledger/artifact refs, scout
+   influence, observations, open questions, and pivot/continue reasoning.
 4. Choose a graph/mechanism hypothesis before metric search. Be able to state
    why the branch exists, why its constants are mechanism defaults or simple
    priors, and what evidence would invalidate it.
 5. If the next decision is ambiguous between mechanism-deepening, graph
-   expansion, or stopping, run one lightweight narrative scout pass or journal
-   why it is unavailable, off-target, unnecessary, or skipped.
+   expansion, or stopping, run one lightweight narrative scout pass or record in
+   `exploration_path.md` why it is unavailable, off-target, unnecessary, or
+   skipped.
 6. Before widening graph breadth, ask whether the current graph neighborhood
    still has an unresolved sign, lag, regime, interaction, control, or
    risk-shaping question. If yes, answer that mechanism-depth question first.
@@ -80,11 +97,11 @@ Each round should answer a mechanism question, not just consume compute.
 8. Run `prepare-branch` before trusting branch inputs.
 9. Run `debug-branch` before recording evidence.
 10. Run `run-branch` only when declaration and debug facts are ready enough for
-   the evidence label you want.
+    the evidence label you want.
 11. Re-read `evidence_ledger.json` and `frontier.md`.
-12. Update `research_journal.md` for the recorded round before starting another
-   recorded round. Cite the round ledger ref and capture what changed, what
-   happened, what was learned, and what that implies next.
+12. Ensure `exploration_path.md` has the recorded round before starting another
+    recorded round. Cite the round ledger ref and capture the path, reason, Edge
+    feedback, what changed, what was learned, and what that implies next.
 
 Discovery seeds candidates from graph/mechanism priors. A hard user metric
 target is an optimization request: pursue it as guarded optimization
@@ -124,7 +141,7 @@ accounting facts for review. Workflow blockers preserve Alpha's declared count
 but use `edge_k_source=not_available` because no Edge K was returned.
 
 If performance scouting happened during standard discovery, declare the
-effective search width, journal what happened, treat the result as
+effective search width, record what happened in `exploration_path.md`, treat the result as
 scout-informed or optimization-informed rather than clean standard-discovery
 evidence, and return to graph/mechanism-led branch selection.
 
@@ -135,11 +152,11 @@ After each render, treat:
 - `evidence_ledger.json` as the evidence record
 - `frontier.md` / `frontier.json` as factual coverage reports
 - `agent_context.md` as the compact factual resume surface
-- `research_journal.md` as agent-owned research state
+- `exploration_path.md` as the single human-facing exploration log
 
-`journal_coverage_complete=false` means at least one recorded round still needs
-an agent-written journal entry. `research_reflection_due=true` is derived from
-that missing coverage; it does not mean the system has chosen a route.
+`path_coverage_complete=false` means at least one recorded round still needs an
+`exploration_path.md` entry with the round ledger ref, chosen path, reason, and
+Edge feedback. It does not mean the system has chosen a route.
 
 Input realization separates declaration from runtime behavior: a branch can
 declare `input_claim=graph_supported`, but if the strategy does not read
@@ -194,7 +211,7 @@ the default URL in the skill code if this endpoint changes.
 
 ## Exploration Discipline
 
-- graph breadth exploration comes first
+- graph context comes before strategy variants
 - strategy variants come second
 - parameter tuning comes last
 - multiple branches on one graph input set can still be graph-breadth narrow
@@ -208,5 +225,5 @@ the default URL in the skill code if this endpoint changes.
   points, but Edge evidence decides
   whether the branch worked
 
-If repeated variants fail in the same neighborhood, use the frontier and journal
-to make that concentration explicit before continuing.
+If repeated variants fail in the same neighborhood, use the frontier and
+`exploration_path.md` to make that concentration explicit before continuing.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 
+from abel_invest import __version__
 from abel_invest.narrative_core.contracts.constants import CHANGED_DIMENSIONS, DEFAULT_BACKTEST_START
 from abel_invest.workspace_core.workspace import DEFAULT_WORKSPACE_NAME
 
@@ -17,6 +18,7 @@ def _positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Abel strategy discovery workspace CLI")
+    parser.add_argument("--version", action="version", version=f"abel-invest {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     workspace = sub.add_parser("workspace", help="Create or inspect an Abel strategy discovery workspace")
@@ -26,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
         "init",
         help="Create a new workspace scaffold without preparing the runtime",
     )
-    workspace_init.add_argument("name", help="Workspace directory name")
+    workspace_init.add_argument("name", help="Workspace name recorded in the manifest")
     workspace_init.add_argument(
         "--path",
         required=True,
@@ -164,10 +166,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit machine-readable JSON output",
     )
 
-    init_session = sub.add_parser("init-session", help="Create a narrative session")
-    init_session.add_argument("--ticker", required=True)
-    init_session.add_argument("--exp-id", required=True)
-    init_session.add_argument("--root", default=None)
+    init_session = sub.add_parser("init-session", help="Create an Abel Invest research session")
+    init_session.add_argument("--ticker", required=True, help="Target ticker for this strategy discovery session")
+    init_session.add_argument("--exp-id", required=True, help="Session id written under the workspace research root")
+    init_session.add_argument(
+        "--root",
+        default=None,
+        help="Explicit research root. Omit during normal workspace-owned research.",
+    )
     init_session.add_argument(
         "--allow-outside-workspace",
         action="store_true",
@@ -177,6 +183,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--backtest-start",
         default=DEFAULT_BACKTEST_START,
         help="Session-level backtest start date passed to abel-edge evaluate",
+    )
+    init_session.add_argument(
+        "--mode",
+        default=None,
+        choices=["standard", "grandma"],
+        help="Session strategy mode. Grandma mode routes branches to the conservative grandma_daily profile.",
     )
     discovery_group = init_session.add_mutually_exclusive_group()
     discovery_group.add_argument(
@@ -194,7 +206,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_session.add_argument(
         "--discover-limit",
-        type=int,
+        type=_positive_int,
         default=10,
         help="Maximum Abel nodes to record per discovery call",
     )
@@ -203,7 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
         "set-backtest-start",
         help="Update the session-level backtest start and refresh readiness",
     )
-    set_backtest_start.add_argument("--session", required=True)
+    set_backtest_start.add_argument("--session", required=True, help="Session path, workspace-relative or absolute")
     start_group = set_backtest_start.add_mutually_exclusive_group(required=True)
     start_group.add_argument(
         "--date",
@@ -225,19 +237,19 @@ def build_parser() -> argparse.ArgumentParser:
         "set-hypothesis",
         help="Persist a branch-level hypothesis without recording a round",
     )
-    set_hypothesis.add_argument("--branch", required=True)
-    set_hypothesis.add_argument("--text", required=True)
+    set_hypothesis.add_argument("--branch", required=True, help="Branch path, workspace-relative or absolute")
+    set_hypothesis.add_argument("--text", required=True, help="Causal claim with expected sign and invalidation condition")
 
     init_branch = sub.add_parser("init-branch", help="Create a branch under a session")
-    init_branch.add_argument("--session", required=True)
-    init_branch.add_argument("--branch-id", required=True)
+    init_branch.add_argument("--session", required=True, help="Session path, workspace-relative or absolute")
+    init_branch.add_argument("--branch-id", required=True, help="Short branch id describing the hypothesis family")
 
     frontier = sub.add_parser("frontier", help="Inspect or expand the session graph frontier")
     frontier_sub = frontier.add_subparsers(dest="frontier_command", required=True)
     frontier_status = frontier_sub.add_parser("status", help="Show graph frontier status")
-    frontier_status.add_argument("--session", required=True)
+    frontier_status.add_argument("--session", required=True, help="Session path, workspace-relative or absolute")
     frontier_expand = frontier_sub.add_parser("expand", help="Expand a graph frontier node")
-    frontier_expand.add_argument("--session", required=True)
+    frontier_expand.add_argument("--session", required=True, help="Session path, workspace-relative or absolute")
     frontier_expand.add_argument("--node", "--anchor", dest="node", required=True)
     frontier_expand.add_argument(
         "--mode",
@@ -247,7 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     frontier_expand.add_argument(
         "--limit",
-        type=int,
+        type=_positive_int,
         default=10,
         help="Maximum Abel nodes to record for the expansion",
     )
@@ -256,7 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
         "prepare-branch",
         help="Resolve branch data dependencies and warm the edge cache before evaluation",
     )
-    prepare_branch.add_argument("--branch", required=True)
+    prepare_branch.add_argument("--branch", required=True, help="Branch path, workspace-relative or absolute")
     prepare_branch.add_argument(
         "--python-bin",
         default=None,
@@ -264,7 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prepare_branch.add_argument(
         "--cache-limit",
-        type=int,
+        type=_positive_int,
         default=5000,
         help="Warm-cache fetch limit used for each requested symbol",
     )
@@ -272,18 +284,18 @@ def build_parser() -> argparse.ArgumentParser:
     run_branch = sub.add_parser(
         "run-branch", help="Run edge evaluate and record a branch round"
     )
-    run_branch.add_argument("--branch", required=True)
+    run_branch.add_argument("--branch", required=True, help="Branch path, workspace-relative or absolute")
     run_branch.add_argument("--mode", default="explore", choices=["explore", "exploit"])
-    run_branch.add_argument("-d", "--description", required=True)
-    run_branch.add_argument("--input-note", default="")
-    run_branch.add_argument("--hypothesis", default="")
-    run_branch.add_argument("--expected-signal", default="")
-    run_branch.add_argument("--summary", default="")
-    run_branch.add_argument("--next-step", default="")
-    run_branch.add_argument("--trigger", default="")
-    run_branch.add_argument("--change-summary", default="")
-    run_branch.add_argument("--time-spent-min", default="")
-    run_branch.add_argument("--action", action="append", default=[])
+    run_branch.add_argument("-d", "--description", required=True, help="Short factual label for this recorded round")
+    run_branch.add_argument("--input-note", default="", help="Optional note about realized branch inputs")
+    run_branch.add_argument("--hypothesis", default="", help="Round-specific causal claim when it differs from branch.yaml")
+    run_branch.add_argument("--expected-signal", default="", help="Expected sign, lag, or behavior before seeing the result")
+    run_branch.add_argument("--summary", default="", help="Agent-written result summary for the round note")
+    run_branch.add_argument("--next-step", default="", help="Agent's proposed follow-up after reading this result")
+    run_branch.add_argument("--trigger", default="", help="Why this round was run now")
+    run_branch.add_argument("--change-summary", default="", help="What changed relative to the prior branch state")
+    run_branch.add_argument("--time-spent-min", default="", help="Approximate active research time in minutes")
+    run_branch.add_argument("--action", action="append", default=[], help="Repeatable audit note about actions taken before the round")
     run_branch.add_argument(
         "--changed-dimension",
         action="append",

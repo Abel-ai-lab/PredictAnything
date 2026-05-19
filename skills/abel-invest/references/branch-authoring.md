@@ -141,13 +141,16 @@ signed effect, or tradable direction from the role alone. Parent and child roles
 disclose causal-flow orientation; Abel Invest's `blanket` role is a
 Markov-blanket discovery bucket, not a fixed causal-flow direction.
 
-## Journal And Research Reflection
+## Exploration Path
 
-`agent_context.md` is the compact factual resume surface. `research_journal.md`
-is the agent-owned research state.
+`agent_context.md` is the compact factual resume surface. `exploration_path.md`
+is the single human-facing exploration log.
 
-Use the journal for:
-
+Use the exploration path for:
+- the path chosen for each recorded round
+- why that path was chosen
+- Edge feedback after the round
+- key result facts and artifact references
 - hypotheses and observations
 - branch basis before strategy code when the choice could affect evidence
   interpretation
@@ -169,27 +172,25 @@ unresolved assumptions have been tested or intentionally ruled out.
 When an insight should survive as a research conclusion, cite evidence such as
 `ledger:<branch_id>:<round_id>`, `frontier.md`, or a raw artifact path.
 
-Every recorded round needs its own agent-written journal entry before the next
+Every recorded round needs its own exploration path entry before the next
 recorded round. The entry does not need a fixed template, but it must cite the
-round ledger ref and preserve the observation or insight that should guide later
-exploration.
+round ledger ref and preserve the path, reason, and Edge feedback that should
+guide later exploration.
 
-When `journal_coverage_complete=false`, use frontier facts and the journal to
-close the missing entries. State whether you are continuing the neighborhood,
-pivoting graph inputs, changing strategy family, adding contrast evidence, or
-stopping. The framework exposes the shape of the search; it should not choose
-the route.
+When `path_coverage_complete=false`, update `exploration_path.md` for the
+missing ledger refs. The framework exposes the shape of the search; it should
+not choose the route.
 
 ## Prepared Inputs
 
 `prepare-branch` materializes the branch contract under `inputs/`:
 
-- `runtime_profile.json`
-- `execution_constraints.json`
-- `data_manifest.json`
-- `context_guide.md`
-- `probe_samples.json`
-- `dependencies.json`
+- `inputs/runtime_profile.json`
+- `inputs/execution_constraints.json`
+- `inputs/data_manifest.json`
+- `inputs/context_guide.md`
+- `inputs/probe_samples.json`
+- `inputs/dependencies.json`
 
 Inspect these files before changing strategy logic. Prefer prepared branch
 inputs over frontier-side inference. `data_manifest.json` and
@@ -215,14 +216,14 @@ Before writing strategy logic, be able to state:
 
 If a branch was chosen because it ranked best in a local metric scan, it is not
 a clean standard-discovery candidate. Declare the search width with
-`--selection-trials`, journal the scout influence, and return to
+`--selection-trials`, record the scout influence in `exploration_path.md`, and return to
 graph/mechanism-led branch selection for the next standard round.
 
 ## What To Do
 
 1. State the branch thesis in `branch.yaml`.
 2. Run `<command_prefix> prepare-branch --branch ...`.
-3. Inspect `inputs/context_guide.md`, `probe_samples.json`, and
+3. Inspect `inputs/context_guide.md`, `inputs/probe_samples.json`, and
    `inputs/data_manifest.json`.
 4. Implement or revise `compute_decisions(self, ctx)`.
 5. Run `<command_prefix> debug-branch --branch ...`.
@@ -230,7 +231,7 @@ graph/mechanism-led branch selection for the next standard round.
 7. Run `<command_prefix> run-branch --branch ...` when declaration and
    debug facts are ready enough for the evidence label you want.
 8. Read `evidence_ledger.json` and `frontier.md`.
-9. Update `research_journal.md` with grounded follow-up state.
+9. Keep `exploration_path.md` covered with path, why, Edge feedback, and ledger refs.
 
 ## Research Judgment
 

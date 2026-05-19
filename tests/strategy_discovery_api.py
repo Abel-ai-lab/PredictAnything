@@ -24,24 +24,31 @@ from abel_invest.narrative_core.contracts.constants import (
     EVIDENCE_LEDGER_FILENAME,
     FRONTIER_JSON_FILENAME,
     FRONTIER_MARKDOWN_FILENAME,
-    JOURNAL_GENERATED_HEADER_END,
     RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
     GRAPH_FRONTIER_FILENAME,
 )
 from abel_invest.narrative_core.runtime.context import build_branch_context
 from abel_invest.narrative_core.dashboard import (
-    build_multipart_form_data,
-    build_skill_dashboard_session_bundle,
-    post_strategy_artifact_upload,
+    post_skill_dashboard_bundle,
     post_skill_dashboard_session,
     render_skill_dashboard_session_upload_result,
-    render_strategy_artifact_upload_lines,
     resolve_skill_dashboard_base_url,
+    upload_skill_dashboard_session,
+)
+from abel_invest.narrative_core.dashboard_payload import (
+    build_skill_dashboard_bundle,
+    build_skill_dashboard_session_bundle,
+)
+from abel_invest.narrative_core.strategy_artifact_upload import (
+    post_strategy_artifact_upload,
+    render_strategy_artifact_upload_lines,
     strategy_artifact_client_request_id,
     upload_prepared_strategy_artifact_for_session,
-    upload_skill_dashboard_session,
     upload_strategy_artifact_for_session,
+)
+from abel_invest.narrative_core.upload_transport import (
+    build_multipart_form_data,
 )
 from abel_invest.narrative_core.strategy_artifacts import (
     build_strategy_artifact_manifest,
@@ -52,7 +59,7 @@ from abel_invest.narrative_core.strategy_artifacts import (
 )
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts
 from abel_invest.narrative_core.io import append_tsv_row
-from abel_invest.narrative_core.evidence.journal import build_research_journal_status
+from abel_invest.narrative_core.evidence.exploration_path import build_exploration_path_status
 from abel_invest.narrative_core.command_handlers.branch import (
     debug_branch_run,
     prepare_branch_inputs,
@@ -89,7 +96,7 @@ from abel_invest.narrative_core.evidence.graph_frontier import (
 from abel_invest.narrative_core.rendering.session_rendering import (
     check_session,
     graph_priority_warning_lines,
-    journal_coverage_warning_lines,
+    path_coverage_warning_lines,
     print_status,
     render_session,
 )
