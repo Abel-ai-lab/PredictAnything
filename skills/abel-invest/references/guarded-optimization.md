@@ -36,7 +36,9 @@ Fail any → disqualified regardless of objective value.
 3. Seed configs from `data-driven-construction.md` (feature factory +
    ensemble) and `proven-patterns.md`.
 4. Per config: `init-branch` → `prepare-branch` →
-   `run-branch --selection-trials <running total of ALL variants>`.
+   `run-branch --selection-trials <THIS config/round's search width only —
+   NOT a running total; the framework accumulates campaign K from prior
+   rounds itself (see K rule)>`.
 5. Discard non-gauntlet-PASS candidates (they still increment K).
 6. Select `argmax(single objective)` over PASS survivors.
 7. Journal: search width, K, gauntlet outcomes, selected optimum.
