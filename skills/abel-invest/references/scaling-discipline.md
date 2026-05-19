@@ -26,9 +26,8 @@ experiment.
 **Why** — canonical in `methodology.md` (data-driven entry) +
 `guarded-optimization.md` (the gauntlet gates). Not restated here. One line:
 force the extreme causal-bounded data-driven loop by default and prove
-exhaustion by ledger, never by vibe. (The "more search self-defeats on a weak
-edge" dynamic is plausible but only trustworthy under correct per-round K
-accounting — see the K rule below.)
+exhaustion by ledger, never by vibe; account K honestly per-round and let the
+gauntlet reject weak Sharpe.
 
 Self-contained: abel-invest's own CLI + engine.py + branch flow only. No
 abelian / external skill.
@@ -45,7 +44,7 @@ abelian / external skill.
 - This is Pillar-2 of `data-driven-construction.md` made obligatory, not
   optional. Skipping it = skipping the search.
 
-## Honest-K is the scaling law's governor
+## Honest-K accounting
 
 - `--selection-trials` = THIS round's search width ONLY (model families ×
   HPO trials × denoise variants × feature-sets tried *in this round*). The
@@ -53,14 +52,15 @@ abelian / external skill.
   (`build_dsr_trials_context`: `K = Σ prior rounds' current_round_trials +
   this round`). Passing a running/cumulative total DOUBLE-COUNTS prior rounds
   and corrupts DSR — the cardinal K error. Per-round width, never cumulative.
-- DSR deflates as the framework-accumulated campaign K grows. Therefore: on a
-  real edge the breakthrough lands in **1-2 rounds**; if many rounds are
-  needed, the edge is absent and more search is **negative-EV** (K rises
-  faster than Sharpe). State this up front. (Caveat: this dynamic is only
-  trustworthy with correct per-round K accounting — a cumulative-pass bug
-  inflates K and can falsely manufacture the "self-defeat" signal.)
-- Strong edge → scaling holds (force the loop hard). Weak/absent edge →
-  scaling self-defeats (the gate correctly refuses to manufacture alpha).
+- With correct per-round K, campaign K grows only ~linearly with rounds
+  (≈ number of recorded rounds) — there is NO runaway "more-search-self-
+  defeats" dynamic; a prior claimed "honest-K self-defeat law" was a
+  cumulative-double-count artifact and is retracted.
+- The real bound is mundane and sufficient: a weak-Sharpe construction fails
+  the DSR gate even at honest per-round K. So the discipline is not "search
+  less to protect K" — it is: run the mandatory data-driven entry, account K
+  per-round honestly, and let the gauntlet reject weak Sharpe. Force the loop;
+  trust the gate.
   Do not mistake "more compute" for "more alpha".
 
 ## Exhaustion is ledger-proven, never asserted
