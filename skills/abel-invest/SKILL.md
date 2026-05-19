@@ -116,7 +116,10 @@ Always start by resolving workspace state before strategy work.
 15. `--selection-trials N` is the honest K-accounting that MAKES guarded
     optimization legitimate: it deflates DSR by the true number of variants
     tried. Always pass it for any search width. It is mandatory for guarded
-    optimization, not a marker of misbehavior.
+    optimization, not a marker of misbehavior. `N` = THIS round's width ONLY;
+    the framework accumulates the campaign total from prior rounds itself —
+    never pass a running/cumulative total (see `references/guarded-optimization.md`
+    K rule).
 16. A hard user metric target (Sharpe / MaxDD / PnL) IS an optimization
     request. Pursue it via guarded optimization (gauntlet-gated,
     causal-prior-bounded, K-accounted) — not by widening un-gated local search,
