@@ -61,9 +61,17 @@ Fail any → disqualified regardless of objective value.
    final+1 and each failed-survivor recheck deflates the next stricter — that
    corrupts the verdict. If the survivor fails the gate at K_final, it is NOT
    the optimum — analytically recheck the next survivor (still non-recorded).
-   K_final = the campaign K already implied by the recorded rounds; the
-   revalidation itself adds zero trials. Never report an optimum validated
-   only at a stale (smaller) K, and never let the revalidation inflate K.
+   **K_final = (campaign K implied by recorded PASS/FAIL rounds) + (every
+   preflight/workflow-ERROR-disqualified variant since the last counted round
+   that was never folded into a recorded per-round `--selection-trials`).**
+   `build_dsr_trials_context` counts PASS/FAIL rows only, so terminal ERROR
+   variants after the last counted round (e.g. survivor PASSes, next config
+   ERRORs, search stops) have no later round to absorb them — the analytic
+   recompute MUST add them explicitly or it undercounts and can preserve a
+   survivor that should fail DSR. The revalidation itself records nothing and
+   adds zero *recorded* trials, but its K_final must include those unfolded
+   terminal ERRORs. Never report an optimum validated only at a stale (smaller)
+   K, and never let the revalidation itself create a recorded row.
 8. Journal: search width, K, gauntlet outcomes, the final-K revalidation, the
    selected optimum.
 

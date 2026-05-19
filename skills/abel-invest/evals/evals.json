@@ -31,7 +31,7 @@
       "expectations": [
         "Says --selection-trials = THIS round's width only, NOT a running/cumulative total (framework accumulates campaign K)",
         "Notes preflight/ERROR-disqualified configs are not auto-counted and must be folded into a later round's per-round count",
-        "Requires final-total-K revalidation of the selected survivor via a NON-RECORDED analytic recompute (not a new run-branch; the recheck must not add a trial / inflate K)"
+        "Requires final-total-K revalidation of the selected survivor via a NON-RECORDED analytic recompute (not a new run-branch), where K_final = recorded PASS/FAIL campaign K PLUS any unfolded terminal preflight/ERROR variants since the last counted round"
       ]
     }
   ]

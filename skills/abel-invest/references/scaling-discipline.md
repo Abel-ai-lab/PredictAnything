@@ -74,8 +74,11 @@ abelian / external skill.
   **analytically at the FINAL total K from its stored round artifacts**
   (`*-edge-frame.csv` pnl + `abel_edge._dsr`). Do NOT `run-branch` the recheck
   — a recorded re-run becomes final+1 and escalates with each failed-survivor
-  recheck. The revalidation adds zero trials. Never report a candidate
-  validated only at a stale smaller K, nor let the recheck inflate K.
+  recheck. K_final = recorded-PASS/FAIL campaign K **+ every unfolded
+  terminal preflight/ERROR variant since the last counted round** (those have
+  no later round to absorb them; omitting them undercounts). The recheck
+  records nothing but its K_final must include those. Never report a candidate
+  validated only at a stale/undercounted K, nor let the recheck create a row.
 - **Autoresearch is NOT round-limited.** There is no round cap, round budget,
   or "stop after N rounds / 1-2 tries". Keep iterating data-driven mechanisms
   for as long as untested high-quality directions remain. The ONLY stops are:
