@@ -3,12 +3,32 @@
 **When**: every abel-invest mandate — always-on temperament. Read at session
 start and again before writing any "exhausted / ceiling / no edge" conclusion.
 
+**First principle** (the fixed hierarchy — everything below serves it):
+
+1. **Causal is a first-class citizen.** The causal graph/edge is the primary
+   organizing object — the universe and candidate space are bounded BY it,
+   never an unbounded feature soup with causality bolted on.
+2. **Kaggle-style ML is the methodology.** Machine feature factory +
+   heterogeneous diversity-gated ensembling is the actual working method,
+   applied competitively and empirically — not hand-designed single
+   mechanisms.
+3. **Top-tier engineering is the foundation.** Reproducible, vectorized,
+   cached, deterministic, leak-safe execution is the base the rest stands on;
+   without it the search is not trustworthy.
+4. **The abel causal gauntlet is the heavy gates.** Multiple hard gating
+   layers (semantic · gate/DSR/triangle · leakage · walk-forward · honest-K)
+   admit nothing unworthy; the gate is incorruptible and final.
+
+Derived from the **DR-series production existence proof** (the deployed ETH
+winners embody 1-4 and reach Sharpe>3) — NOT from any single in-session
+experiment.
+
 **Why** — canonical in `methodology.md` (data-driven entry) +
 `guarded-optimization.md` (the gauntlet gates). Not restated here. One line:
-the causal scaling law is REAL but **edge-conditional** — brute-force
-data-driven search is king only *through the honest gate* and only *when the
-edge exists*; so force the extreme data-driven loop by default and prove
-exhaustion by ledger, never by vibe.
+force the extreme causal-bounded data-driven loop by default and prove
+exhaustion by ledger, never by vibe. (The "more search self-defeats on a weak
+edge" dynamic is plausible but only trustworthy under correct per-round K
+accounting — see the K rule below.)
 
 Self-contained: abel-invest's own CLI + engine.py + branch flow only. No
 abelian / external skill.
