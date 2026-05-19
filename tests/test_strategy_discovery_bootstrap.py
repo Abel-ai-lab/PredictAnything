@@ -136,3 +136,31 @@ def test_strategy_discovery_cli_exposes_env_refresh() -> None:
     assert args.command == "env"
     assert args.env_command == "refresh"
     assert args.path == "abel-invest-workspace"
+
+
+def test_visualize_session_strategy_artifact_is_default_with_session_only_opt_out() -> None:
+    parser = build_parser()
+
+    default_args = parser.parse_args(
+        ["visualize-session", "--session", "research/tsla/tsla-v1"]
+    )
+    opt_out_args = parser.parse_args(
+        [
+            "visualize-session",
+            "--session",
+            "research/tsla/tsla-v1",
+            "--without-strategy-artifact",
+        ]
+    )
+
+    assert default_args.without_strategy_artifact is False
+    assert opt_out_args.without_strategy_artifact is True
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "visualize-session",
+                "--session",
+                "research/tsla/tsla-v1",
+                "--with-strategy-artifact",
+            ]
+        )

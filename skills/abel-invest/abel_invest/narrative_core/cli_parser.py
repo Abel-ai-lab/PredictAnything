@@ -343,11 +343,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build and print the payload without sending it.",
     )
     visualize_session.add_argument(
-        "--with-strategy-artifact",
+        "--without-strategy-artifact",
         action="store_true",
         help=(
-            "Prepare the session's best ranked hostable strategy artifact, then upload "
-            "narrative and artifact."
+            "Upload only the narrative session view and skip strategy artifact "
+            "preparation/upload."
         ),
     )
     visualize_session.add_argument(

@@ -50,7 +50,7 @@ round.
 Only after the user asks to publish the paper-ready session, or agrees after a PASS:
 
 ```bash
-<command_prefix> visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
+<command_prefix> visualize-session --session research/<ticker>/<exp_id>
 ```
 
 New sessions run live graph discovery by default. Use `--no-discover` only when
@@ -184,13 +184,13 @@ agrees, or if the user explicitly asks to visualize the session, pass the
 session folder to the command:
 
 ```bash
-<command_prefix> visualize-session --session research/<ticker>/<exp_id> --with-strategy-artifact
+<command_prefix> visualize-session --session research/<ticker>/<exp_id>
 ```
 
 The command builds the online view from local session evidence and uploads the
 automatically selected best `PASS` strategy artifact when one is available. Use
-narrative-only `visualize-session` only when the user explicitly asks for a
-session view without strategy artifact upload. If the command reports
+`visualize-session --without-strategy-artifact` only when the user explicitly
+asks for a session view without strategy artifact upload. If the command reports
 `needs_agent_refactor`, read the emitted `refactor-request.json` and handle it
 in the current skill loop. If `kind` is `state_intent_self_check`, inspect the
 selected branch source and nearby model/checkpoint/cache files, then write
