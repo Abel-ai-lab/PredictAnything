@@ -8,10 +8,10 @@ start and again before writing any "exhausted / ceiling / no edge" conclusion.
 1. **Causal is a first-class citizen.** The causal graph/edge is the primary
    organizing object — the universe and candidate space are bounded BY it,
    never an unbounded feature soup with causality bolted on.
-2. **Kaggle-style ML is the methodology.** Machine feature factory +
-   heterogeneous diversity-gated ensembling is the actual working method,
-   applied competitively and empirically — not hand-designed single
-   mechanisms.
+2. **Top-1-Kaggler-style ML is the temperament AND the methodology.**
+   Extreme feature engineering + diversity-gated ensembling + genuine ML
+   expertise, applied competitively and empirically — the disposition *and*
+   the working method, never hand-designed single mechanisms.
 3. **Top-tier engineering is the foundation.** Reproducible, vectorized,
    cached, deterministic, leak-safe execution is the base the rest stands on;
    without it the search is not trustworthy.
