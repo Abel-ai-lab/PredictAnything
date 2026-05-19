@@ -5,7 +5,8 @@
 **Why** — canonical in `methodology.md` ("Mechanism seeds; the gauntlet
 gates; optimization is first-class"). Not restated here. One line: optimize
 *through* the gauntlet; never select on a raw metric outside it; the causal
-frontier bounds K so the search stays DSR-survivable.
+frontier bounds K so the search stays DSR-survivable. Keep search width explicit:
+add variants only when their role is declared and their K is counted.
 
 Self-contained: the agent runs this via abel-invest's own CLI only. No
 autonomous optimizer is shipped; no abelian / external skill.
@@ -33,8 +34,10 @@ Fail any → disqualified regardless of objective value.
 
 1. `init-session` (graph-first).
 2. `frontier` — this IS the search space; never optimize an unbounded universe.
-3. Seed configs from `data-driven-construction.md` (feature factory +
-   ensemble) and `proven-patterns.md`.
+3. Seed configs from the causal frontier, current evidence, and
+   `proven-patterns.md`. If you intentionally test a broader construction
+   principle from `principles-to-test.md`, state that and K-account the added
+   width. Do not add complexity without K-accounting it.
 4. Per config: `init-branch` → `prepare-branch` →
    `abel-invest run-branch --branch <branch-path> -d "<change description>"
    --selection-trials <N>` where **`--branch` and `-d/--description` are
@@ -72,6 +75,8 @@ Fail any → disqualified regardless of objective value.
    adds zero *recorded* trials, but its K_final must include those unfolded
    terminal ERRORs. Never report an optimum validated only at a stale (smaller)
    K, and never let the revalidation itself create a recorded row.
+   Until Abel Invest exposes a dedicated non-recording command, treat this as a
+   manual analytic check against stored artifacts rather than another CLI run.
 8. Journal: search width, K, gauntlet outcomes, the final-K revalidation, the
    selected optimum.
 

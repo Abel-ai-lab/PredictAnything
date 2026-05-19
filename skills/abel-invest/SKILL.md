@@ -74,16 +74,16 @@ Always start by resolving workspace state before strategy work.
   read `references/constraints.md`.
 - Explaining why the workflow is graph-first or evidence-boundary oriented:
   optionally read `references/methodology.md`.
-- Forming the candidate space (entry stance, feature generation, ensemble):
-  read `references/data-driven-construction.md`. Core path.
 - Choosing concrete constructions while writing the engine:
   read `references/proven-patterns.md` (battle-tested patterns). Core path.
 - A hard Sharpe / MaxDD / PnL target is set:
   read `references/guarded-optimization.md` (self-contained gauntlet-gated
   optimization). Core path — not optional — when a performance bar is set.
-- Always-on temperament; tempted to hand-design first, or about to write
-  "exhausted / ceiling / no edge":
-  read `references/scaling-discipline.md`. Core path — not optional.
+- Before writing "exhausted / ceiling / no edge":
+  read `references/experiment-loop.md` and check the ledger requirements there.
+- Considering a plausible but not-yet-canonical research principle, including
+  broad feature-factory or ensemble construction:
+  read `references/principles-to-test.md`.
 
 ## Operating Rules
 
@@ -150,17 +150,20 @@ Research discipline:
   rounds itself. Fold preflight/ERROR-disqualified variants into a later
   per-round count when they would otherwise be skipped. See
   `references/guarded-optimization.md`.
-- Data-driven entry is mandatory, not advice: the first recorded candidate round
-  is a machine feature factory over the full directly-discovered depth-1
-  frontier (parents + blanket + children), fed to a heterogeneous
-  diversity-gated ensemble. Do not require 2-hop on the first round; depth-2
-  needs an evidence-gated `frontier expand` per
-  `references/discovery-protocol.md`. Hand-designed single-mechanism rounds are
-  diagnostics, never the baseline. See `references/scaling-discipline.md`.
+- Broader construction principles can help avoid premature single-mechanism
+  conclusions, but they are not canonical rules until validated. The first
+  serious candidate path should use the full directly-discovered depth-1
+  frontier relevant to the causal question (parents + blanket + children), not a
+  single metric-picked favorite node. Do not require 2-hop on the first round;
+  depth-2 needs an evidence-gated `frontier expand` per
+  `references/discovery-protocol.md`. Hand-designed single-mechanism rounds can
+  be useful diagnostics, but they do not prove exhaustion. See
+  `references/experiment-loop.md` and `references/principles-to-test.md`.
 - Exhaustion is ledger-proven, never asserted. Do not write "exhausted",
   "ceiling", or "no untested mechanism" unless the ledger shows, K-accounted:
-  machine factory, >=1 unsupervised denoise, heterogeneous ensemble, and the
-  full discovered frontier (>=3 nodes; 2-hop only if evidence-expanded). A green
+  full discovered frontier where relevant, materially different mechanism
+  classes, any intentionally tested principle and its search impact, and all
+  attempted width including otherwise-skipped ERROR/preflight variants. A green
   per-candidate gauntlet does not certify search exhaustiveness.
 - CAP graph nodes are model-supported causal priors. Trust that they carry
   target-relevant information, but do not infer disclosed weight, exact lag,

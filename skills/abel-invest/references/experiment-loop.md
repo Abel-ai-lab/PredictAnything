@@ -130,20 +130,42 @@ round defaults to `1`. If accidental search width or explicitly requested
 optimization selected one submitted strategy from a parameter, threshold,
 filter, sizing, driver, asset, or window sweep, pass `--selection-trials N` so
 DSR reflects the Alpha search width instead of only the final `engine.py` shape.
-`--selection-trials` is the honest K-accounting that makes guarded
-optimization legitimate: always pass it for any search width so DSR deflates
-by the true number of variants tried.
+`N` is this round's width only, never a running/cumulative campaign total; the
+framework accumulates prior PASS/FAIL rounds itself. `--selection-trials` is the
+honest K-accounting that makes guarded optimization legitimate: always pass it
+for any search width so DSR deflates by the true number of variants tried.
 Each edge result also appends a session-level `dsr_trials.jsonl` audit row.
 Recorded PASS/FAIL validation rounds count toward future DSR; debug runs,
 semantic errors, and workflow blockers are recorded for audit but do not increase
 future DSR count. Round notes and `evidence_ledger.json` expose the same K
 accounting facts for review. Workflow blockers preserve Alpha's declared count
-but use `edge_k_source=not_available` because no Edge K was returned.
+but use `edge_k_source=not_available` because no Edge K was returned. If a
+semantic preflight or workflow ERROR represents a real attempted variant, fold it
+into a later recorded round's per-round `--selection-trials`; otherwise it is
+audited but not counted for future DSR.
 
 If performance scouting happened during standard discovery, declare the
 effective search width, record what happened in `exploration_path.md`, treat the result as
 scout-informed or optimization-informed rather than clean standard-discovery
 evidence, and return to graph/mechanism-led branch selection.
+
+## Before Exhaustion Or No-Edge Claims
+
+Do not write "exhausted", "ceiling", or "no edge" from a single failed
+mechanism, a small round count, or a green per-candidate gauntlet. Exhaustion is
+a ledger conclusion.
+
+Before making that claim, check that the ledger shows:
+
+1. the relevant discovered frontier was used or intentionally ruled out
+2. materially different mechanism classes were tried, not only parameter variants
+3. any intentionally tested principle from `principles-to-test.md` is recorded
+   with its impact on the search
+4. all attempted width is K-accounted, including preflight or workflow ERROR
+   variants that would otherwise be audited but skipped from future DSR
+
+Stop conditions are a gauntlet-PASS candidate at the target or ledger-supported
+exhaustion. Do not stop by round count.
 
 ## Evidence Reading
 

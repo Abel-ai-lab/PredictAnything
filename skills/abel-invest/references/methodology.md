@@ -53,15 +53,15 @@ gauntlet (semantic, gate/DSR/triangle, leakage, walk-forward) and
 `--selection-trials` accounts the true K. The failure mode to avoid is
 selecting on a raw metric OUTSIDE the gauntlet — not optimization itself.
 
-**Data-driven entry; mechanism is post-hoc.**
+**Evidence entry; mechanism is post-hoc.**
 A candidate enters on gauntlet / OOS survival, never on the strength of its
 mechanism story. The mechanism narrative is a post-hoc Insight Card written
 after a candidate survives — it explains, it does not admit. Graph and
 mechanism priors *seed and bound* the search (the causal regularizer); they
-do not gate entry — survival does. This is the construction stance behind the
-production track record: many machine-engineered weak signals combined as a
-diversity-gated ensemble, judged by survival, not a single
-narrative-confirmed signal. See `references/data-driven-construction.md`.
+do not gate entry — survival does. This supports systematic construction when
+the search question requires it, but it does not make complexity self-justifying.
+See `references/principles-to-test.md` for non-canonical broader construction
+principles.
 
 `--selection-trials` is the honest K-accounting that makes guarded
 optimization legitimate, not a marker that search is illegitimate. abel-invest
