@@ -262,16 +262,12 @@ Run these commands from the workspace root:
 {default_activate_command()}
 ./.venv/bin/abel-invest init-session --ticker TSLA --exp-id tsla-v1
 ./.venv/bin/abel-invest frontier status --session research/tsla/tsla-v1
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <feature-factory-branch>
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <model-or-denoise-branch>
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <target-control-branch>
+./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <candidate-branch>
 ```
 
 Read or edit these files before the first recorded round:
 
-- `research/tsla/tsla-v1/branches/<feature-factory-branch>/branch.yaml`
-- `research/tsla/tsla-v1/branches/<model-or-denoise-branch>/branch.yaml`
-- `research/tsla/tsla-v1/branches/<target-control-branch>/branch.yaml`
+- `research/tsla/tsla-v1/branches/<candidate-branch>/branch.yaml`
 - `research/tsla/tsla-v1/exploration_path.md`
 - `research/tsla/tsla-v1/branches/<chosen-branch>/engine.py`
 
@@ -399,16 +395,12 @@ Run these commands from the workspace root:
 ./.venv/bin/abel-invest doctor
 ./.venv/bin/abel-invest init-session --ticker TSLA --exp-id tsla-v1
 ./.venv/bin/abel-invest frontier status --session research/tsla/tsla-v1
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <feature-factory-branch>
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <model-or-denoise-branch>
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <target-control-branch>
+./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <candidate-branch>
 ```
 
 Read or edit these files before branch execution:
 
-- `research/tsla/tsla-v1/branches/<feature-factory-branch>/branch.yaml`
-- `research/tsla/tsla-v1/branches/<model-or-denoise-branch>/branch.yaml`
-- `research/tsla/tsla-v1/branches/<target-control-branch>/branch.yaml`
+- `research/tsla/tsla-v1/branches/<candidate-branch>/branch.yaml`
 - `research/tsla/tsla-v1/exploration_path.md`
 - `research/tsla/tsla-v1/branches/<chosen-branch>/engine.py`
 

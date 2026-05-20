@@ -19,49 +19,41 @@ optimizer skill is required.
 - MaxDD / PnL / LossYrs / Lo / IC / DSR / triangle are validation gates or
   diagnostics, not a reason to hide the primary objective.
 - Use target/baseline behavior to measure whether graph-enriched candidates add
-  value beyond target self-history, but keep graph-derived portfolio search
-  active when graph candidates are live.
+  value beyond target self-history, but keep graph-derived search active when
+  graph candidates are live.
 
 ## Two-Stage Loop
 
 ### 1. Exploration Screening
 
-Use a bounded candidate universe and search it empirically.
-For ordinary non-grandma alpha search, empirical construction is the main lane,
-not an optional late broadening step.
+Use a bounded candidate universe and search it empirically. For ordinary
+non-grandma alpha search, empirical construction is the posture, not an
+optional late broadening step.
 
-Good candidate-universe sources:
+Candidate-universe sources can include:
 
 - target-only features as baseline and competitor
 - validated baseline or catalog strategies
-- graph nodes and graph-derived feeds as the default high-value current feature
-  universe beyond target history
+- graph nodes and graph-derived feeds as the default high-value expanded
+  feature universe
 - sector, cross-asset, liquidity, volume, and regime features when justified by
   user goal or evidence
 - proven patterns, feature factories, learned models, and ensembles
 
-Allowed search moves:
+Search degrees of freedom can include:
 
 - parameter grids or random search
 - graph-node subset search
-- materially different graph-derived views or extractors
 - lag, sign, transformation, ratio, and rolling-window search
 - model-family comparison
 - HPO
 - feature-factory and ensemble screening
 - regime, sizing, and filter search
 - denoise or compression when temporally legal
-- earned local graph expansion when current evidence points outside the current
-  view
 
 Hand-written single-mechanism branches can benchmark, diagnose, ablate, or
 refine a promising shape. They should not replace the empirical construction
-lane when live graph-derived data is available and unsearched.
-
-Avoid single-lead collapse during screening. A first good graph-supported or
-target-only branch is a lead, not permission to stop graph-derived search,
-unless the candidate is already near reportable quality and the next refinement
-is earned by metric shape.
+posture when live graph-derived data is available.
 
 During screening:
 
@@ -134,8 +126,6 @@ honestly when no survivor clears final-K validation.
 - Hiding search width inside one branch.
 - Treating the whole depth-1 frontier as the only legitimate first candidate.
 - Letting target-only become the default escape from live graph-derived search.
-- Polishing one simple lead while materially different graph-derived views
-  remain untried.
 - Treating graph-supported hand-written rules as a substitute for feature
   factories, model-family comparison, denoise, subset search, or ensembles.
 - Refusing to report a validated target-only candidate when it is honestly the

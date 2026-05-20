@@ -81,8 +81,8 @@ Always start by resolving workspace state before strategy work.
   optimization). Core path — not optional — when a performance bar is set.
 - Before writing "exhausted / ceiling / no edge":
   read `references/experiment-loop.md` and check the ledger requirements there.
-- Data-driven candidate construction, especially during early non-grandma
-  candidate construction or when tempted to write another simple rule:
+- Data-driven candidate construction, especially when ordinary alpha search
+  risks becoming another simple hand-written rule:
   read `references/data-driven-construction.md`. Core path.
 
 ## Operating Rules
@@ -141,42 +141,30 @@ Alpha search stance:
 - Search hard, then explain. Let observed results, failure modes, and metric
   shape choose the next candidate family. Mechanism stories are useful after
   evidence appears; they are not admission tickets.
-- Ordinary alpha search has a default engine: graph-frontier alpha portfolio
-  search over a bounded target + current graph-derived universe. Early work
-  should create a small set of materially different graph-derived candidate
-  universes or extractors, unless live graph access is blocked, a validated
-  baseline is the obvious launchpad, or the user chose a simple/conservative
-  lane.
+- Ordinary alpha search has a default posture: empirical construction over a
+  bounded target + graph-derived universe. The agent should use the graph,
+  target behavior, feature construction, model comparison, denoise, subset
+  search, regimes, sizing, filters, or ensembles as data calls for them; these
+  are degrees of freedom, not a scripted route.
 - New sessions use live causal graph discovery when available. Treat the graph
   as the default high-value alpha feature universe beyond target-only history:
   node subsets, lags, signs, transformations, ratios, regimes, model features,
   sizing signals, filters, and ensemble members are all fair game.
-- Data-driven graph use means letting graph-derived views compete. Good early
-  lanes include direct frontier feature factories, causal-role buckets,
-  graph-node subset/lag/sign searches, denoise/compression, learned
-  target+graph models, graph-as-regime, graph-as-risk filter, and graph-member
-  ensembles. This is not a quota; it prevents collapsing into the first simple
-  lead.
-- Graph-enriched ideas should appear early and recur throughout the search
+- Graph-enriched ideas should appear early and recur throughout ordinary search
   unless the user chose a simple/conservative lane, a validated baseline already
   defines the immediate path, or live graph access is blocked. Do not turn this
   into a full-frontier quota or a broad basket ritual.
 - Target-only work is useful as a baseline, seed, ablation, or competing
   candidate. It should not become the lazy default when live graph candidates
   are available; use it to measure whether graph-derived information improves
-  the objective or robustness. If target-only looks strong, ask what graph
-  overlay, regime, risk, or diversification context can explain or improve it
-  before spending the rest of the search in target-only optimization.
+  the objective or robustness.
 - A graph-supported branch is not automatically data-driven. Runtime graph reads
   prove input realization; they do not replace feature construction, model
   comparison, subset/lag/sign search, denoise, or ensemble search.
 - Hand-written single-mechanism branches are diagnostics, controls, ablations,
-  or refinements around an empirical lead. They should not dominate the early
-  search when the graph-derived universe is live and unsearched.
-- Avoid single-lead collapse. Do not spend the budget polishing one simple graph
-  or target mechanism unless metrics show near-reportable quality and the next
-  refinement is earned by the data. Otherwise construct another materially
-  different graph-derived view or compare against a control.
+  or refinements around empirical construction. They are useful, but they are
+  not the product's default search posture when live graph-derived data is
+  available.
 - A hard user metric target (Sharpe / MaxDD / PnL) is an optimization request.
   Search is expected: use target/baseline context, graph-derived features,
   feature factories, ensembles, parameter search, model-family comparison,
@@ -187,12 +175,10 @@ Alpha search stance:
   rounds itself. Fold preflight/ERROR-disqualified variants into a later
   per-round count when they would otherwise be skipped. See
   `references/guarded-optimization.md`.
-- Graph-derived search should mine the current causal node universe
-  empirically. Let data select subsets, lags, transformations, models, and graph
-  roles. Before distant expansion, try higher-information current-view moves:
-  role buckets, subset/lag/sign search, transformations, feature factories,
-  denoise/compression, model-family comparison, regimes, filters, sizing, or
-  ensembles.
+- Graph-derived search should mine the causal node universe empirically. Let
+  data select subsets, lags, transformations, models, and graph roles. Graph
+  expansion is available when evidence points outside the current view, but it
+  is not a coverage ritual.
 - Exhaustion is ledger-proven, never asserted. Do not write "exhausted",
   "ceiling", or "no edge" unless the ledger shows, K-accounted: the bounded
   candidate universe, materially different search axes, graph-derived and
@@ -214,13 +200,9 @@ Alpha search stance:
   or same-lag basket, declare that construction explicitly. A failed basket only
   invalidates that construction unless other evidence supports a broader graph
   conclusion.
-- Use earned graph expansion. Expand the graph frontier when current evidence
-  points to a named node, causal role, local neighborhood, unavailable input,
-  missing motif, or promising external driver. Do not expand merely to satisfy
-  graph coverage or make the search look broader.
-- Treat expansion as a local probe, not a new obligation. After expansion,
-  quickly ask whether the added neighborhood improves information density; if
-  not, return to the strongest current-view graph construction.
+- Expand the graph frontier only when it helps the empirical search question.
+  Do not expand merely to satisfy graph coverage or make the exploration look
+  broader.
 - Branch count is not proof of breadth. Graph-node concentration, model/factor
   coverage, strategy-variant coverage, and local refinement are separate facts.
 - Abel Ask or narrative context can scout candidate ideas, supplemental drivers,

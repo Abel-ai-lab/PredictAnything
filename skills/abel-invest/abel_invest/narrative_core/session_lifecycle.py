@@ -106,12 +106,10 @@ def render_data_led_start_lines(session: Path) -> list[str]:
     return [
         "data-led graph-enriched alpha search:",
         f"read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing the next candidate or round",
-        "first serious non-grandma lane should be empirical construction over a bounded target + graph-derived universe",
-        f"{command_prefix} init-branch --session {session} --branch-id <feature-factory-branch>",
-        f"{command_prefix} init-branch --session {session} --branch-id <model-or-denoise-branch>",
-        f"{command_prefix} init-branch --session {session} --branch-id <target-control-branch>",
+        "ordinary alpha search posture: empirical construction over a bounded target + graph-derived universe",
+        f"{command_prefix} init-branch --session {session} --branch-id <candidate-branch>",
         "edit branch.yaml with objective, selected inputs, search width when applicable, and validation scope",
-        "use graph-derived feature factories, model/subset/lag/sign search, denoise, and ensembles early when live graph discovery is available",
+        "let data decide how to express graph-derived information: features, models, subsets, lags, regimes, sizing, filters, or ensembles",
         "use target-only as baseline, seed, ablation, or competitor; simple hand-written rules are diagnostics or refinements, not the default main lane",
         f"after each recorded round, keep {EXPLORATION_PATH_FILENAME} updated with ledger ref, chosen path, compact reason, Edge feedback, and artifact refs",
     ]

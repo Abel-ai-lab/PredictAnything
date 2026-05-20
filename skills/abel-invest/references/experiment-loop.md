@@ -29,9 +29,9 @@ Run:
 Live graph discovery should run by default when available. Its output is the
 default high-value alpha feature universe, not a mandatory first branch and not
 a requirement to run the whole depth-1 frontier as one basket. For ordinary
-non-grandma alpha search, early candidate construction should be empirical over
-a bounded target + graph-derived universe, and should let several graph-derived
-views compete before concentrating on one lead.
+non-grandma alpha search, keep the search posture empirical and graph-informed
+over a bounded target + graph-derived universe, not another hand-written single
+mechanism.
 
 When resuming, read:
 
@@ -45,17 +45,16 @@ When resuming, read:
 
 Each round should push toward the user's objective.
 
-1. Build a bounded current alpha universe from validated baselines, target-only
+1. Build a bounded candidate universe from validated baselines, target-only
    features, graph nodes, graph-derived feeds, cross-assets, sector/regime
    context, proven patterns, feature factories, and user constraints.
-2. Make empirical construction the main lane. Early search should form a small
-   graph-frontier portfolio when live graph candidates exist: feature
-   factories, role-bucket searches, weak-signal ensembles, model-family
-   comparison, denoise/compression, graph-node subset search,
-   lag/sign/transformation search, regimes, sizing, and filters.
-3. Let graph-derived views compete before spending the budget on one lead.
-   Target-only candidates are baselines, seeds, ablations, and competitors, not
-   the default escape from graph search.
+2. Make empirical construction the main stance. Feature factories, weak-signal
+   ensembles, model-family comparison, denoise/compression, graph-node subset
+   search, lag/sign/transformation search, regimes, sizing, and filters are
+   available degrees of freedom, not a fixed checklist.
+3. Keep graph-enriched ideas active early and throughout the search when live
+   graph candidates exist. Use target-only candidates as baselines, seeds,
+   ablations, and competitors, not as the default escape from graph search.
 4. Use simple hand-written target or graph rules as diagnostics, controls,
    ablations, or refinements around an empirical lead; do not let them dominate
    the early search while the graph-derived feature universe is unsearched.
@@ -69,32 +68,15 @@ Each round should push toward the user's objective.
    If the candidate was selected from a search, pass `--selection-trials N`,
    where `N` is this round's effective search width only.
 9. Re-read `evidence_ledger.json`, `frontier.md`, and the latest Edge result.
-10. Let metric shape and failure mode decide the next move: refine,
-   construct another graph-derived view, change model family, change graph
-   subset, add an ablation, re-search the current universe, run earned local
-   graph expansion, or stop.
+10. Let metric shape and failure mode decide the next move. The framework shows
+   facts; it does not prescribe the next driver, proxy, threshold, model
+   family, or route.
 11. Keep `exploration_path.md` covered with ledger ref, chosen path, compact
     reason, Edge feedback, and artifact refs before another recorded round.
 
 Optimization is not a deviation. The failure mode is reporting an unvalidated
 raw winner, not searching. Use honest K/search-width accounting and final
 validation before claiming success.
-
-## Search Pacing
-
-Prefer this pacing when the user has not chosen a conservative lane:
-
-```text
-early: divergent graph-derived constructions
-middle: compare graph views, target controls, and metric failure shapes
-late: concentrate only where the data earned concentration
-```
-
-Do not treat a first good target-only or graph-supported branch as permission
-to stop searching the graph. Also do not expand the graph just to look broader.
-Expansion should be local and earned by current evidence: a named node, role
-bucket, missing input, missing motif, external driver, or near-pass that needs
-additional context.
 
 ## Branch Execution
 
@@ -144,15 +126,13 @@ Exhaustion is a ledger conclusion.
 Before making that claim, check that the ledger shows:
 
 1. a bounded candidate universe was actually searched or intentionally ruled out
-2. empirical construction was tried when the lane was available: feature
-   factory, model comparison, denoise/compression, ensemble, graph subset,
-   lag/sign/transformation, regime, sizing, or filter search
+2. empirical construction was tried when the lane was available, rather than
+   only simple hand-written mechanisms
 3. graph-derived candidates were searched when live graph discovery was
    available, unless the user chose a simple/conservative lane
 4. target/baseline performance was compared against graph-enriched performance
    where useful
-5. materially different model families, feature constructions, graph subsets,
-   or search axes were tried, not only one hand-written rule
+5. materially different search axes were tried, not only one hand-written rule
 6. all attempted width is K-accounted, including preflight or workflow ERROR
    variants that would otherwise be audited but skipped from future DSR
 
@@ -221,7 +201,7 @@ the default URL in the skill code if this endpoint changes.
 Preserve this shape:
 
 ```text
-user objective -> bounded alpha universe -> graph-frontier portfolio search -> recorded validation -> explanation/reporting
+user objective -> bounded alpha universe -> empirical construction/search -> recorded validation -> explanation/reporting
 ```
 
 Multiple branches on one input set can still be narrow if they do not change a

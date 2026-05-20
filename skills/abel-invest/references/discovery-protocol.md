@@ -46,25 +46,22 @@ facts.
 
 ## Alpha Universe
 
-Use the graph as the default high-value alpha feature universe beyond target
-history, and search it like an alpha source rather than a checklist:
+Use the graph as the default high-value expanded feature universe, and search it
+like an alpha source rather than a checklist:
 
 - target history and validated baselines establish the benchmark
-- current graph nodes and graph-derived feeds are the normal next place to look
-  for incremental information when live graph candidates exist
-- earned local expansion can add nodes when current evidence points outside the
-  current view
+- graph nodes and graph-derived feeds are the normal next place to look for
+  incremental information when live graph candidates exist
 - available cross-assets, sector peers, volume, liquidity, and regime variables
   can supplement the graph when the user goal or evidence supports them
 - proven patterns, feature factories, ML models, and ensembles turn the universe
   into candidate signals
 
 For ordinary alpha search, graph context should feed empirical construction
-lanes early: feature factories, model comparisons, denoise/compression,
-node-subset search, lag/sign/transformation search, regimes, sizing, filters,
-or ensembles. Prefer a small set of materially different graph-derived views
-before spending most of the budget polishing one lead. A hand-written rule that
-happens to read graph nodes is graph-realized evidence, but it is not by itself
+early. Feature factories, model comparisons, denoise/compression, node-subset
+search, lag/sign/transformation search, regimes, sizing, filters, and ensembles
+are possible expressions, not a checklist. A hand-written rule that happens to
+read graph nodes is graph-realized evidence, but it is not by itself
 data-driven graph search.
 
 Target-only candidates are baselines, seeds, ablations, and competing strategy
@@ -94,10 +91,9 @@ candidate search can test lag and transformation choices.
 
 ## Practical Use
 
-Use graph context as a search prior and feature universe:
+Graph context can shape the search prior and feature universe:
 
 - test graph-enriched feature factories
-- create materially different graph-derived views before polishing one lead
 - search graph node subsets instead of assuming the whole frontier should move
   together
 - test lag, sign, ratio, relative-momentum, volatility, and regime
@@ -107,10 +103,8 @@ Use graph context as a search prior and feature universe:
   or regime context according to what the data supports
 - keep weak standalone graph signals if they add diversity inside an ensemble
 
-Do not expand the graph merely to satisfy coverage. Use earned expansion when
-current evidence points to a named node, role bucket, local neighborhood,
-missing motif, unavailable input, external driver, or promising feature universe
-outside the current frontier:
+Do not expand the graph merely to satisfy coverage. Expand when it helps the
+empirical search question:
 
 ```bash
 <command_prefix> frontier status --session research/<ticker>/<exp_id>
@@ -121,19 +115,15 @@ Use `--mode parents`, `--mode blanket`, or `--mode all` according to the
 candidate-universe question. The result is new or updated nodes in
 `graph_frontier.json`, not a recommendation to run a specific branch.
 
-Good expansion reasons include a useful current node that needs neighborhood
-context; a missing liquidity, supply-chain, market-state, or demand-regime
-motif; current-frontier availability or input-realization limits; a strong
-target-only or graph lead that needs graph overlay; or user/narrative context
-that names a plausible external driver outside the current frontier. Weak
-reasons include "more graph nodes are always good" or "the product expects graph
-coverage."
+Good expansion reasons are evidence-led: missing motifs, availability or input
+realization limits, user context, or a plausible external driver outside the
+current frontier. Weak reasons include "more graph nodes are always good" or
+"the product expects graph coverage."
 
 Before expanding to a more distant frontier, consider whether the current graph
 universe still has useful subset, lag, sign, transformation, model-family,
-denoise, regime, filter, sizing, or ensemble search left. Treat expansion as a
-local probe; if it does not improve information density, return to the strongest
-current-view construction.
+regime, or sizing search left. Prefer the path that is most likely to improve
+the user's objective.
 
 ## Narrative Scout
 

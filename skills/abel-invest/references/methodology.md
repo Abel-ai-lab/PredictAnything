@@ -26,10 +26,11 @@ stories organize results after evidence appears; they should not slow the first
 useful empirical test.
 
 **Empirical construction by default.**
-For ordinary non-grandma alpha search, early candidate construction should use
-bounded feature-factory, model-family, denoise, subset, or ensemble search over
-target and graph-derived data. Simple rules can benchmark, diagnose, ablate, or
-refine an empirical lead, but they are not the default search engine.
+For ordinary non-grandma alpha search, the default posture is empirical
+construction over target and graph-derived data. Feature factories, model
+families, denoise, subsets, ensembles, regimes, filters, and sizing are
+degrees of freedom. Simple rules can benchmark, diagnose, ablate, or refine an
+empirical lead, but they are not the default search engine.
 
 **Graph as alpha universe.**
 Abel-discovered causal structure is a validated prior and should normally enter
@@ -38,31 +39,17 @@ volume history. The graph supplies a rich node universe; data selects subsets,
 lags, signs, transformations, model families, interaction terms, filters,
 sizing signals, and regime roles.
 
-**Graph-frontier portfolio before single-lead polish.**
-When live graph candidates exist, early ordinary search should let several
-graph-derived views compete: direct frontier factories, causal-role buckets,
-node-subset searches, learned target+graph models, denoise/compression,
-graph-as-filter, graph-as-regime, graph-as-sizing, or ensemble roles. This is a
-search posture, not a branch quota.
-
 **Target-only as benchmark, seed, and competitor.**
 Target-only candidates are useful baselines, simple seeds, ablations, and
 competing strategies. They should not become the default hiding place when live
 graph candidates are available. Their main product role is to reveal whether
 graph-derived information improves the objective or robustness.
 
-**Graph expansion must be earned.**
-Expanding the frontier increases the search space. Use it when current evidence
-points to a named node, role bucket, local neighborhood, missing motif,
-unavailable input, external driver, or near-pass that needs more context. First
-ask whether the current graph universe still has useful subset, lag, sign,
-transformation, model, denoise, regime, filter, sizing, or ensemble search left.
-
-**ML and feature factories are normal.**
-Feature-factory screening, model-family comparison, HPO, graph-node subset
-search, lag/sign search, ensembles, regime filters, and sizing search are
-legitimate exploration. Make the search width visible; do not pretend a selected
-winner came from one isolated hand-written idea.
+**Empirical search is normal.**
+Feature construction, model-family comparison, HPO, graph-node subset search,
+lag/sign search, ensembles, regime filters, and sizing search are legitimate
+exploration. Make the search width visible; do not pretend a selected winner
+came from one isolated hand-written idea.
 
 **Graph-supported is not enough.**
 Runtime graph reads prove input realization. They do not by themselves prove the
@@ -87,7 +74,7 @@ mechanism essay.
 The natural path is:
 
 ```text
-user objective -> bounded candidate universe -> graph-frontier portfolio search -> recorded validation -> explanation/reporting
+user objective -> bounded candidate universe -> empirical construction/search -> recorded validation -> explanation/reporting
 ```
 
 Candidate-universe sources include:

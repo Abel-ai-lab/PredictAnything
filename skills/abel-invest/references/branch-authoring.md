@@ -233,13 +233,9 @@ record the selection influence in `exploration_path.md`.
   become the default when graph candidates are live
 - graph-enriched search should appear early and recur when graph discovery is
   available
-- early ordinary search should let materially different graph-derived views
-  compete before polishing one simple lead
-- ordinary alpha search should default to empirical construction over the
+- ordinary alpha search should keep an empirical construction posture over the
   bounded target + graph-derived universe; simple hand-written mechanisms are
   diagnostics, controls, ablations, or refinements
-- graph expansion is an earned local probe when current evidence points outside
-  the current view, not a coverage ritual
 - branch count is not search breadth if every branch hides the same search axis
 - weird low-attention graph nodes are not automatically noise
 - narrative scout can inspire features, but it is not evidence truth

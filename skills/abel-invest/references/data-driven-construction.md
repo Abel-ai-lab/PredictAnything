@@ -1,16 +1,16 @@
 # Data-Driven Construction
 
-Use this reference for ordinary non-grandma alpha search, especially during
-early candidate construction, after a simple baseline, or when the next idea is
-another hand-written rule.
+Use this reference for ordinary non-grandma alpha search, especially when the
+next idea is drifting toward another hand-written rule.
 
 This is the default construction stance, not a separate workflow. Runtime
 legality, honest search-width accounting, and validation still decide what can
 be reported.
 
-## Default Engine
+## Default Posture
 
-Build candidates by empirical construction over a bounded current universe:
+Build candidates by empirical construction over a bounded universe. Usual
+ingredients include:
 
 - target history and any validated baseline or catalog strategy
 - live graph nodes and graph-derived feeds when available
@@ -19,28 +19,11 @@ Build candidates by empirical construction over a bounded current universe:
 
 The graph bounds and enriches the alpha universe. It does not prescribe one
 tradable basket, and it is not satisfied by placing a few nodes into a simple
-hand-written rule.
+hand-written rule. The agent owns how to express the data.
 
-## Graph-Frontier Portfolio
+## Construction Space
 
-For ordinary alpha search, the default early posture is a small portfolio of
-materially different graph-derived candidate universes or extractors. Examples:
-
-- direct frontier feature factory
-- causal-role buckets such as parent, child, blanket, or local neighborhood
-- graph-node subset, lag, sign, transformation, ratio, or spread search
-- learned target+graph model such as linear, tree, GBDT, or hybrid
-- unsupervised denoise or compression over target+graph features
-- graph-as-regime, graph-as-risk filter, graph-as-sizing signal, or ensemble
-  member search
-
-This is a construction stance, not a branch quota. The point is to let graph
-views compete before the search spends most of its budget polishing one lead.
-
-## Serious Construction Moves
-
-For normal alpha search, serious early construction can use these empirical
-moves:
+Data-driven construction can use many empirical degrees of freedom:
 
 - deterministic feature factory over target + graph-derived fields
 - weak-signal ensemble with diversity-aware member selection
@@ -51,38 +34,9 @@ moves:
 - unsupervised denoise or compression such as PCA/ICA when temporally legal
 - regime, sizing, or filter search layered on an otherwise plausible alpha
 
-It does not have to use the whole frontier, and it should not expand the graph
-just to look broad. Prefer the bounded feature universe most likely to improve
-the user's objective.
-
-## Earned Expansion
-
-Graph expansion is allowed when current evidence points outside the current
-view. Good triggers include:
-
-- a useful node or role bucket that needs local neighborhood context
-- an unavailable or thin input that needs a nearby substitute
-- a missing liquidity, demand, market-state, supply, or risk motif
-- a strong target-only or graph lead that needs graph overlay, diversification,
-  or regime context
-- a near-pass that appears limited by breadth rather than expression quality
-
-Weak triggers include "more nodes are always better" and "graph-first means
-expanding now." Before expansion, ask whether subset, lag, sign,
-transformation, model family, denoise, regime, filter, sizing, or ensemble
-search over the current graph-derived universe is the higher-information move.
-
-When expansion is used, keep it local and named. Treat the added neighborhood as
-a probe; if it does not improve information density, return to the strongest
-current-view construction.
-
-## Avoid Single-Lead Collapse
-
-A strong early model or simple mechanism is a lead, not the whole search. Do not
-spend the remaining budget on small refinements unless the result is already
-near reportable quality and the next refinement is data-earned. Otherwise build
-another materially different graph-derived view or run a target/baseline control
-that clarifies graph contribution.
+This list is not a route plan. Use the bounded feature universe most likely to
+improve the user's objective, and let observed behavior decide how the search
+evolves.
 
 ## What Simple Rules Are For
 
@@ -111,9 +65,9 @@ honest width accounting.
 
 A failed empirical construction says that expression failed. It does not prove
 the graph is useless, and it does not prove target-only should take over. Read
-metric shape and then choose whether to change model family, subset, lag/sign,
-denoise, regime, sizing, another graph-derived view, earned graph expansion, or
-target/control comparison.
+metric shape and evidence context before deciding whether the problem is the
+expression, the data view, the model family, the risk treatment, or the search
+scope.
 
 Before claiming no edge, the ledger should show materially different empirical
 search axes, not only a sequence of small hand-written mechanisms.
