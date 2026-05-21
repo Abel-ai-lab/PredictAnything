@@ -4,6 +4,24 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.5.0] - 2026-05-21
+
+### Added
+
+- Added default Abel Invest session visualization strategy-artifact upload, including hosted artifact manifests, trade-log packaging, and dashboard-compatible selection metadata.
+- Added the data-driven Abel Invest alpha-search posture, emphasizing graph-enriched empirical construction, feature factories, guarded optimization, and ledger-grounded exploration evidence.
+
+### Changed
+
+- Updated Abel Invest to version `3.6.0` and kept the Abel Edge runtime dependency on `>=0.8.6,<0.9.0`.
+- Retuned Abel Invest strategy artifact selection toward Sharpe, annual return, drawdown, and pass-rate ranking while preserving dashboard-compatible upload metadata.
+- Refined Abel Invest workspace, exploration-path, frontier, and experiment-loop guidance around graph-informed data search without turning research process into rigid strategy advice.
+
+### Fixed
+
+- Allowed hostable validation strategy artifacts to be selected from robust non-PASS rounds when they contain the required engine, result, metrics, and promotion evidence.
+- Preserved SIT/prod router compatibility by keeping runtime endpoint selection outside Abel Skills product defaults.
+
 ## [1.4.0] - 2026-05-18
 
 ### Added
