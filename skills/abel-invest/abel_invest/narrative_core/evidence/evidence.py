@@ -121,13 +121,12 @@ def derive_exploration_class(
     changed_dimensions: list[str],
 ) -> str:
     role = str(declaration.get("exploration_role") or "unspecified")
-    input_claim = str(declaration.get("input_claim") or "")
     intent = str(declaration.get("evidence_intent") or "")
     if run_type == "debug" or evidence_label in {"diagnostic_only", "workflow_blocker", "runtime_invalid"}:
         return "diagnostic"
     if role == "diagnostic" or intent == "diagnostic":
         return "diagnostic"
-    if role in {"control", "ablation"} or intent == "control" or input_claim == "target_only":
+    if role in {"control", "ablation"} or intent == "control":
         return "control"
     if role == "expansion_probe" or any(item in BROAD_CHANGED_DIMENSIONS for item in changed_dimensions):
         return "broad_explore"
@@ -357,6 +356,16 @@ def derive_evidence_label(
     if not comparable:
         return "non_comparable"
     if not auxiliary_reads and not actual_graph_node_reads:
+        if declaration["evidence_intent"] == "control" or declaration.get("exploration_role") in {
+            "control",
+            "ablation",
+        }:
+            return "target_control_evidence"
+        return "candidate_strategy_evidence"
+    if declaration["evidence_intent"] == "control" or declaration.get("exploration_role") in {
+        "control",
+        "ablation",
+    }:
         return "target_control_evidence"
     if declaration["input_claim"] == "graph_supported":
         selected_graph_nodes = set(normalize_graph_node_list(declaration.get("selected_graph_nodes")))

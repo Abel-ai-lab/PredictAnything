@@ -1,112 +1,103 @@
 # Methodology
 
-Use this optional reference when the user asks why the workflow is graph-first,
-why evidence labels are strict, or why the framework refuses to recommend the
-next strategy route.
+Use this optional reference when the user asks why Abel Invest is data-driven,
+why the causal graph still matters, why search is allowed, or why validation
+gates do not replace strategy search.
 
 ## Boundary
 
-The product boundary is:
+Abel Invest is an alpha-search product.
 
 ```text
-framework = evidence validity and exploration-shape facts
-agent = strategy judgment and research insight
+framework = temporal legality, evidence facts, search-width accounting, reportability
+agent = candidate generation, empirical search, and strategy judgment
 ```
 
-`abel-edge` owns runtime legality and validation metrics.
-`abel-invest` owns branch declarations, evidence labels, frontier
-facts, and the research journal surface.
+`abel-edge` owns runtime legality and validation metrics. `abel-invest` owns
+branch declarations, evidence labels, candidate-universe facts, search-width
+accounting, and the exploration path surface. The agent owns what to try next.
 
-## Core Principles
+## Core Stance
 
-**Causal graph first.**
-Use Abel-discovered causal structure as the default search prior because it
-reduces blind search and is more likely to survive regime change. Correlation
-signals can still be useful, but they enter as supplements or controls unless
-the branch declares and validates a stronger claim.
+**Search hard, then explain.**
+The job is to find a high-quality strategy for the user's objective, usually
+high Sharpe, high return, or a constrained risk-return profile. Mechanism
+stories organize results after evidence appears; they should not slow the first
+useful empirical test.
 
-CAP graph nodes are model-supported causal priors, not trading instructions.
-Trust that they carry target-relevant information, but do not infer disclosed
-weight, exact lag, signed effect, or tradable direction from the role alone.
-Parent and child roles disclose causal-flow orientation; Abel Invest's
-`blanket` role is a Markov-blanket discovery bucket, not a fixed causal-flow
-direction.
+**Empirical construction by default.**
+For ordinary non-grandma alpha search, the default posture is empirical
+construction over target and graph-derived data. Feature factories, model
+families, denoise, subsets, ensembles, regimes, filters, and sizing are
+degrees of freedom. Simple rules can benchmark, diagnose, ablate, or refine an
+empirical lead, but they are not the default search engine.
 
-Graph-first means using the graph to form input and mechanism hypotheses. Expand
-the graph when a frontier question remains after reading current evidence. Do
-not expand just because a few branches failed or because a local metric scan
-found one attractive node.
+**Graph as alpha universe.**
+Abel-discovered causal structure is a validated prior and should normally enter
+candidate generation early. It expands the search beyond target-only price and
+volume history. The graph supplies a rich node universe; data selects subsets,
+lags, signs, transformations, model families, interaction terms, filters,
+sizing signals, and regime roles.
 
-Graph breadth should not outrun mechanism depth. Before widening to a more
-distant frontier, ask whether the current graph neighborhood still has an
-unresolved sign, lag, regime, interaction, control, or risk-shaping question. A
-mechanism-deepening branch is preferable when it can answer one of those
-questions without becoming parameter search.
+**Target-only as benchmark, seed, and competitor.**
+Target-only candidates are useful baselines, simple seeds, ablations, and
+competing strategies. They should not become the default hiding place when live
+graph candidates are available. Their main product role is to reveal whether
+graph-derived information improves the objective or robustness.
 
-**Mechanism-led discovery beats metric-led search.**
-Standard discovery chooses a branch from graph context, mechanism reasoning,
-recorded evidence, or a control/ablation purpose before metric search. Local
-parameter, threshold, window, filter, sizing, driver, or asset sweeps are
-optimization behavior unless the user explicitly requests them.
+**Empirical search is normal.**
+Feature construction, model-family comparison, HPO, graph-node subset search,
+lag/sign search, ensembles, regime filters, and sizing search are legitimate
+exploration. Make the search width visible; do not pretend a selected winner
+came from one isolated hand-written idea.
 
-`--selection-trials` audits accidental or explicitly requested search width. It
-does not make brute-force candidate selection part of standard discovery.
+**Graph-supported is not enough.**
+Runtime graph reads prove input realization. They do not by themselves prove the
+agent searched the graph as data. Abel Invest should mine the graph-derived
+universe for subsets, lags, transformations, models, regimes, filters, sizing
+signals, and ensemble roles.
 
-**Narrative scout is context, not evidence.**
-Abel Ask and narrative context can generate mechanism hypotheses, supplement
-driver ideas, and graph expansion questions. Treat them as domain-context scout
-work: stronger than free association, weaker than CAP graph facts, and never a
-substitute for Edge validation.
+**Gate validates; it does not throttle.**
+The gauntlet, DSR, leakage checks, walk-forward behavior, and promotion gate
+decide what can be reported as robust. They should not prevent empirical
+screening. A raw-metric winner is not a strategy success until it clears the
+required validation with honest search-width accounting.
 
-Use one narrative scout pass when the next research decision is ambiguous
-between mechanism-deepening, graph expansion, or stopping. This is most useful
-when graph nodes are hard to interpret, the current neighborhood lacks a clear
-industry or supply-demand mechanism, or the journal cannot state what sign,
-lag, regime, interaction, control, or risk-shaping question remains. If Abel Ask
-is unavailable, off-target, or weak, record that plainly and continue with the
-best graph/frontier evidence; do not launder narrative text into validation
-evidence.
+**Artifact completeness stays hard.**
+`exploration_path.md` preserves each recorded round's selected path, compact
+reason, Edge feedback, and ledger/artifact refs. It protects visualization and
+replay completeness. Keep it short and evidence-linked; do not turn it into a
+mechanism essay.
 
-**Evidence labels are not strategy advice.**
-Candidate/control/diagnostic/blocker labels say what kind of research evidence a
-run produced. They do not choose the next driver, model, threshold, or mechanism.
+## Search Shape
 
-**Runtime legality is non-negotiable.**
-If a strategy reads information it could not have seen at decision time, the
-backtest is invalid. The current authoring contract expresses legal reads
-through `DecisionContext` and semantic preflight.
+The natural path is:
 
-**Multi-dimensional validation beats single-metric selection.**
-The validation profile can evolve, but the principle is stable: avoid promoting
-strategies from one attractive metric when other evidence says the signal is
-fragile, concentrated, or illegal.
+```text
+user objective -> bounded candidate universe -> empirical construction/search -> recorded validation -> explanation/reporting
+```
 
-**Serial compounding beats static grids.**
-Each round should update the agent's understanding. Static parameter grids can
-hide whether the search is learning or just overfitting a neighborhood.
+Candidate-universe sources include:
 
-**The journal is agent-owned.**
-`research_journal.md` preserves hypotheses, observations, pivots, and stop/keep
-reasoning between turns. Evidence references make journal insights durable, but
-the journal itself is not evidence truth.
+- validated baselines or catalog strategies
+- target history and target-only simple features
+- causal graph nodes and graph-derived feeds
+- sector, cross-asset, liquidity, volume, and regime feeds
+- proven empirical patterns
+- feature factories, learned models, and ensembles
+- user constraints such as drawdown, no leverage, or grandma mode
 
-## Current Workflow Consequence
-
-The branch-default path is:
+The runtime path stays stable:
 
 1. resolve workspace and doctor readiness
-2. start or resume a graph-first session
-3. read ledger, frontier, and journal facts
-4. use one narrative scout pass when the next decision is ambiguous between
-   mechanism-deepening, graph expansion, or stopping
-5. deepen the current mechanism when unresolved sign, lag, regime, interaction,
-   control, or risk-shaping questions remain
-6. expand `graph_frontier.json` only when current evidence leaves a frontier
-   question unresolved
-7. declare branch hypothesis and selected graph inputs
-8. prepare branch inputs
-9. write `compute_decisions(self, ctx)`
-10. run semantic preflight
-11. record evidence
-12. inspect ledger/frontier facts
-13. update the research journal before deep local refinement
+2. start or resume a session; run live graph discovery when available
+3. search candidates empirically without temporal leakage
+4. declare enough candidate metadata for runtime and audit
+5. `prepare-branch` to materialize inputs
+6. `debug-branch` to check semantic legality
+7. `run-branch` to record selected candidates with `--selection-trials` when
+   search width was used
+8. read ledger/frontier/Edge facts
+9. keep `exploration_path.md` covered
+10. explain mechanism and graph contribution after there is evidence worth
+    explaining

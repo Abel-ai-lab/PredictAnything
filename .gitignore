@@ -19,3 +19,4 @@ codex-skill-eval/runs/*
 .DS_Store
 endpoints.local.json
 maintainers/skills/
+skills/abel-invest/evals/evals.json

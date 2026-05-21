@@ -27,7 +27,7 @@ from abel_invest.workspace_core.workspace import (
 
 
 SUCCESS_STATUSES = {"ready"}
-WORKSPACE_MODE = "alpha-managed branch research"
+WORKSPACE_MODE = "alpha-managed strategy search"
 PACKAGE_CHECK = "package_freshness"
 
 
@@ -235,7 +235,7 @@ def run_doctor(start: Path | None = None) -> dict[str, object]:
             "status": "ready",
             "summary": (
                 "Workspace, Python environment, abel-edge, and Abel auth are ready "
-                "for alpha-managed branch research."
+                "for alpha-managed strategy search."
             ),
             "next_step": (
                 f"{workspace_command(root, manifest, 'init-session')} --ticker <TICKER> --exp-id <session-id>  "

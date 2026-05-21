@@ -68,8 +68,8 @@ def handle_workspace_command(args: argparse.Namespace) -> int:
         )
         print("")
         print("Boundary:")
-        print("  This workspace is for alpha-managed branch research.")
-        print("  Keep research artifacts under `research/`.")
+        print("  This workspace is for alpha-managed strategy search.")
+        print("  Keep session artifacts under `research/`.")
         print("  If you need a standalone Abel-edge project, create it outside this workspace.")
         print("")
         print("From here:")
@@ -287,7 +287,7 @@ def handle_env_command(args: argparse.Namespace) -> int:
     print("  dependency_install_mode: abel-invest package metadata")
     print(f"  alpha_install_mode: {'editable' if result.alpha_editable else 'regular'}")
     print("  alpha_install_reason: installs the packaged abel-invest CLI and declared dependencies into this workspace runtime")
-    print("  canonical_runtime_note: use this workspace runtime as the canonical environment for daily research work")
+    print("  canonical_runtime_note: use this workspace runtime as the canonical environment for daily alpha search")
     cli_path = resolve_runtime_cli(result.workspace_root)
     print(f"  canonical_cli: {cli_path}")
     if result.runtime_mode == "existing_python":
@@ -300,14 +300,14 @@ def handle_env_command(args: argparse.Namespace) -> int:
     if result.edge_discovery_payload_capable is False or result.edge_context_json_capable is False:
         print("Warning:")
         print("  Installed Abel-edge is missing required alpha contracts.")
-        print(f"  Run `{cli_path} env refresh`, then rerun `{cli_path} doctor` before starting research.")
+        print(f"  Run `{cli_path} env refresh`, then rerun `{cli_path} doctor` before starting alpha search.")
         print("")
     print("From here:")
     print(f"  {cli_path} doctor")
     print(f"  {default_activate_command()}")
     print(
         "  # once doctor is ready: init-session -> declare branches -> "
-        "use frontier facts and research_journal.md to guide pivots"
+        "use frontier facts and exploration_path.md to guide pivots"
     )
     return 0
 

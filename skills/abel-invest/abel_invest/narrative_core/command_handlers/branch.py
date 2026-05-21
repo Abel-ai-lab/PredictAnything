@@ -44,7 +44,6 @@ from abel_invest.narrative_core.contracts.constants import (
     EXPLORATION_PATH_FILENAME,
     EXECUTION_CONSTRAINTS_FILENAME,
     PROBE_SAMPLES_FILENAME,
-    RESEARCH_JOURNAL_FILENAME,
     RESULTS_HEADER,
 )
 from abel_invest.narrative_core.runtime.context import (
@@ -81,9 +80,8 @@ from abel_invest.narrative_core.session_lifecycle import (
     resolve_workspace_arg_path,
 )
 from abel_invest.narrative_core.rendering.session_rendering import (
-    graph_priority_warning_lines,
-    journal_coverage_missing_rounds,
-    journal_coverage_warning_lines,
+    path_coverage_missing_rounds,
+    path_coverage_warning_lines,
     render_section,
     render_session,
 )
@@ -103,9 +101,9 @@ from abel_invest.narrative_core.state import (
 
 SELECTION_TRIALS_AUDIT_WARNING = (
     "Selection-trials audit: --selection-trials records accidental or explicitly requested "
-    "search width for DSR accounting; it does not make sweep-selected candidates part of "
-    "standard discovery. Journal the branch basis and any scout or optimization influence "
-    "before continuing."
+    "search width for DSR accounting; it does not by itself validate raw sweep winners. "
+    "Record the branch basis and any scout or optimization influence "
+    f"in {EXPLORATION_PATH_FILENAME} before continuing."
 )
 
 
@@ -209,7 +207,7 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     cache_payload = json.loads(output_path.read_text(encoding="utf-8"))
     dependencies["cache"] = cache_payload
     output_path.write_text(json.dumps(dependencies, indent=2), encoding="utf-8")
-    runtime_profile = build_runtime_profile_payload(target=target)
+    runtime_profile = build_runtime_profile_payload(target=target, branch_spec=branch_spec)
     execution_constraints = build_execution_constraints_payload(branch_spec)
     data_manifest = build_data_manifest_payload(
         target=target,
@@ -309,8 +307,14 @@ def prepare_branch_inputs(args: argparse.Namespace) -> int:
     if auth_handoff_needed:
         print("  Use abel-auth")
         print(f"  {command_prefix} prepare-branch --branch {branch}")
+    elif warm_fail:
+        print("  Fix cache failures before debug/run; unresolved prepared inputs should not become evidence.")
+        print(f"  inspect {output_path.relative_to(session)}")
+        print(f"  revise {branch / BRANCH_SPEC_FILENAME} or auth/data access if needed")
+        print(f"  {command_prefix} prepare-branch --branch {branch}")
+        return completed.returncode or 1
     else:
-        print("  The branch inputs are ready; use debug preflight first, then record a round once the engine reflects the branch thesis.")
+        print("  The branch inputs are ready; use debug preflight first, then record a round once the engine reflects the candidate.")
         print(f"  {command_prefix} debug-branch --branch {branch}")
         print(f"  {command_prefix} run-branch --branch {branch} -d \"baseline\"")
     return completed.returncode
@@ -324,12 +328,12 @@ def run_branch_round(args: argparse.Namespace) -> int:
     readiness = load_readiness(session)
     with SessionLock(session):
         render_session(session)
-    blocking_missing_journal = journal_coverage_missing_rounds(session)
-    if blocking_missing_journal:
+    blocking_missing_path = path_coverage_missing_rounds(session)
+    if blocking_missing_path:
         print(
-            "Journal required before next recorded round: "
-            f"missing_journal_rounds={', '.join(blocking_missing_journal)}. "
-            f"Update {RESEARCH_JOURNAL_FILENAME} with evidence-linked notes for each missing ledger round.",
+            "Exploration path entry required before next recorded round: "
+            f"missing_path_rounds={', '.join(blocking_missing_path)}. "
+            f"Update {EXPLORATION_PATH_FILENAME} with ledger refs, chosen path, compact reason, Edge feedback, and artifact refs for each missing round.",
             file=sys.stderr,
         )
         return 2
@@ -503,9 +507,9 @@ def run_branch_round(args: argparse.Namespace) -> int:
             emit_missing_hypothesis_warning = should_emit_missing_hypothesis_warning(branch)
     if emit_missing_hypothesis_warning:
         print(
-            "Warning: recording a round without an explicit hypothesis. "
-            "State the causal claim, graph use contract when applicable, expected sign/timing assumption, "
-            "and invalidation condition before the next round.",
+            "Audit note: recording a round without explicit candidate metadata. "
+            "Before the next round, make objective, selected inputs, search width, and validation scope clear; "
+            "add graph attribution only when claiming graph-derived contribution.",
             file=sys.stderr,
         )
     decision = alpha_decision(rows, result, session=session)
@@ -605,10 +609,8 @@ def run_branch_round(args: argparse.Namespace) -> int:
             changed_dimensions=getattr(args, "changed_dimension", []),
         )
         render_session(session)
-    for line in graph_priority_warning_lines(session):
-        print(f"Exploration protocol: {line}")
-    for line in journal_coverage_warning_lines(session):
-        print(f"Journal required: {line}")
+    for line in path_coverage_warning_lines(session):
+        print(f"Exploration path required: {line}")
     print(f"Alpha context: {context_path.relative_to(session)}")
     print(f"Edge result: {result_path.relative_to(session)}")
     print(f"Edge validation: {report_path.relative_to(session)}")
@@ -635,6 +637,14 @@ def run_branch_round(args: argparse.Namespace) -> int:
             frame_text,
         ],
     )
+    print("")
+    print("From here:")
+    print(
+        f"  update {session / EXPLORATION_PATH_FILENAME} with ledger:{branch.name}:{round_id} "
+        "before another recorded round"
+    )
+    print(f"  read {session / EXPLORATION_PATH_FILENAME} and frontier.md before choosing continue/pivot/stop")
+    print(f"  if continuing this branch, run abel-invest debug-branch --branch {branch} before the next recorded round")
     return 0
 
 
@@ -747,4 +757,12 @@ def debug_branch_run(args: argparse.Namespace) -> int:
     if debug_result_path.exists():
         print(f"Debug result: {debug_result_path.relative_to(session)}")
     print("No narrative round was recorded.")
+    print("")
+    print("From here:")
+    if completed.returncode:
+        print("  inspect the debug output and fix the engine or prepared inputs before recording a round")
+        print(f"  abel-invest debug-branch --branch {branch}")
+    else:
+        print("  confirm branch.yaml has objective, selected inputs, search width when applicable, and validation scope")
+        print(f"  abel-invest run-branch --branch {branch} -d \"<round-description>\"")
     return completed.returncode

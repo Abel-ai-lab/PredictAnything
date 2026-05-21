@@ -1,6 +1,6 @@
 ---
 name: abel
-version: 1.4.0
+version: 1.4.1
 description: >
   Use when the user asks for Abel or starts an Abel workflow and you need to
   check auth state, initialize Abel if needed, and route to the right Abel

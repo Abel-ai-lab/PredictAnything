@@ -25,9 +25,9 @@ def normalize_hypothesis_text(value: str) -> str:
     if text:
         return text
     return (
-        "Hypothesis missing. Before the next round, state the causal claim, "
-        "graph use contract when applicable, expected sign/timing assumption, "
-        "and invalidation condition explicitly."
+        "Candidate note missing. Before the next round, state the search "
+        "objective, selected input universe, search width when applicable, "
+        "and graph-use claim when claiming graph-derived contribution."
     )
 
 
@@ -37,6 +37,7 @@ def has_explicit_hypothesis(value: str) -> bool:
         text
         and text != "No hypothesis supplied."
         and not text.startswith("Hypothesis missing.")
+        and not text.startswith("Candidate note missing.")
     )
 
 
@@ -359,12 +360,17 @@ def build_default_branch_spec(
     discovery: dict,
     readiness: dict,
     graph_frontier: dict | None = None,
+    session_mode: str = "standard",
+    validation_profile: str = "",
 ) -> dict:
     frontier = graph_frontier or {}
     suggested_nodes = graph_frontier_candidate_node_ids(frontier, readiness, limit=5)
     selected_nodes = suggested_nodes[: min(3, len(suggested_nodes))]
-    graph_first = bool(selected_nodes)
-    return {
+    grandma_mode = str(session_mode or "").strip().lower() == "grandma"
+    if grandma_mode:
+        selected_nodes = []
+    graph_enriched = bool(selected_nodes)
+    spec = {
         "version": 2,
         "branch_id": branch.name,
         "target": discovery.get("ticker", branch.parent.parent.parent.name.upper()),
@@ -374,7 +380,7 @@ def build_default_branch_spec(
         ),
         "hypothesis": "",
         "evidence_intent": "draft",
-        "input_claim": "graph_supported" if graph_first else "target_only",
+        "input_claim": "graph_supported" if graph_enriched else "target_only",
         "mechanism_family": "unspecified",
         "invalidation_condition": "",
         "model_family": "unspecified",
@@ -390,6 +396,19 @@ def build_default_branch_spec(
             "fields": ["close"],
         },
     }
+    if grandma_mode:
+        spec.update(
+            {
+                "strategy_mode": "grandma",
+                "validation_profile": validation_profile or "grandma_daily",
+                "position_bounds": [-1.0, 1.0],
+                "model_family": "rule_signal",
+                "complexity_class": "simple_signal",
+                "mechanism_family": "simple_return",
+                "input_claim": "target_only",
+            }
+        )
+    return spec
 
 
 def branch_dependencies_payload(
@@ -435,14 +454,18 @@ def canonicalize_dependencies_payload(payload: dict) -> dict:
     return dependencies
 
 
-def build_runtime_profile_payload(*, target: str) -> dict:
-    return {
+def build_runtime_profile_payload(*, target: str, branch_spec: dict | None = None) -> dict:
+    payload = {
         "profile": "daily",
         "target": target,
         "decision_event": "bar_close",
         "execution_delay_bars": 1,
         "return_basis": "close_to_close",
     }
+    validation_profile = str((branch_spec or {}).get("validation_profile") or "").strip()
+    if validation_profile:
+        payload["validation_profile"] = validation_profile
+    return payload
 
 
 def build_execution_constraints_payload(branch_spec: dict) -> dict:
@@ -596,6 +619,7 @@ def build_context_guide_markdown(
         "",
         "## Runtime",
         f"- profile: `{runtime_profile.get('profile', 'daily')}`",
+        f"- validation_profile: `{runtime_profile.get('validation_profile', 'auto')}`",
         f"- decision_event: `{runtime_profile.get('decision_event', 'bar_close')}`",
         f"- execution_delay_bars: `{runtime_profile.get('execution_delay_bars', 1)}`",
         f"- return_basis: `{runtime_profile.get('return_basis', 'close_to_close')}`",
@@ -611,17 +635,17 @@ def build_context_guide_markdown(
         "- use `ctx.points()` when you need path-sensitive cross-calendar logic",
         "",
         "## Declaration Fields",
-        "- `hypothesis`: concrete claim being tested",
+        "- `hypothesis`: legacy field name for compact candidate note or search objective",
         "- `evidence_intent`: candidate, control, diagnostic, or draft",
         "- `input_claim`: graph_supported, target_only, supplement, or mixed",
-        "- graph-supported branches should state selected nodes, construction, intended role, unresolved assumption, and falsification scope",
-        "- `mechanism_family`: factual mechanism label",
-        "- `invalidation_condition`: what would weaken the claim",
+        "- graph-attribution claims should state selected nodes, construction, intended role, unresolved assumption, and falsification scope",
+        "- `mechanism_family`: factual mechanism label when known",
+        "- `invalidation_condition`: what would weaken the claim or candidate path",
         "",
-        "## Protocol Checklist",
+        "## Audit Checklist",
         "1. Inspect `probe_samples.json` and `data_manifest.json`.",
         "2. Edit `engine.py` against `DecisionContext`.",
         "3. Run debug-branch with the workspace command prefix first to read semantic preflight.",
-        "4. Only record a round after the branch expresses a real mechanism.",
+        "4. Record a round after runtime inputs, objective, search width, and validation scope are clear.",
     ]
     return "\n".join(lines) + "\n"

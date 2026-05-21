@@ -1,15 +1,21 @@
-# Proven Patterns — Battle Evidence (NOT Scaffold)
+# Proven Patterns — Case Studies, Not Recipes
 
 These are patterns that worked on specific assets at specific times.
 They are evidence of what's possible, not instructions for what to do.
-Read them for inspiration during EXPLORE mode, ideally after the branch already
-has a runnable `branch.yaml -> prepare-branch -> debug-branch` path.
-Do NOT copy-paste — understand the MECHANISM and decide if it applies.
+Read them as candidate generators and feature-library ideas during EXPLORE mode.
+Do NOT copy-paste or treat the listed metrics as targets. Understand the
+candidate shape, adapt it to the current alpha universe, and let new evidence
+decide whether it deserves more search width.
 
 These notes are not the primary legality contract.
 
 - Author new branch code against `DecisionContext`.
 - Use `debug-branch` semantic preflight before trusting a recorded round.
+- Use patterns as candidate generators and feature-library ideas. Local data
+  should decide whether a pattern, parameter range, model family, or graph-node
+  subset is useful for the current target.
+- When a pattern inspires a search over parameters, lags, models, or node
+  combinations, record the effective search width for the submitted candidate.
 - Treat the temporal caveats below as pattern-specific implementation notes, not
   as a universal authoring checklist.
 - Do not treat pattern-specific lags, weights, or causal pairs below as
@@ -56,14 +62,14 @@ still rose but IC collapsed 29% — the metric triangle caught concentration gam
 (zeroing positions on low-correlation days inflates apparent per-trade quality).
 
 **When**: SSTK→ETH xcorr multiplier in Dual Resonance. Validated through full scaling
-sweep (1.25→2.0 step 0.25). Optimal: UP=1.75, DOWN=0.25.
+sweep (1.25→2.0 step 0.25). Best in that run: UP=1.75, DOWN=0.25.
 
 Apply this as an internal multiplier, then cap the final strategy output so `abs(position) <= 1`.
 
 | Scale Up/Down | Lo   | IC    | Verdict              |
 |---------------|------|-------|----------------------|
 | 1.50 / 0.50   | 2.35 | 0.549 | Strong               |
-| **1.75 / 0.25** | **2.37** | **0.569** | **Optimal**  |
+| **1.75 / 0.25** | **2.37** | **0.569** | **best in that run**  |
 | 2.00 / 0.00   | 2.38 | 0.403 | IC crash — gaming    |
 
 **Failure modes**: Choosing the highest Sharpe/Lo point without watching IC. The triangle
@@ -110,7 +116,7 @@ size breaks the serial correlation mechanically — the more consecutive days he
 the smaller the position, the more varied the daily PnL magnitude.
 
 **When**: Dual Resonance (ETH). Parameter sweep: start-day 1→5, decay 0.05→0.12.
-Optimal: start day 2, decay 0.10/day. Too aggressive (day 1, 0.12) → Sharpe drops.
+Best in that run: start day 2, decay 0.10/day. Too aggressive (day 1, 0.12) → Sharpe drops.
 Too gentle (day 5, 0.05) → no measurable effect on Lo.
 
 **Failure modes**: Any signal that makes positions MORE persistent over time hurts Lo
@@ -134,11 +140,11 @@ penalty: the penalty handles run-length, RSI handles price-level extremes.
 
 **When**: Dual Resonance (ETH Sharpe 4.27, Lo 2.48). RSI(20) > RSI(14) > RSI(10):
 longer period triggers only at genuine extremes, not noise. Scaling sweep 0.85/1.15
-through 0.50/1.50 — Sharpe-Lo tradeoff. Optimal 0.60/1.40 maximizes Lo without
+through 0.50/1.50 — Sharpe-Lo tradeoff. In that run, 0.60/1.40 maximized Lo without
 collapsing Sharpe below threshold.
 
 **Failure modes**: RSI as an ML feature is noise. RSI as a position overlay is signal.
-This distinction was confirmed in BNB research: adding RSI as a feature degraded Sharpe
+This distinction was confirmed in a BNB run: adding RSI as a feature degraded Sharpe
 by 8%; using it as an overlay improved Lo. Do not conflate the two uses. After the
 overlay, cap the final position so `abs(position) <= 1`.
 
@@ -159,14 +165,14 @@ per asset because each asset has a different dominant timescale. Walk-forward re
 prevents look-ahead: the target for H=k is `return.shift(-k)` applied only during
 training, not inference.
 
-**When**: META (Sharpe 2.52), AAPL (Sharpe 1.69), BNB (Sharpe 2.82). Optimal weights
+**When**: META (Sharpe 2.52), AAPL (Sharpe 1.69), BNB (Sharpe 2.82). Best-run weights
 differ per asset:
 - META: H=1/3/5 weights 70/20/10 — fast-moving large-cap, short horizon dominates
 - AAPL: H=1/3/5 weights 50/30/20 — more balanced, sector peers add medium-horizon signal
 - BNB: H=1/3/5 weights 50/30/20 — crypto volatility benefits from multi-horizon
 
 **Failure modes**: Copying META weights to AAPL degraded performance — each asset
-must run independent autoresearch to find its optimal horizon weights.
+must run independent search to find its optimal horizon weights.
 
 **Look-ahead traps**:
 - Training targets: `y = returns.shift(-H)` — correct, this is the future return.
@@ -188,7 +194,7 @@ single-asset momentum. Abel shows ETH→BNB causal weight = 0, so this is a
 correlation-derived supplement rather than a causal core signal. It was still
 tradeable, but only as an empirically validated add-on.
 
-**When**: BNB Phase 1 research. Adding 8 crypto peers (ADA, ETH, SOL, XRP, etc.)
+**When**: BNB Phase 1 search. Adding 8 crypto peers (ADA, ETH, SOL, XRP, etc.)
 was the single biggest breakthrough: IC +34%, top-18 parent list includes ADA and ETH.
 Direct Abel parents only gave 2 of the top-18 — 2-hop + crypto sector peers dominated.
 

@@ -123,7 +123,7 @@ def test_workspace_context_exposes_workspace_command_prefix(tmp_path, monkeypatc
         "run_doctor",
         lambda _root: {
             "status": "ready",
-            "workspace_mode": "alpha-managed branch research",
+            "workspace_mode": "alpha-managed strategy search",
             "command_prefix": str(cli_path),
             "next_step": f"{cli_path} init-session --ticker <TICKER> --exp-id <session-id>",
         },

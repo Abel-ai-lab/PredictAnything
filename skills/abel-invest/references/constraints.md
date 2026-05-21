@@ -15,6 +15,7 @@ The branch-default safety story is:
 
 Any strategy that uses information it could not have seen at decision time is
 invalid.
+This applies to cheap empirical screening as well as recorded validation.
 
 ## Authoring Contract
 

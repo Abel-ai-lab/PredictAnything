@@ -1,6 +1,6 @@
 # Workspace Bootstrap
 
-`abel-invest` is workspace-first. Do not start strategy research
+`abel-invest` is workspace-first. Do not start strategy search
 until you know which workspace root owns the run.
 
 ## Fresh Install Bootstrap
@@ -64,7 +64,7 @@ doctor is ready.
 
 ## Workspace Rules
 
-- Keep research under the workspace `research/` directory.
+- Keep session and branch artifacts under the workspace `research/` directory.
 - Do not create a nested workspace when `alpha.workspace.yaml` already exists.
 - Do not create a standalone `abel-edge init` sidecar for this flow.
 - Use `workspace context`, `workspace status`, and `doctor` to inspect setup

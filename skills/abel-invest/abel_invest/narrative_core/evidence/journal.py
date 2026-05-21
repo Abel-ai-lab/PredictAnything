@@ -1,4 +1,4 @@
-"""Research journal parsing and coverage helpers."""
+"""Alpha-search journal parsing and coverage helpers."""
 
 from __future__ import annotations
 
@@ -22,18 +22,18 @@ def ensure_research_journal(session: Path) -> Path:
 
 
 def build_research_journal_template(session: Path) -> str:
-    return f"""# Research Journal
+    return f"""# Alpha Search Journal
 
-agent-owned research notes for session `{session.name}`
+agent-owned search notes for session `{session.name}`
 
 ## Boundary
 
 - `evidence_ledger.json` and `frontier.md` are the system-owned evidence facts.
-- This journal is for the agent's hypotheses, observations, pivots, and stop/continue reasoning.
+- This journal is for the agent's candidate ideas, observations, pivots, and stop/continue reasoning.
 - Every recorded round requires an agent-written note below with its ledger evidence reference.
 - Capture what changed, what happened, what was learned, and what that implies for the next exploration step.
 - Before a new candidate branch, record the branch basis and whether any performance-like scout influenced the choice.
-- Treat Abel Ask or narrative context as hypothesis context, not validation evidence; note when it is off-target or weak.
+- Treat Abel Ask or narrative context as candidate-generation context, not validation evidence; note when it is off-target or weak.
 - The generated header above this marker never counts as journal coverage.
 
 {JOURNAL_GENERATED_HEADER_END}

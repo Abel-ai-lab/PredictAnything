@@ -1,32 +1,62 @@
 # Branch Authoring
 
 Use this reference after the workspace is ready and you are creating or revising
-a research branch.
+a candidate branch.
 Commands below use the workspace `command_prefix` returned by
 `workspace context --json` or doctor.
 
 ## Branch Model
 
-- `graph_frontier.json` is the session graph node frontier.
+- `graph_frontier.json` is the session graph-derived candidate universe.
 - `readiness.json` is the session coverage/advisory report.
-- `branch.yaml` defines the branch research declaration and runtime intent.
+- `branch.yaml` declares candidate metadata and runtime intent.
 - `prepare-branch` resolves inputs, writes the branch contract, and warms edge
   cache.
 - `debug-branch` is the semantic preflight step.
 - `run-branch` consumes prepared inputs and records evidence.
 
-The graph frontier gives leads, not answers. Readiness gives coverage clues, not
-permission. A branch is a hypothesis family: a coherent thesis, graph node input
-set, mechanism, model family, and complexity class.
+The graph frontier gives high-value leads, not answers. Readiness gives
+coverage facts, not a veto. A branch is a candidate strategy expression:
+objective, input universe, runtime constraints, and enough detail to make the
+search reproducible and auditable.
+
+## Candidate Audit Surface
+
+Do not make every branch carry a full mechanism essay before it can run.
+`branch.yaml` should unblock runtime and audit with compact facts. Split
+metadata into two layers.
+
+Minimum metadata for ordinary candidate exploration:
+
+- objective or search goal
+- `evidence_intent`: `candidate`, `control`, `diagnostic`, or `draft`
+- `input_claim`: `graph_supported`, `target_only`, `supplement`, or `mixed`
+- selected runtime inputs
+- requested/effective window
+- search width when the candidate was selected from multiple variants
+- validation scope and runtime constraints
+
+Explanation metadata, useful but not always blocking before a first run:
+
+- mechanism family
+- graph attribution or graph use contract
+- invalidation scope
+- narrative scout notes
+- why a candidate family is worth further search or later explanation
+
+The evidence ledger derives labels from explicit declaration fields plus actual
+edge runtime facts. `frontier.md` and `frontier.json` report facts; they are not
+a strategy advisor.
 
 ## Evidence Boundary
 
-`branch.yaml` is a claim, not proof. Fill these fields before expecting a run
-to count as protocol-complete candidate evidence:
+`branch.yaml` is a claim, not proof. For strong, comparable evidence, keep these
+compatibility fields meaningful when possible. The field names are stable API
+surface; they do not require the agent to write a pre-evidence theory:
 
-- `hypothesis`
-- `evidence_intent`: `candidate`, `control`, `diagnostic`, or `draft`
-- `input_claim`: `graph_supported`, `target_only`, `supplement`, or `mixed`
+- `hypothesis` (legacy field name for candidate note / search objective)
+- `evidence_intent`
+- `input_claim`
 - `mechanism_family`
 - `invalidation_condition`
 - `requested_start`
@@ -35,8 +65,12 @@ to count as protocol-complete candidate evidence:
 - `complexity_class`
 - `exploration_role`
 
+Incomplete explanation fields should not make a promising candidate impossible
+to test. They can limit how much mechanism or graph attribution the result
+supports until the agent writes a clearer post-evidence explanation.
+
 `selected_inputs` is the one authoring field for branch inputs. Prefer
-structured graph node entries:
+structured graph node entries when graph attribution matters:
 
 ```yaml
 selected_inputs:
@@ -44,14 +78,10 @@ selected_inputs:
     role: graph_input
     source: frontier
   - node_id: SPY.volume
-    role: control
+    role: supplement
     source: external
     source_reason: market-liquidity contrast outside the current frontier
 ```
-
-The evidence ledger derives labels from explicit declaration fields plus actual
-edge runtime facts. `frontier.md` and `frontier.json` report coverage facts; they
-are not a strategy advisor.
 
 Input realization is recorded separately from declaration:
 
@@ -63,16 +93,15 @@ Input realization is recorded separately from declaration:
 - realized input claim: what kind of evidence the round actually supports
 
 If `input_claim=graph_supported` but runtime does not read the prepared graph
-inputs, the round is a graph input read gap. It can still be useful control or
-diagnostic evidence, but the declaration alone does not make it candidate
-causal evidence.
+inputs, the round is a graph input read gap. It can still be useful strategy,
+control, or diagnostic evidence, but the declaration alone does not prove graph
+contribution.
 
-## Graph Use Contract
+## Graph Attribution Contract
 
-CAP graph nodes are model-supported causal priors. A graph-supported branch
-should state how it tries to extract target-relevant information from the
-selected nodes. This is a lightweight authoring contract, not a new `branch.yaml`
-schema requirement:
+CAP graph nodes are model-supported causal priors. Use a graph attribution
+contract when a branch needs to claim graph-derived contribution or when a
+failed result should be scoped carefully:
 
 ```yaml
 graph_use_contract:
@@ -86,23 +115,23 @@ graph_use_contract:
 - `nodes`: the graph nodes the branch attempts to use.
 - `construction`: how the nodes are transformed, combined, gated, or otherwise
   read by the strategy.
-- `intended_role`: how the agent currently chooses to use them, such as alpha,
-  filter, sizing, regime, interaction, or another agent-defined role.
-- `unresolved_assumption`: the key unknown the construction is leaning on, such
-  as sign, lag, conditioning, interaction, or another agent-defined assumption.
+- `intended_role`: alpha, filter, sizing, regime, interaction, or another
+  agent-defined role.
+- `unresolved_assumption`: sign, lag, conditioning, interaction, or another
+  assumption.
 - `falsification_scope`: the broadest conclusion a failed round can support.
 
-`other` and agent-defined roles are valid. The contract describes the agent's
-current use of a node; it must not become a fixed node taxonomy.
+The contract is optional for pure target/baseline candidates and lightweight
+graph-enriched experiments where graph attribution is not yet being claimed.
 
 If a branch combines multiple graph nodes as one same-direction, equal-weight,
 or same-lag basket, declare that construction explicitly. A failed basket only
 invalidates that construction unless other evidence supports a broader graph
 conclusion.
 
-## Exploration Shape
+## Search Shape
 
-Use branch fields to describe the hypothesis family:
+Use branch fields to describe the candidate family:
 
 - `model_family`: `rule_signal`, `linear_model`, `tree_model`, `learned_model`,
   `ensemble`, `hybrid`, or `unspecified`
@@ -118,130 +147,100 @@ Use `run-branch --changed-dimension` to describe factual round changes:
   --changed-dimension drivers
 ```
 
-Broad exploration means a new input hypothesis, mechanism family, model family,
-complexity class, or expansion probe. Local refinement means parameter, sizing,
-threshold, filter, window, or implementation work inside the same family.
+Parameter, sizing, threshold, filter, window, model, factor, and node-subset
+changes are legitimate search dimensions when intentional and K-accounted. Do
+not relabel search width as a single isolated idea.
 
-The default priority is graph breadth first, strategy variants second, and
-parameters last. Graph breadth still needs a frontier question: expand
-`graph_frontier.json` when current evidence leaves a causal motif or anchor
-question unresolved, not just because a branch failed. Target-only controls are
-useful contrast evidence, but they do not cover graph-supported candidate input
-breadth when live graph candidates exist.
+## Exploration Path
 
-Graph breadth should not outrun mechanism depth. Before moving to a more
-distant frontier, ask whether the current graph neighborhood still has an
-unresolved sign, lag, regime, interaction, control, or risk-shaping question. A
-deeper mechanism branch is appropriate when the added complexity answers that
-question instead of tuning toward a metric target.
+`agent_context.md` is the compact factual resume surface. `exploration_path.md`
+is the single human-facing exploration log and remains a completeness gate
+before another recorded round.
 
-CAP graph nodes are model-supported causal priors. Trust that they carry
-target-relevant information, but do not infer disclosed weight, exact lag,
-signed effect, or tradable direction from the role alone. Parent and child roles
-disclose causal-flow orientation; Abel Invest's `blanket` role is a
-Markov-blanket discovery bucket, not a fixed causal-flow direction.
+Each recorded round entry should be concise:
 
-## Journal And Research Reflection
+- ledger ref
+- selected path
+- compact reason
+- Edge feedback
+- key result facts and artifact references
+- any search width or scout influence that selected the candidate
 
-`agent_context.md` is the compact factual resume surface. `research_journal.md`
-is the agent-owned research state.
+After a failed graph-enriched round, scope the conclusion to the actual
+construction. Do not conclude that graph nodes are useless unless materially
+different graph-derived constructions, target/baseline comparisons, and search
+axes have been tested or intentionally ruled out.
 
-Use the journal for:
-
-- hypotheses and observations
-- branch basis before strategy code when the choice could affect evidence
-  interpretation
-- any performance-like scout or sweep that influenced branch choice
-- Abel Ask or narrative scout context, including when it was off-target or weak
-- why narrative scout was skipped when the next step was already clear or when
-  Abel Ask was unavailable
-- failed neighborhoods
-- open questions
-- reasons to continue, pivot, add contrast evidence, or stop
-- cross-branch comparisons
-- final research summaries
-
-After a failed graph-supported round, scope the conclusion to the declared graph
-use contract. Do not conclude that graph nodes or graph-first exploration are
-invalid unless multiple materially different constructions, controls, and
-unresolved assumptions have been tested or intentionally ruled out.
-
-When an insight should survive as a research conclusion, cite evidence such as
+When an insight should survive as a strategy conclusion, cite evidence such as
 `ledger:<branch_id>:<round_id>`, `frontier.md`, or a raw artifact path.
-
-Every recorded round needs its own agent-written journal entry before the next
-recorded round. The entry does not need a fixed template, but it must cite the
-round ledger ref and preserve the observation or insight that should guide later
-exploration.
-
-When `journal_coverage_complete=false`, use frontier facts and the journal to
-close the missing entries. State whether you are continuing the neighborhood,
-pivoting graph inputs, changing strategy family, adding contrast evidence, or
-stopping. The framework exposes the shape of the search; it should not choose
-the route.
 
 ## Prepared Inputs
 
 `prepare-branch` materializes the branch contract under `inputs/`:
 
-- `runtime_profile.json`
-- `execution_constraints.json`
-- `data_manifest.json`
-- `context_guide.md`
-- `probe_samples.json`
-- `dependencies.json`
+- `inputs/runtime_profile.json`
+- `inputs/execution_constraints.json`
+- `inputs/data_manifest.json`
+- `inputs/context_guide.md`
+- `inputs/probe_samples.json`
+- `inputs/dependencies.json`
 
 Inspect these files before changing strategy logic. Prefer prepared branch
 inputs over frontier-side inference. `data_manifest.json` and
 `dependencies.json` include selected graph node facts alongside the ticker feeds
 used by the current runtime.
 
-## Branch Self-Check
+## Candidate Self-Check
 
-Before writing strategy logic, be able to state:
+Before recording a branch, be able to state the minimum audit facts:
 
-- the graph node, frontier question, recorded evidence, narrative scout, or
-  control purpose that motivates the branch
-- the graph use contract when the branch uses CAP graph nodes
-- the mechanism being tested
-- whether this is graph-breadth expansion or mechanism-depth work, and why that
-  is the right next learning step
-- whether an ambiguous deepen/expand/stop decision used or skipped one
-  narrative scout pass, and what it changed about the mechanism or frontier
-  question if used
-- why chosen constants are mechanism defaults or simple priors, not
-  backtest-selected values
-- what evidence would invalidate the branch
+- the objective or metric target
+- the input universe and why it is bounded
+- whether the candidate is target/baseline, graph-enriched, mixed, or supplement
+- any search width used to select the submitted candidate
+- whether this is the empirical construction lane, a diagnostic/control, an
+  ablation, or a refinement around an empirical lead
+- whether semantic preflight confirmed legal reads
+- what validation result would make this candidate worth refining or promoting
 
-If a branch was chosen because it ranked best in a local metric scan, it is not
-a clean standard-discovery candidate. Declare the search width with
-`--selection-trials`, journal the scout influence, and return to
-graph/mechanism-led branch selection for the next standard round.
+For graph-attribution claims, also state the selected graph nodes,
+construction, intended role, unresolved assumption, and falsification scope.
+Keep this compact before validation; expand it after a pass or meaningful
+near-pass.
 
-## What To Do
+If a branch was chosen because it ranked best in a local metric scan, that is
+normal candidate search. Declare the search width with `--selection-trials` and
+record the selection influence in `exploration_path.md`.
 
-1. State the branch thesis in `branch.yaml`.
+## Minimal Runtime Path
+
+1. State the audit-relevant candidate metadata in `branch.yaml`.
 2. Run `<command_prefix> prepare-branch --branch ...`.
-3. Inspect `inputs/context_guide.md`, `probe_samples.json`, and
+3. Inspect `inputs/context_guide.md`, `inputs/probe_samples.json`, and
    `inputs/data_manifest.json`.
 4. Implement or revise `compute_decisions(self, ctx)`.
 5. Run `<command_prefix> debug-branch --branch ...`.
 6. Read the semantic verdict and traces.
-7. Run `<command_prefix> run-branch --branch ...` when declaration and
-   debug facts are ready enough for the evidence label you want.
-8. Read `evidence_ledger.json` and `frontier.md`.
-9. Update `research_journal.md` with grounded follow-up state.
+7. Run `<command_prefix> run-branch --branch ...` when runtime facts are ready.
+8. Read `evidence_ledger.json`, `frontier.md`, and the Edge result.
+9. Keep `exploration_path.md` covered with ledger ref, chosen path, compact
+   reason, Edge feedback, and artifact refs.
 
-## Research Judgment
+## Alpha Search Judgment
 
-- causal discovery is a prior, not an evidence label
-- explore means new information, a new transmission path, or a genuinely
-  different mechanism
-- branch count is not exploration breadth if every branch is the same family and
-  input claim
-- weird low-attention parents are not automatically noise
-- narrative scout can inspire a mechanism, but it is not evidence truth
+- causal discovery is a high-value prior, not a trading instruction
+- target-only is a baseline, seed, ablation, and competitor; it should not
+  become the default when graph candidates are live
+- graph-enriched search should appear early and recur when graph discovery is
+  available
+- ordinary alpha search should keep an empirical construction posture over the
+  bounded target + graph-derived universe; simple hand-written mechanisms are
+  diagnostics, controls, ablations, or refinements
+- branch count is not search breadth if every branch hides the same search axis
+- weird low-attention graph nodes are not automatically noise
+- narrative scout can inspire features, but it is not evidence truth
 - semantic failure is a signal about visibility or timing assumptions
-- metric failure is evidence about the mechanism, not a prompt to hack metrics
+- metric failure is evidence about the candidate expression, not a reason to
+  hack metrics
 - stop honestly when recent rounds are no longer improving and no high-quality
-  new direction remains
+  new direction remains after the bounded search is ledger-supported

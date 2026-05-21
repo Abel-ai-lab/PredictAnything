@@ -1,18 +1,22 @@
-# Graph Frontier Protocol
+# Graph-Informed Alpha Context
 
-Use this reference after workspace preflight is complete.
+Use this reference after workspace preflight is complete when live graph
+discovery, graph-derived feeds, or frontier expansion are relevant.
 Commands below use the workspace `command_prefix` returned by
 `workspace context --json` or doctor.
 
 ## Purpose
 
-The graph frontier answers one question:
+The graph frontier answers one product question:
 
-Which causal graph nodes are currently known, and where can the agent widen the
-search next?
+Which causal graph nodes are currently known, and how can they enrich the
+alpha universe?
 
-It does not define the branch runtime by itself. Frontier expansion widens the
-candidate node pool through CAP without pretending to pre-solve the strategy.
+It does not prescribe the first strategy branch. It does not mean the whole
+depth-1 frontier should be traded as one basket. CAP graph nodes are a validated
+source of structure and should normally enter candidate generation early, but
+data decides the tradable expression: subset, lag, sign, transformation, model,
+filter, sizing signal, or ensemble role.
 
 Live graph discovery is the normal session opening:
 
@@ -31,26 +35,40 @@ continuity constraints make live graph discovery unavailable:
 
 The session owns:
 
-- `graph_frontier.json`: current graph node frontier and expansion provenance
+- `graph_frontier.json`: current graph node universe and expansion provenance
 - `readiness.json`: advisory coverage report
-- `research_journal.md`: agent-owned research state
-- `frontier.md`: factual exploration coverage
+- `exploration_path.md`: human-facing path, reason, and Edge feedback log
+- `frontier.md`: factual search-context coverage
 
-The branch then selects graph node inputs from that session context in
-`branch.yaml`. The evidence ledger later records declared, prepared, and actual
-graph node read facts.
+The branch selects inputs from this session context in `branch.yaml`. The
+evidence ledger later records declared, prepared, and actual graph node read
+facts.
 
-## Priority Order
+## Alpha Universe
 
-Graph-first is a research priority, not a mechanical quota:
+Use the graph as the default high-value expanded feature universe, and search it
+like an alpha source rather than a checklist:
 
-1. causal graph structure and input hypotheses
-2. strategy/mechanism variants
-3. parameter, threshold, filter, sizing, and window refinement
+- target history and validated baselines establish the benchmark
+- graph nodes and graph-derived feeds are the normal next place to look for
+  incremental information when live graph candidates exist
+- available cross-assets, sector peers, volume, liquidity, and regime variables
+  can supplement the graph when the user goal or evidence supports them
+- proven patterns, feature factories, ML models, and ensembles turn the universe
+  into candidate signals
 
-Direct parents are an opening clue, not a guarantee that the final branch should
-stay direct-only. If the first candidates look odd, do not discard them just
-because they are obscure or low-attention; explain them before moving on.
+For ordinary alpha search, graph context should feed empirical construction
+early. Feature factories, model comparisons, denoise/compression, node-subset
+search, lag/sign/transformation search, regimes, sizing, filters, and ensembles
+are possible expressions, not a checklist. A hand-written rule that happens to
+read graph nodes is graph-realized evidence, but it is not by itself
+data-driven graph search.
+
+Target-only candidates are baselines, seeds, ablations, and competing strategy
+candidates. Their job is to make graph-derived marginal contribution visible,
+not to replace graph search as the default when graph candidates are live.
+
+## CAP Role Interpretation
 
 CAP graph nodes are model-supported causal priors, not trading instructions.
 Trust that they carry target-relevant information, but do not infer disclosed
@@ -69,94 +87,84 @@ not signed trading direction:
 If more specific roles are present, use those roles for structural orientation.
 The underlying graph is temporal, so treat graph relevance as lag-mediated
 rather than contemporaneous by default. CAP does not disclose the exact lag; the
-branch construction should declare or test its timing assumption.
+candidate search can test lag and transformation choices.
 
-## Practical Expansion
+## Practical Use
 
-Use this as a search prior, not a hard recipe. Prefer small explicit node sets
-whose use can be explained. Structural roles help name provenance and, when
-specific enough, orientation. They do not prescribe strategy use.
+Graph context can shape the search prior and feature universe:
 
-When current evidence leaves a frontier question unresolved, expand the graph
-itself before spending rounds on strategy variants:
+- test graph-enriched feature factories
+- search graph node subsets instead of assuming the whole frontier should move
+  together
+- test lag, sign, ratio, relative-momentum, volatility, and regime
+  transformations
+- compare linear, tree, ensemble, and hybrid model families when useful
+- use graph-derived signals as alpha core, confirmation, filter, sizing signal,
+  or regime context according to what the data supports
+- keep weak standalone graph signals if they add diversity inside an ensemble
+
+Do not expand the graph merely to satisfy coverage. Expand when it helps the
+empirical search question:
 
 ```bash
 <command_prefix> frontier status --session research/<ticker>/<exp_id>
 <command_prefix> frontier expand --session research/<ticker>/<exp_id> --anchor <NODE_ID> --mode all --limit 20
 ```
 
-Use `--mode parents`, `--mode mb`, or `--mode all` according to the causal
-question. The result is new or updated nodes in `graph_frontier.json`, not a
-recommendation to run a specific branch.
+Use `--mode parents`, `--mode blanket`, or `--mode all` according to the
+candidate-universe question. The result is new or updated nodes in
+`graph_frontier.json`, not a recommendation to run a specific branch.
 
-Good expansion reasons include a missing liquidity, supply-chain, market-state,
-or demand-regime motif; current-frontier availability or input-realization
-limits; or user/narrative context that names a plausible real-world mechanism
-outside the current frontier. Weak reasons include "the last branch failed",
-"graph breadth is always good", or "a local metric scan found one attractive
-node, so expand around it until the result improves".
+Good expansion reasons are evidence-led: missing motifs, availability or input
+realization limits, user context, or a plausible external driver outside the
+current frontier. Weak reasons include "more graph nodes are always good" or
+"the product expects graph coverage."
 
-Before expanding to a more distant frontier, check mechanism depth in the
-current neighborhood. If evidence still leaves a concrete sign, lag, regime,
-interaction, control, or risk-shaping question, prefer one branch that answers
-that question over wider graph expansion. Complexity is allowed when it adds
-mechanism information; it is not allowed as metric-pressure tuning.
+Before expanding to a more distant frontier, consider whether the current graph
+universe still has useful subset, lag, sign, transformation, model-family,
+regime, or sizing search left. Prefer the path that is most likely to improve
+the user's objective.
 
 ## Narrative Scout
 
-Abel Ask and narrative context can improve exploration efficiency by generating
-mechanism hypotheses before another branch cut or graph expansion. Use them to
-ask what industry, demand, supply-chain, liquidity, macro, volume, or peer
-mechanism could make a graph neighborhood matter.
+Abel Ask and narrative context can improve search efficiency by generating
+candidate features, supplemental drivers, graph expansion anchors, or
+interpretation. Use them when they help the empirical search.
 
 Narrative scout work can suggest:
 
 - a supplemental driver to test
 - a graph expansion anchor
-- a sign, lag, or regime question
-- a reason to stop exploring a weak mechanism family
+- a sign, lag, regime, or transformation question
+- a reason to stop spending search width on a weak candidate family
 
 It is not validation evidence and it does not override CAP facts or Edge
 results. If the narrative result is off-target or weak, record that plainly.
 
-Use one narrative scout pass when ledger/frontier/journal facts do not make the
-next research move clear: deepen the current mechanism, expand the frontier, or
-stop. This is especially useful when the known graph nodes are obscure, the
-target is driven by industry or supply-demand context, or the branch self-check
-cannot name a real-world transmission path.
-
-When using Abel Ask for this scout pass, keep it lightweight: start from the
-Abel Ask narrative probe workflow, prefer `narrate` for a concrete candidate or
-`query-node` for a broad theme, and return to Abel Invest branch evidence as
-soon as the mechanism or frontier question is clear enough. If auth is missing,
-the result is thin, or the narrative drifts off target, journal that fact and do
-not treat the scout as branch evidence.
-
 Efficient pattern:
 
 ```text
-ledger/frontier facts -> narrative scout for mechanism context ->
-frontier question -> optional CAP expansion or branch cut
+ledger/frontier facts -> candidate universe question -> optional narrative scout -> branch/search
 ```
 
 Inefficient pattern:
 
 ```text
-weak metric result -> expand graph broadly -> search new nodes for a metric win
+weak metric result -> expand graph broadly -> search new nodes only because coverage feels thin
 ```
 
 ## Branch Cut
 
-When moving from discovery into a branch:
+When moving from graph context into a branch:
 
-- choose a small explicit graph node input set
-- write it into `branch.yaml` as structured `selected_inputs`
-- state the graph use contract: selected nodes, construction, intended role,
-  unresolved assumption, and falsification scope
+- choose inputs that match the candidate search question
+- write selected runtime inputs into `branch.yaml`
+- keep graph attribution lightweight before validation unless the branch needs a
+  specific graph claim
 - use readiness to understand coverage, not to auto-ban ideas
 - run `prepare-branch` before a recorded round
 - after the round, check input realization facts before treating a declared
-  graph-supported branch as graph-supported evidence
+  graph-supported branch as graph-derived evidence
 
 ```yaml
 selected_inputs:
@@ -164,10 +172,10 @@ selected_inputs:
     role: graph_input
     source: frontier
   - node_id: SPY.volume
-    role: control
+    role: supplement
     source: external
     source_reason: market-liquidity contrast outside the current frontier
 ```
 
 Readiness is advisory. Do not collapse every branch onto the latest common start
-unless the branch thesis truly requires strict overlap.
+unless the candidate expression truly requires strict overlap.

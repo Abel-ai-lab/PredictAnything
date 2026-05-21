@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-ENGINE_TEMPLATE = '''"""Research engine for {ticker}. Replace the starter baseline when the branch thesis is ready.
+ENGINE_TEMPLATE = '''"""Alpha-search engine for {ticker}. Replace the starter wiring scaffold when the candidate is ready.
 
 Default backtest behavior should follow branch.yaml first and the injected context second.
 If provided, self.context contains workspace/session/branch/discovery/readiness metadata from Abel strategy discovery.
-Use branch.yaml to make the critical research choices explicit:
-  - hypothesis
+Use branch.yaml to make the critical audit facts explicit:
+  - hypothesis  # legacy field name for candidate note / search objective
   - evidence_intent
   - input_claim
   - mechanism_family
@@ -16,7 +16,7 @@ Use branch.yaml to make the critical research choices explicit:
   - requested_start
   - selected_inputs
   - overlap_mode
-Write against DecisionContext instead of raw research helpers:
+Write against DecisionContext instead of raw data/runtime helpers:
   - ctx.decision_index()
   - ctx.target.series("close")
   - ctx.feed(name).asof_series("close")
@@ -38,13 +38,13 @@ class BranchEngine(StrategyEngine):
         close = ctx.target.series("close")
         if close.empty:
             raise RuntimeError(
-                "The default Abel strategy discovery baseline loaded no usable target bars. "
+                "The default Abel strategy discovery starter scaffold loaded no usable target bars. "
                 "Confirm the requested window in branch.yaml, then rerun "
                 "prepare-branch with the workspace command prefix."
             )
-        # Debug-safe starting point: a simple target-trend starter baseline.
+        # Debug-safe starting point: a simple target-trend wiring scaffold.
         # It exists to make the first branch runnable and comparable, not to
-        # pretend that discovery has already been translated into a real edge.
+        # pretend that discovery has already found a real edge.
         slow_mean = close.rolling(window=40, min_periods=15).mean()
         next_position = (close > slow_mean).astype(float).fillna(0.0)
         if len(next_position) > 0:

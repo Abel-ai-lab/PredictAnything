@@ -5,7 +5,7 @@ from pathlib import Path
 from abel_invest.workspace_core import doctor
 
 
-def test_run_doctor_ready_reports_alpha_managed_branch_research(
+def test_run_doctor_ready_reports_alpha_managed_strategy_search(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -46,12 +46,12 @@ def test_run_doctor_ready_reports_alpha_managed_branch_research(
 
     assert result["status"] == "ready"
     assert result["workspace_mode"] == doctor.WORKSPACE_MODE
-    assert "alpha-managed branch research" in str(result["summary"])
+    assert "alpha-managed strategy search" in str(result["summary"])
     assert "init-session" in str(result["next_step"])
     assert "prepare-branch" in str(result["next_step"])
 
     report = doctor.render_doctor_report(result)
-    assert "Workspace mode: alpha-managed branch research" in report
+    assert "Workspace mode: alpha-managed strategy search" in report
     assert "Edge install target:" not in report
 
 
@@ -121,7 +121,7 @@ def test_run_doctor_runtime_stale_routes_to_env_refresh(
         "probe_package_freshness",
         lambda *_args, **_kwargs: {
             "ok": False,
-            "summary": "Workspace runtime has abel-edge 0.8.4, below this skill's required >= 0.8.5.",
+            "summary": "Workspace runtime has abel-edge 0.8.4, below this skill's required >= 0.8.6.",
         },
     )
 

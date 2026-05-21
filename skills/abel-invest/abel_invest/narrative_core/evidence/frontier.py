@@ -4,17 +4,19 @@ from __future__ import annotations
 
 from abel_invest.narrative_core.contracts.branch_spec import ordered_unique_upper
 from abel_invest.narrative_core.contracts.constants import (
-    GRAPH_PRIORITY_ROUND_MINIMUM,
     INPUT_BREADTH_ROUND_THRESHOLD,
 )
 from abel_invest.narrative_core.io import _now
-from abel_invest.narrative_core.evidence.journal import build_journal_coverage, compact_research_journal_status
+from abel_invest.narrative_core.evidence.exploration_path import (
+    build_exploration_path_coverage,
+    compact_exploration_path_status,
+)
 
 
 def build_frontier(
     ledger: dict,
     *,
-    journal_status: dict[str, object] | None = None,
+    exploration_path_status: dict[str, object] | None = None,
 ) -> dict:
     rows = [row for row in (ledger.get("rows") or []) if isinstance(row, dict)]
     discovered_drivers = ordered_unique_upper(ledger.get("discovered_drivers") or [])
@@ -50,9 +52,13 @@ def build_frontier(
     protocol_complete = 0
     comparable_candidates = 0
     comparable_controls = 0
+    comparable_strategy_candidates = 0
     candidate_pass = 0
     candidate_fail = 0
     candidate_other = 0
+    strategy_candidate_pass = 0
+    strategy_candidate_fail = 0
+    strategy_candidate_other = 0
     for row in rows:
         label = str(row.get("evidence_label") or "unknown")
         verdict = str(row.get("verdict") or "unknown").upper()
@@ -118,6 +124,14 @@ def build_frontier(
                 candidate_fail += 1
             else:
                 candidate_other += 1
+        if row.get("comparable") and is_strategy_candidate_row(row, label):
+            comparable_strategy_candidates += 1
+            if verdict == "PASS":
+                strategy_candidate_pass += 1
+            elif verdict == "FAIL":
+                strategy_candidate_fail += 1
+            else:
+                strategy_candidate_other += 1
         if row.get("comparable") and label == "target_control_evidence":
             comparable_controls += 1
         for metric in row.get("metric_failure_metrics") or []:
@@ -140,24 +154,12 @@ def build_frontier(
         and len(candidate_driver_sets) < 2
     )
     graph_candidates_available = bool(discovered_drivers) or graph_discovery_k > 0
-    target_only_saturation = (
-        recorded_round_count >= GRAPH_PRIORITY_ROUND_MINIMUM
-        and target_only_recorded_round_count == recorded_round_count
-        and recorded_round_count > 0
-    )
-    graph_discovery_missing = target_only_saturation and not graph_candidates_available
-    graph_first_uncovered = (
-        graph_candidates_available
-        and recorded_round_count >= GRAPH_PRIORITY_ROUND_MINIMUM
-        and graph_supported_candidate_round_count == 0
-    )
     local_refinement_count = exploration_class_counts.get("local_refinement", 0)
     control_evidence_count = label_counts.get("target_control_evidence", 0)
     ablation_evidence_count = exploration_role_counts.get("ablation", 0)
     expansion_probe_count = exploration_role_counts.get("expansion_probe", 0)
-    compact_journal = compact_research_journal_status(journal_status)
-    journal_coverage = build_journal_coverage(rows, compact_journal)
-    research_reflection_due = not bool(journal_coverage.get("journal_coverage_complete"))
+    compact_path = compact_exploration_path_status(exploration_path_status)
+    path_coverage = build_exploration_path_coverage(rows, compact_path)
     return {
         "schema_version": 1,
         "exp_id": ledger.get("exp_id", ""),
@@ -181,6 +183,17 @@ def build_frontier(
             "validation_fail": candidate_fail,
             "validation_other": candidate_other,
         },
+        "strategy_candidate_summary": {
+            "rows": sum(
+                1
+                for row in rows
+                if is_strategy_candidate_row(row, str(row.get("evidence_label") or "unknown"))
+            ),
+            "comparable": comparable_strategy_candidates,
+            "validation_pass": strategy_candidate_pass,
+            "validation_fail": strategy_candidate_fail,
+            "validation_other": strategy_candidate_other,
+        },
         "driver_read_count": len(driver_reads),
         "driver_reads": sorted(driver_reads),
         "graph_node_read_count": len(graph_node_reads),
@@ -190,6 +203,7 @@ def build_frontier(
         "runtime_stage_counts": dict(sorted(window_counts.items())),
         "comparable_availability": {
             "candidate_causal_evidence": comparable_candidates,
+            "candidate_strategy_evidence": comparable_strategy_candidates,
             "target_control_evidence": comparable_controls,
         },
         "input_breadth": {
@@ -207,32 +221,20 @@ def build_frontier(
             "target_only_recorded_round_count": target_only_recorded_round_count,
             "graph_supported_candidate_round_count": graph_supported_candidate_round_count,
         },
-        "graph_priority": {
+        "candidate_universe": {
             "graph_discovery_source": graph_discovery_source,
             "graph_discovery_k": graph_discovery_k,
             "graph_candidates_available": graph_candidates_available,
-            "graph_first_uncovered": graph_first_uncovered,
-            "graph_discovery_missing": graph_discovery_missing,
-            "target_only_saturation": target_only_saturation,
-            "graph_priority_round_minimum": GRAPH_PRIORITY_ROUND_MINIMUM,
-        },
-        "research_journal": compact_journal,
-        "journal_coverage": journal_coverage,
-        "research_reflection": {
-            "research_reflection_due": research_reflection_due,
-            "recorded_round_count": recorded_round_count,
-            "journal_coverage_complete": bool(journal_coverage.get("journal_coverage_complete")),
-            "missing_journal_round_count": len(journal_coverage.get("missing_journal_rounds") or []),
-            "evidence_linked_journal_update": bool(
-                compact_journal.get("has_evidence_linked_update")
-            ),
-            "journal_evidence_reference_count": int(
-                compact_journal.get("evidence_reference_count") or 0
-            ),
-            "resolved_evidence_reference_count": int(
-                compact_journal.get("resolved_evidence_reference_count") or 0
+            "target_only_recorded_round_count": target_only_recorded_round_count,
+            "graph_supported_candidate_round_count": graph_supported_candidate_round_count,
+            "candidate_driver_set_count": len(candidate_driver_sets),
+            "discovered_driver_coverage": fraction_pair(
+                len(candidate_discovered_drivers),
+                len(discovered_drivers),
             ),
         },
+        "exploration_path": compact_path,
+        "path_coverage": path_coverage,
         "input_realization": {
             "declared_graph_supported_rounds": declared_graph_supported_rounds,
             "realized_graph_supported_rounds": realized_graph_supported_rounds,
@@ -311,6 +313,20 @@ def fraction_pair(count: int, total: int) -> str:
     return f"{count}/{total}" if total else "0/0"
 
 
+def is_strategy_candidate_row(row: dict[str, object], label: str) -> bool:
+    if str(row.get("run_type") or "") != "round":
+        return False
+    intent = str(row.get("declared_evidence_intent") or "")
+    role = str(row.get("declared_exploration_role") or "")
+    if intent in {"control", "diagnostic", "draft"} or role in {"control", "diagnostic"}:
+        return False
+    return label in {
+        "candidate_strategy_evidence",
+        "candidate_causal_evidence",
+        "supplemental_evidence",
+    }
+
+
 def discovered_driver_tickers(discovery: dict) -> list[str]:
     target = str(discovery.get("ticker") or discovery.get("target_asset") or "").strip().upper()
     raw_nodes: list[object] = []
@@ -381,14 +397,14 @@ def render_frontier_markdown(frontier: dict) -> str:
     comparable = frontier.get("comparable_availability") or {}
     hypothesis = frontier.get("hypothesis_coverage") or {}
     candidate = frontier.get("candidate_causal_summary") or {}
+    strategy_candidate = frontier.get("strategy_candidate_summary") or {}
     concentration = frontier.get("coverage_concentration") or {}
     exploration = frontier.get("exploration_breadth") or {}
     input_breadth = frontier.get("input_breadth") or {}
-    graph_priority = frontier.get("graph_priority") or {}
-    research_reflection = frontier.get("research_reflection") or {}
+    candidate_universe = frontier.get("candidate_universe") or {}
     input_realization = frontier.get("input_realization") or {}
-    journal_coverage = frontier.get("journal_coverage") or {}
-    research_journal = frontier.get("research_journal") or {}
+    path_coverage = frontier.get("path_coverage") or {}
+    exploration_path = frontier.get("exploration_path") or {}
     return f"""# Evidence Frontier
 
 generated by Abel strategy discovery narrative layer
@@ -418,10 +434,18 @@ generated by Abel strategy discovery narrative layer
 - validation_fail: `{candidate.get("validation_fail", 0)}`
 - validation_other: `{candidate.get("validation_other", 0)}`
 
-## Declaration Coverage
+## Strategy Candidate Summary
 
-- protocol_complete: `{hypothesis.get("protocol_complete", 0)}`
-- protocol_incomplete: `{hypothesis.get("protocol_incomplete", 0)}`
+- rows: `{strategy_candidate.get("rows", 0)}`
+- comparable: `{strategy_candidate.get("comparable", 0)}`
+- validation_pass: `{strategy_candidate.get("validation_pass", 0)}`
+- validation_fail: `{strategy_candidate.get("validation_fail", 0)}`
+- validation_other: `{strategy_candidate.get("validation_other", 0)}`
+
+## Declaration Audit Coverage
+
+- audit_complete: `{hypothesis.get("protocol_complete", 0)}`
+- audit_incomplete: `{hypothesis.get("protocol_incomplete", 0)}`
 
 ## Mechanism Families
 
@@ -475,32 +499,27 @@ generated by Abel strategy discovery narrative layer
 - target_only_recorded_round_count: `{input_breadth.get("target_only_recorded_round_count", 0)}`
 - graph_supported_candidate_round_count: `{input_breadth.get("graph_supported_candidate_round_count", 0)}`
 
-## Graph Priority
+## Candidate Universe
 
-- graph_discovery_source: `{graph_priority.get("graph_discovery_source", "unknown")}`
-- graph_discovery_k: `{graph_priority.get("graph_discovery_k", 0)}`
-- graph_candidates_available: `{str(graph_priority.get("graph_candidates_available", False)).lower()}`
-- graph_first_uncovered: `{str(graph_priority.get("graph_first_uncovered", False)).lower()}`
-- graph_discovery_missing: `{str(graph_priority.get("graph_discovery_missing", False)).lower()}`
-- target_only_saturation: `{str(graph_priority.get("target_only_saturation", False)).lower()}`
-- graph_priority_round_minimum: `{graph_priority.get("graph_priority_round_minimum", 0)}`
+- graph_discovery_source: `{candidate_universe.get("graph_discovery_source", "unknown")}`
+- graph_discovery_k: `{candidate_universe.get("graph_discovery_k", 0)}`
+- graph_candidates_available: `{str(candidate_universe.get("graph_candidates_available", False)).lower()}`
+- target_only_recorded_round_count: `{candidate_universe.get("target_only_recorded_round_count", input_breadth.get("target_only_recorded_round_count", 0))}`
+- graph_supported_candidate_round_count: `{candidate_universe.get("graph_supported_candidate_round_count", input_breadth.get("graph_supported_candidate_round_count", 0))}`
+- candidate_driver_set_count: `{candidate_universe.get("candidate_driver_set_count", input_breadth.get("candidate_driver_set_count", 0))}`
+- discovered_driver_coverage: `{candidate_universe.get("discovered_driver_coverage", input_breadth.get("discovered_driver_coverage", "0/0"))}`
 
-## Research Reflection
+## Exploration Path Coverage
 
-- research_reflection_due: `{str(research_reflection.get("research_reflection_due", False)).lower()}`
-- recorded_round_count: `{research_reflection.get("recorded_round_count", 0)}`
-- journal_coverage_complete: `{str(research_reflection.get("journal_coverage_complete", False)).lower()}`
-- missing_journal_round_count: `{research_reflection.get("missing_journal_round_count", 0)}`
-- evidence_linked_journal_update: `{str(research_reflection.get("evidence_linked_journal_update", False)).lower()}`
-- journal_evidence_reference_count: `{research_reflection.get("journal_evidence_reference_count", 0)}`
-- resolved_evidence_reference_count: `{research_reflection.get("resolved_evidence_reference_count", 0)}`
-
-## Journal Coverage
-
-- recorded_round_count: `{journal_coverage.get("recorded_round_count", 0)}`
-- journaled_round_count: `{journal_coverage.get("journaled_round_count", 0)}`
-- journal_coverage_complete: `{str(journal_coverage.get("journal_coverage_complete", False)).lower()}`
-- missing_journal_rounds: `{", ".join(journal_coverage.get("missing_journal_rounds") or []) or "none"}`
+- path: `{exploration_path.get("path", "exploration_path.md")}`
+- exists: `{str(exploration_path.get("exists", False)).lower()}`
+- entry_count: `{exploration_path.get("entry_count", 0)}`
+- evidence_reference_count: `{exploration_path.get("evidence_reference_count", 0)}`
+- resolved_evidence_reference_count: `{exploration_path.get("resolved_evidence_reference_count", 0)}`
+- recorded_round_count: `{path_coverage.get("recorded_round_count", 0)}`
+- covered_round_count: `{path_coverage.get("covered_round_count", 0)}`
+- path_coverage_complete: `{str(path_coverage.get("path_coverage_complete", False)).lower()}`
+- missing_path_rounds: `{", ".join(path_coverage.get("missing_path_rounds") or []) or "none"}`
 
 ## Input Realization
 
@@ -508,14 +527,6 @@ generated by Abel strategy discovery narrative layer
 - realized_graph_supported_rounds: `{input_realization.get("realized_graph_supported_rounds", 0)}`
 - graph_input_read_gap_count: `{input_realization.get("graph_input_read_gap_count", 0)}`
 - graph_input_read_gap_rows: `{", ".join(input_realization.get("graph_input_read_gap_rows") or []) or "none"}`
-
-## Research Journal
-
-- exists: `{str(research_journal.get("exists", False)).lower()}`
-- evidence_reference_count: `{research_journal.get("evidence_reference_count", 0)}`
-- resolved_evidence_reference_count: `{research_journal.get("resolved_evidence_reference_count", 0)}`
-- has_evidence_linked_update: `{str(research_journal.get("has_evidence_linked_update", False)).lower()}`
-- last_evidence_linked_update_line: `{research_journal.get("last_evidence_linked_update_line", 0)}`
 
 ## Runtime Reads
 
@@ -529,6 +540,7 @@ generated by Abel strategy discovery narrative layer
 ## Comparable Availability
 
 - candidate_causal_evidence: `{comparable.get("candidate_causal_evidence", 0)}`
+- candidate_strategy_evidence: `{comparable.get("candidate_strategy_evidence", 0)}`
 - target_control_evidence: `{comparable.get("target_control_evidence", 0)}`
 """
 
@@ -565,34 +577,37 @@ def render_session_frontier_summary(frontier: dict) -> str:
     comparable = frontier.get("comparable_availability") or {}
     hypothesis = frontier.get("hypothesis_coverage") or {}
     candidate = frontier.get("candidate_causal_summary") or {}
+    strategy_candidate = frontier.get("strategy_candidate_summary") or {}
     concentration = frontier.get("coverage_concentration") or {}
     exploration = frontier.get("exploration_breadth") or {}
     input_breadth = frontier.get("input_breadth") or {}
-    graph_priority = frontier.get("graph_priority") or {}
-    research_reflection = frontier.get("research_reflection") or {}
+    candidate_universe = frontier.get("candidate_universe") or {}
     input_realization = frontier.get("input_realization") or {}
-    journal_coverage = frontier.get("journal_coverage") or {}
+    path_coverage = frontier.get("path_coverage") or {}
     return "\n".join(
         [
             f"- evidence_rows: `{frontier.get('row_count', 0)}`",
-            f"- protocol_complete: `{hypothesis.get('protocol_complete', 0)}`",
-            f"- protocol_incomplete: `{hypothesis.get('protocol_incomplete', 0)}`",
+            f"- audit_complete: `{hypothesis.get('protocol_complete', 0)}`",
+            f"- audit_incomplete: `{hypothesis.get('protocol_incomplete', 0)}`",
             f"- candidate_causal_evidence: `{labels.get('candidate_causal_evidence', 0)}`",
             f"- candidate_causal_pass: `{candidate.get('validation_pass', 0)}`",
             f"- candidate_causal_fail: `{candidate.get('validation_fail', 0)}`",
+            f"- strategy_candidate_evidence: `{strategy_candidate.get('rows', 0)}`",
+            f"- strategy_candidate_pass: `{strategy_candidate.get('validation_pass', 0)}`",
+            f"- strategy_candidate_fail: `{strategy_candidate.get('validation_fail', 0)}`",
             f"- target_control_evidence: `{labels.get('target_control_evidence', 0)}`",
             f"- workflow_blockers: `{frontier.get('workflow_blockers', 0)}`",
             f"- comparable_candidates: `{comparable.get('candidate_causal_evidence', 0)}`",
+            f"- comparable_strategy_candidates: `{comparable.get('candidate_strategy_evidence', 0)}`",
             f"- comparable_controls: `{comparable.get('target_control_evidence', 0)}`",
             f"- dominant_mechanism_family: `{concentration.get('dominant_mechanism_family', 'none')}` (`{concentration.get('dominant_mechanism_family_share', '0/0')}`)",
             f"- dominant_driver_set: `{concentration.get('dominant_driver_set', 'none')}` (`{concentration.get('dominant_driver_set_share', '0/0')}`)",
             f"- branch_family_count: `{exploration.get('branch_family_count', 0)}`",
             f"- candidate_driver_set_count: `{input_breadth.get('candidate_driver_set_count', 0)}`",
-            f"- graph_first_uncovered: `{str(graph_priority.get('graph_first_uncovered', False)).lower()}`",
-            f"- graph_discovery_missing: `{str(graph_priority.get('graph_discovery_missing', False)).lower()}`",
-            f"- research_reflection_due: `{str(research_reflection.get('research_reflection_due', False)).lower()}`",
-            f"- journal_coverage_complete: `{str(journal_coverage.get('journal_coverage_complete', False)).lower()}`",
-            f"- missing_journal_rounds: `{', '.join(journal_coverage.get('missing_journal_rounds') or []) or 'none'}`",
+            f"- graph_candidates_available: `{str(candidate_universe.get('graph_candidates_available', False)).lower()}`",
+            f"- graph_supported_candidate_round_count: `{input_breadth.get('graph_supported_candidate_round_count', 0)}`",
+            f"- path_coverage_complete: `{str(path_coverage.get('path_coverage_complete', False)).lower()}`",
+            f"- missing_path_rounds: `{', '.join(path_coverage.get('missing_path_rounds') or []) or 'none'}`",
             f"- graph_input_read_gap_count: `{input_realization.get('graph_input_read_gap_count', 0)}`",
             f"- local_refinement_count: `{exploration.get('local_refinement_count', 0)}`",
         ]

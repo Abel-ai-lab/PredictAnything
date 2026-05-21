@@ -90,7 +90,6 @@ CHANGED_DIMENSIONS = {
 BROAD_CHANGED_DIMENSIONS = {"drivers", "mechanism", "model_family", "complexity"}
 LOCAL_CHANGED_DIMENSIONS = {"sizing", "thresholds", "filters", "window", "implementation"}
 INPUT_BREADTH_ROUND_THRESHOLD = 8
-GRAPH_PRIORITY_ROUND_MINIMUM = 3
 JOURNAL_GENERATED_HEADER_END = "<!-- ABEL_GENERATED_HEADER_END -->"
 JOURNAL_REFERENCE_RE = re.compile(
     r"(ledger:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+|"

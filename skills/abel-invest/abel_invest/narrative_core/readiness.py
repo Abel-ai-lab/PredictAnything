@@ -83,7 +83,7 @@ def render_readiness_guidance(readiness: dict) -> str:
         )
     return (
         f"Desired start remains {requested_start}. Use readiness as a coverage profile, not as a mandatory "
-        "research-design verdict."
+        "strategy-design verdict."
     )
 
 

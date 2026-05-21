@@ -36,13 +36,14 @@ def test_evidence_frontier_is_the_current_frontier_runtime_surface(tmp_path: Pat
 
     assert ledger["graph_discovery_source"] == "abel_live"
     assert ledger["graph_discovery_k"] == 3
-    assert frontier["graph_priority"]["graph_candidates_available"] is True
-    assert "## Graph Priority" in frontier_md
+    assert frontier["candidate_universe"]["graph_candidates_available"] is True
+    assert "## Candidate Universe" in frontier_md
     assert "## Evidence Frontier" in agent_context
-    assert "## Research Journal" in agent_context
+    assert "## Exploration Path" in agent_context
+    assert "## Research Journal" not in agent_context
 
 
-def test_seed_only_session_keeps_graph_first_gap_visible(tmp_path: Path) -> None:
+def test_seed_only_session_keeps_candidate_universe_status_visible(tmp_path: Path) -> None:
     session = ni.init_session_dir("TSLA", "frontier-v2", tmp_path / "research")
 
     ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
@@ -50,7 +51,7 @@ def test_seed_only_session_keeps_graph_first_gap_visible(tmp_path: Path) -> None
     readme = (session / "README.md").read_text(encoding="utf-8")
 
     assert ledger["graph_discovery_source"] == "pending"
-    assert frontier["graph_priority"]["graph_candidates_available"] is False
+    assert frontier["candidate_universe"]["graph_candidates_available"] is False
     assert "discovery_source: `pending`" in readme
 
 
@@ -111,6 +112,8 @@ def test_frontier_expand_cli_updates_graph_frontier(tmp_path: Path, monkeypatch,
     assert "frontier_expanded" in events
     assert "new_nodes: 2" in out
     assert "Fields: price=2, volume=1" in out
+    assert "From here:" in out
+    assert "review graph_frontier.json" in out
 
 
 def test_failed_live_discovery_attempt_surfaces_as_auth_or_runtime_error(

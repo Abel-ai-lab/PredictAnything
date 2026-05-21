@@ -351,7 +351,7 @@ def classify_result_frame(result: dict[str, object]) -> tuple[str, str]:
             )
         return (
             "validation_result",
-            "Validation ran on the current mechanism; interpret this as research evidence rather than a workflow blocker.",
+            "Validation ran on the current candidate expression; interpret this as search evidence rather than a workflow blocker.",
         )
 
     if verdict == "PASS" and str(semantic.get("verdict") or "").upper() == "PASS":
@@ -479,7 +479,8 @@ def build_branch_context(
     if isinstance(dependencies, dict):
         dependencies = canonicalize_dependencies_payload(dependencies)
     runtime_profile = build_runtime_profile_payload(
-        target=str(branch_spec.get("target") or discovery.get("ticker") or "").strip().upper()
+        target=str(branch_spec.get("target") or discovery.get("ticker") or "").strip().upper(),
+        branch_spec=branch_spec,
     )
     if runtime_profile_path(branch).exists():
         runtime_profile = json.loads(runtime_profile_path(branch).read_text(encoding="utf-8"))
@@ -531,6 +532,16 @@ def build_branch_context(
             **({"cache_root": item.get("cache_root")} if item.get("cache_root") else {}),
             **({"path": item.get("path")} if item.get("path") else {}),
         }
+    validation_context = build_validation_context(
+        session=session,
+        branch=branch,
+        round_id=round_id,
+        selection_trials=selection_trials,
+    )
+    validation_profile = str(runtime_profile.get("validation_profile") or "").strip()
+    if validation_profile:
+        validation_context["profile"] = validation_profile
+
     return {
         "schema_version": 1,
         "workspace_root": str(workspace_root) if workspace_root is not None else None,
@@ -554,12 +565,7 @@ def build_branch_context(
         "backtest_start": backtest_start,
         "branch_spec": branch_spec,
         "branch_declaration": branch_declaration_status(branch_spec),
-        "validation_context": build_validation_context(
-            session=session,
-            branch=branch,
-            round_id=round_id,
-            selection_trials=selection_trials,
-        ),
+        "validation_context": validation_context,
         "engine_scaffold_status": (
             "starter_scaffold"
             if branch_uses_default_scaffold(branch, discovery, readiness, session)

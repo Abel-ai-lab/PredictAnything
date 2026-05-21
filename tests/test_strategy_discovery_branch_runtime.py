@@ -486,7 +486,7 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
     assert "DecisionContext" in context_guide
 
 
-def test_default_branch_spec_starts_as_graph_first_draft_declaration(tmp_path) -> None:
+def test_default_branch_spec_starts_with_graph_enriched_candidate_context(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-decl", tmp_path / "research")
     ni.write_graph_frontier_from_discovery_payload(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
@@ -966,7 +966,7 @@ def test_run_branch_round_records_dsr_k_accounting(tmp_path, monkeypatch, capsys
     assert result == 0
     captured = capsys.readouterr()
     assert "Selection-trials audit" in captured.err
-    assert "does not make sweep-selected candidates part of standard discovery" in captured.err
+    assert "does not by itself validate raw sweep winners" in captured.err
 
     dsr_rows = _read_jsonl(session / "dsr_trials.jsonl")
     assert len(dsr_rows) == 1
@@ -1373,28 +1373,28 @@ def test_frontier_surfaces_candidate_failures_and_resume_facts(tmp_path) -> None
     assert concentration["dominant_driver_set"] == "AAPL,MSFT"
     assert concentration["target_control_evidence"] == 0
     assert "candidate_causal_evidence.FAIL: `6`" in frontier_text
-    assert "## Research Journal" in context_text
-    assert "## Research Reflection" in context_text
+    assert "## Exploration Path" in context_text
     assert "## Input Realization" in context_text
     forbidden = ["try next", "recommend", "open a sibling", "switch mechanism"]
     assert not any(term in frontier_text.lower() for term in forbidden)
     assert not any(term in context_text.lower() for term in forbidden)
 
 
-def test_init_session_creates_research_journal(tmp_path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-journal-init", tmp_path / "research")
+def test_init_session_uses_exploration_path_as_only_human_log(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-path-only-init", tmp_path / "research")
 
     journal_path = session / ni.RESEARCH_JOURNAL_FILENAME
+    path = session / "exploration_path.md"
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
 
-    assert journal_path.exists()
-    journal_text = journal_path.read_text(encoding="utf-8")
-    assert "agent-owned research notes" in journal_text
-    assert ni.JOURNAL_GENERATED_HEADER_END in journal_text
-    assert "## Research Journal" in context_text
-    assert "## Journal Coverage" in context_text
+    assert not journal_path.exists()
+    assert path.exists()
+    path_text = path.read_text(encoding="utf-8")
+    assert "single human-facing exploration log" in path_text
+    assert "## Exploration Path" in context_text
+    assert "## Research Journal" not in context_text
     assert "- evidence_reference_count: `0`" in context_text
-    assert "- has_evidence_linked_update: `false`" in context_text
+    assert "- path_coverage_complete: `true`" in context_text
     assert "- recent_excerpt: `none`" in context_text
 
 
@@ -1403,15 +1403,18 @@ def test_init_session_creates_exploration_path_prompt(tmp_path) -> None:
 
     path = session / "exploration_path.md"
     assert path.exists()
+    assert not (session / ni.RESEARCH_JOURNAL_FILENAME).exists()
     text = path.read_text(encoding="utf-8")
     assert "# Exploration Path" in text
+    assert "single human-facing exploration log" in text
     assert "Before choosing the next Edge run" in text
-    assert "strategy choice" in text
+    assert "chosen path" in text
     assert "Edge feedback" in text
 
     agent_context = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
     assert "exploration_path.md" in agent_context
     assert "read `exploration_path.md`" in agent_context
+    assert "## Research Journal" not in agent_context
 
 
 def test_run_branch_round_appends_exploration_path_edge_feedback(tmp_path, monkeypatch) -> None:
@@ -1483,16 +1486,17 @@ def test_run_branch_round_appends_exploration_path_edge_feedback(tmp_path, monke
     assert result == 0
     path_text = (session / "exploration_path.md").read_text(encoding="utf-8")
     assert "ledger:graph-v1:round-001" in path_text
-    assert "test AAPL graph momentum timing" in path_text
+    assert "path: test AAPL graph momentum timing" in path_text
+    assert "compact reason: AAPL driver strength leads TSLA next-day risk appetite." in path_text
     assert "AAPL driver strength leads TSLA next-day risk appetite." in path_text
     assert "Edge feedback" in path_text
     assert "FAIL" in path_text
     assert "PositionIC 0.000 < 0.02" in path_text
-    assert "try a broader graph driver if PositionIC remains weak" in path_text
+    assert "next implication" not in path_text
 
 
-def test_agent_context_reads_evidence_linked_research_journal(tmp_path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-journal-linked", tmp_path / "research")
+def test_agent_context_reads_evidence_linked_exploration_path(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-path-linked", tmp_path / "research")
     ni.write_graph_frontier_from_discovery_payload(session, _sample_discovery())
     branch = ni.init_branch_dir(session, "graph-v1")
     spec = ni.load_branch_spec(branch)
@@ -1513,10 +1517,13 @@ def test_agent_context_reads_evidence_linked_research_journal(tmp_path) -> None:
         spec=spec,
         result=_edge_result(traced_inputs=["AAPL"], verdict="FAIL"),
     )
-    (session / ni.RESEARCH_JOURNAL_FILENAME).write_text(
-        "# Research Journal\n\n## Notes\n\n"
-        "AAPL-only failed cleanly in ledger:graph-v1:round-001; the useful "
-        "artifact is branches/graph-v1/outputs/round-001-edge-result.json.\n",
+    (session / "exploration_path.md").write_text(
+        "# Exploration Path\n\n## Entries\n\n"
+        "### graph-v1 round-001\n\n"
+        "- ledger: `ledger:graph-v1:round-001`\n"
+        "- path: AAPL-only graph branch\n"
+        "- why: AAPL-only failed cleanly; the useful artifact is "
+        "branches/graph-v1/outputs/round-001-edge-result.json.\n",
         encoding="utf-8",
     )
 
@@ -1525,32 +1532,31 @@ def test_agent_context_reads_evidence_linked_research_journal(tmp_path) -> None:
 
     assert "- evidence_reference_count: `2`" in context_text
     assert "- resolved_evidence_reference_count: `2`" in context_text
-    assert "- has_evidence_linked_update: `true`" in context_text
-    assert "- journal_coverage_complete: `true`" in context_text
+    assert "- path_coverage_complete: `true`" in context_text
     assert "AAPL-only failed cleanly" in context_text
 
 
-def test_journal_prose_without_refs_is_not_evidence_linked(tmp_path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-journal-prose", tmp_path / "research")
-    (session / ni.RESEARCH_JOURNAL_FILENAME).write_text(
-        "# Research Journal\n\n## Notes\n\nThis direction feels too narrow.\n",
+def test_exploration_path_prose_without_refs_is_not_evidence_linked(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-path-prose", tmp_path / "research")
+    (session / "exploration_path.md").write_text(
+        "# Exploration Path\n\n## Entries\n\nThis direction feels too narrow.\n",
         encoding="utf-8",
     )
 
     ni.render_session(session)
-    status = ni.build_research_journal_status(
+    status = ni.build_exploration_path_status(
         session,
         ledger=json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8")),
         frontier=json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8")),
     )
 
     assert status["evidence_reference_count"] == 0
-    assert status["has_evidence_linked_update"] is False
+    assert status["has_round_entries"] is False
     assert status["recent_excerpt"] == "This direction feels too narrow."
 
 
-def test_journal_coverage_required_after_recorded_evidence_without_round_entries(tmp_path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-reflection-due", tmp_path / "research")
+def test_path_coverage_required_after_recorded_evidence_without_round_entries(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-path-coverage-due", tmp_path / "research")
     ni.write_graph_frontier_from_discovery_payload(session, _sample_discovery())
     branch_a = ni.init_branch_dir(session, "momentum-parents")
     branch_b = ni.init_branch_dir(session, "regime-parents")
@@ -1607,19 +1613,13 @@ def test_journal_coverage_required_after_recorded_evidence_without_round_entries
     frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
 
-    assert frontier["graph_priority"]["graph_first_uncovered"] is False
+    assert frontier["candidate_universe"]["graph_supported_candidate_round_count"] == 6
     assert frontier["exploration_breadth"]["branch_family_count"] == 2
-    reflection = frontier["research_reflection"]
-    assert reflection["research_reflection_due"] is True
-    assert reflection["recorded_round_count"] == 6
-    assert reflection["journal_coverage_complete"] is False
-    assert reflection["missing_journal_round_count"] == 6
-    assert reflection["evidence_linked_journal_update"] is False
-    assert frontier["journal_coverage"] == {
+    assert frontier["path_coverage"] == {
         "recorded_round_count": 6,
-        "journaled_round_count": 0,
-        "journal_coverage_complete": False,
-        "missing_journal_rounds": [
+        "covered_round_count": 0,
+        "path_coverage_complete": False,
+        "missing_path_rounds": [
             "momentum-parents:round-001",
             "momentum-parents:round-002",
             "momentum-parents:round-003",
@@ -1628,32 +1628,30 @@ def test_journal_coverage_required_after_recorded_evidence_without_round_entries
             "regime-parents:round-001",
         ],
     }
-    assert "research_reflection_due: `true`" in context_text
-    assert "journal_coverage_complete: `false`" in context_text
+    assert "path_coverage_complete: `false`" in context_text
     assert "same_driver_set_concentration" not in json.dumps(frontier)
     assert "pivot_checkpoint" not in frontier
-    assert ni.journal_coverage_warning_lines(session) == [
-        "journal_coverage_complete=false "
-        "missing_journal_rounds=momentum-parents:round-001, momentum-parents:round-002, momentum-parents:round-003, momentum-parents:round-004, momentum-parents:round-005, regime-parents:round-001 "
-        "required_action=update_research_journal.md_with_round_insights"
+    assert ni.path_coverage_warning_lines(session) == [
+        "path_coverage_complete=false "
+        "missing_path_rounds=momentum-parents:round-001, momentum-parents:round-002, momentum-parents:round-003, momentum-parents:round-004, momentum-parents:round-005, regime-parents:round-001 "
+        "required_action=update_exploration_path.md_with_path_why_and_edge_feedback"
     ]
 
-    (session / ni.RESEARCH_JOURNAL_FILENAME).write_text(
-        "# Research Journal\n\n## Notes\n\n"
-        "- The first momentum attempt failed; ledger:momentum-parents:round-001\n"
-        "- Window change still failed; ledger:momentum-parents:round-002\n"
-        "- Window change still failed; ledger:momentum-parents:round-003\n"
-        "- Window change still failed; ledger:momentum-parents:round-004\n"
-        "- Window change still failed; ledger:momentum-parents:round-005\n"
-        "- Regime branch also failed; ledger:regime-parents:round-001\n",
+    (session / "exploration_path.md").write_text(
+        "# Exploration Path\n\n## Entries\n\n"
+        "### momentum-parents round-001\n- ledger: `ledger:momentum-parents:round-001`\n- path: first momentum attempt\n- why: test\n\n"
+        "### momentum-parents round-002\n- ledger: `ledger:momentum-parents:round-002`\n- path: window change\n- why: test\n\n"
+        "### momentum-parents round-003\n- ledger: `ledger:momentum-parents:round-003`\n- path: window change\n- why: test\n\n"
+        "### momentum-parents round-004\n- ledger: `ledger:momentum-parents:round-004`\n- path: window change\n- why: test\n\n"
+        "### momentum-parents round-005\n- ledger: `ledger:momentum-parents:round-005`\n- path: window change\n- why: test\n\n"
+        "### regime-parents round-001\n- ledger: `ledger:regime-parents:round-001`\n- path: regime branch\n- why: test\n",
         encoding="utf-8",
     )
     ni.render_session(session)
     updated = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
 
-    assert updated["research_reflection"]["research_reflection_due"] is False
-    assert updated["research_reflection"]["evidence_linked_journal_update"] is True
-    assert updated["journal_coverage"]["journal_coverage_complete"] is True
+    assert updated["path_coverage"]["path_coverage_complete"] is True
+    assert updated["path_coverage"]["covered_round_count"] == 6
 
 
 def test_exploration_breadth_marks_single_branch_local_refinement(tmp_path) -> None:
@@ -1697,7 +1695,7 @@ def test_exploration_breadth_marks_single_branch_local_refinement(tmp_path) -> N
     assert exploration["exploration_class_counts"]["broad_explore"] == 1
     assert exploration["exploration_class_counts"]["local_refinement"] == 5
     assert ledger["rows"][-1]["same_neighborhood_failed_rows"] == 5
-    assert "research_reflection_due: `true`" in context_text
+    assert "path_coverage_complete: `false`" in context_text
 
 
 def test_distinct_driver_sets_are_factual_not_checkpoint_reasons(tmp_path) -> None:
@@ -1759,7 +1757,7 @@ def test_distinct_driver_sets_are_factual_not_checkpoint_reasons(tmp_path) -> No
     assert frontier["exploration_breadth"]["branch_family_count"] == 2
     assert frontier["exploration_breadth"]["model_family_counts"]["linear_model"] == 1
     assert frontier["input_breadth"]["candidate_driver_set_count"] == 2
-    assert frontier["research_reflection"]["research_reflection_due"] is True
+    assert frontier["path_coverage"]["path_coverage_complete"] is False
     assert "pivot_checkpoint" not in frontier
     assert "same_driver_set_concentration" not in json.dumps(frontier)
 
@@ -1820,7 +1818,7 @@ def test_input_breadth_reports_candidate_driver_set_coverage(tmp_path) -> None:
     assert not any(term in context_text.lower() for term in forbidden)
 
 
-def test_research_reflection_and_input_realization_for_empty_workspace_9_shape(tmp_path) -> None:
+def test_path_coverage_and_input_realization_for_empty_workspace_9_shape(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-empty-workspace-9-shape", tmp_path / "research")
     ni.write_graph_frontier_from_discovery_payload(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
@@ -1896,9 +1894,10 @@ def test_research_reflection_and_input_realization_for_empty_workspace_9_shape(t
 
     labels = frontier["evidence_label_counts"]
     assert labels["candidate_causal_evidence"] == 1
-    assert labels["target_control_evidence"] == 3
-    assert frontier["research_reflection"]["research_reflection_due"] is True
-    assert frontier["research_reflection"]["recorded_round_count"] == 4
+    assert labels["candidate_strategy_evidence"] == 3
+    assert labels.get("target_control_evidence", 0) == 0
+    assert frontier["path_coverage"]["path_coverage_complete"] is False
+    assert frontier["path_coverage"]["recorded_round_count"] == 4
     assert frontier["input_realization"] == {
         "declared_graph_supported_rounds": 2,
         "realized_graph_supported_rounds": 1,
@@ -1907,10 +1906,10 @@ def test_research_reflection_and_input_realization_for_empty_workspace_9_shape(t
     }
 
     gap_row = next(row for row in ledger["rows"] if row["branch_id"] == "momentum-regime")
-    assert gap_row["evidence_label"] == "target_control_evidence"
+    assert gap_row["evidence_label"] == "candidate_strategy_evidence"
     assert gap_row["input_realization"]["graph_input_read_gap"] is True
     assert gap_row["input_realization"]["realized_input_claim"] == "target_only"
-    assert "research_reflection_due: `true`" in frontier_text
+    assert "path_coverage_complete: `false`" in frontier_text
     assert "graph_input_read_gap_count: `1`" in context_text
     assert "pivot_checkpoint" not in json.dumps(frontier)
 
@@ -1950,10 +1949,10 @@ def test_input_breadth_remains_factual_without_route_warning(tmp_path) -> None:
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
 
     assert frontier["input_breadth"]["input_breadth_thin"] is True
-    assert frontier["graph_priority"]["graph_candidates_available"] is True
+    assert frontier["candidate_universe"]["graph_candidates_available"] is True
     assert "input_breadth_thin: `true`" in context_text
     assert "input_breadth_thin=true" not in "\n".join(
-        ni.journal_coverage_warning_lines(session)
+        ni.path_coverage_warning_lines(session)
     )
 
     msft_branch = ni.init_branch_dir(session, "graph-msft")
@@ -1974,7 +1973,7 @@ def test_input_breadth_remains_factual_without_route_warning(tmp_path) -> None:
     assert frontier["input_breadth"]["input_breadth_thin"] is False
 
 
-def test_graph_priority_warns_when_graph_candidates_are_uncovered(tmp_path) -> None:
+def test_candidate_universe_keeps_graph_context_factual_for_target_only_search(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-graph-uncovered", tmp_path / "research")
     ni.write_graph_frontier_from_discovery_payload(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
@@ -1998,16 +1997,14 @@ def test_graph_priority_warns_when_graph_candidates_are_uncovered(tmp_path) -> N
     frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
     context_text = (session / ni.AGENT_CONTEXT_FILENAME).read_text(encoding="utf-8")
 
-    assert frontier["graph_priority"]["graph_candidates_available"] is True
-    assert frontier["graph_priority"]["graph_first_uncovered"] is True
-    assert frontier["graph_priority"]["graph_discovery_missing"] is False
-    assert "graph_first_uncovered: `true`" in context_text
-    assert ni.graph_priority_warning_lines(session) == [
-        "graph_first_uncovered=true graph_discovery_k=2 target_only_saturation=true"
-    ]
+    assert frontier["candidate_universe"]["graph_candidates_available"] is True
+    assert frontier["candidate_universe"]["graph_discovery_k"] == 2
+    assert frontier["evidence_label_counts"]["candidate_strategy_evidence"] == 3
+    assert "graph_candidates_available: `true`" in context_text
+    assert "## Candidate Universe" in context_text
 
 
-def test_mixed_graph_reads_remain_supplemental_for_graph_priority(tmp_path) -> None:
+def test_mixed_graph_reads_remain_supplemental_for_candidate_universe(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-mixed-supplemental", tmp_path / "research")
     ni.write_graph_frontier_from_discovery_payload(session, _sample_discovery())
     ni.write_readiness(session, _sample_readiness())
@@ -2030,10 +2027,10 @@ def test_mixed_graph_reads_remain_supplemental_for_graph_priority(tmp_path) -> N
 
     assert frontier["evidence_label_counts"]["supplemental_evidence"] == 3
     assert frontier["input_breadth"]["graph_supported_candidate_round_count"] == 0
-    assert frontier["graph_priority"]["graph_first_uncovered"] is True
+    assert frontier["candidate_universe"]["graph_candidates_available"] is True
 
 
-def test_graph_priority_warns_when_discovery_is_missing_and_target_only_saturates(tmp_path) -> None:
+def test_missing_discovery_remains_factual_without_target_only_route_warning(tmp_path) -> None:
     session = ni.init_session_dir("TSLA", "tsla-graph-missing", tmp_path / "research")
     target_branch = ni.init_branch_dir(session, "target-control")
     target_spec = _complete_candidate_spec(target_branch, selected_inputs=[])
@@ -2054,15 +2051,9 @@ def test_graph_priority_warns_when_discovery_is_missing_and_target_only_saturate
     ni.render_session(session)
     frontier = json.loads((session / ni.FRONTIER_JSON_FILENAME).read_text(encoding="utf-8"))
 
-    assert frontier["graph_priority"]["graph_candidates_available"] is False
-    assert frontier["graph_priority"]["graph_discovery_missing"] is True
-    assert frontier["graph_priority"]["graph_first_uncovered"] is False
-    assert ni.graph_priority_warning_lines(session) == [
-        "graph_discovery_missing=true "
-        "graph_discovery_source=pending "
-        "graph_discovery_k=0 "
-        "target_only_saturation=true"
-    ]
+    assert frontier["candidate_universe"]["graph_candidates_available"] is False
+    assert frontier["candidate_universe"]["graph_discovery_source"] == "pending"
+    assert frontier["evidence_label_counts"]["candidate_strategy_evidence"] == 3
 
 
 def test_debug_rows_do_not_count_as_recorded_candidate_rounds(tmp_path) -> None:
@@ -2119,15 +2110,19 @@ def test_debug_rows_do_not_count_as_recorded_candidate_rounds(tmp_path) -> None:
     assert exploration["dominant_evidence_neighborhood_rows"] == 4
 
 
-def test_init_session_output_uses_graph_first_research_loop() -> None:
-    lines = ni.render_breadth_first_start_lines(Path("research/tsla/demo"))
+def test_init_session_output_uses_data_led_graph_enriched_alpha_search() -> None:
+    lines = ni.render_data_led_start_lines(Path("research/tsla/demo"))
     rendered = "\n".join(lines)
 
-    assert "<family-a-branch>" in rendered
-    assert "<family-b-branch>" in rendered
+    assert "<feature-factory-branch>" in rendered
+    assert "<model-or-denoise-branch>" in rendered
+    assert "<target-control-branch>" in rendered
     assert "graph-v1" not in rendered
-    assert "graph-first research loop" in rendered
-    assert "research_journal.md" in rendered
+    assert "data-led graph-enriched alpha search" in rendered
+    assert "first serious non-grandma lane should be empirical construction" in rendered
+    assert "simple hand-written rules are diagnostics or refinements" in rendered
+    assert "exploration_path.md" in rendered
+    assert "research_journal.md" not in rendered
 
 
 def test_tsla_replay_fixture_keeps_broad_failed_search_as_frontier_facts(tmp_path) -> None:
@@ -2356,6 +2351,39 @@ def test_build_branch_context_prefers_prepared_runtime_inputs(tmp_path) -> None:
     assert context["_feeds"]["AAPL"]["symbol"] == "AAPL"
     assert context["data_manifest"]["selected_inputs"] == ["AAPL", "MSFT"]
     assert context["branch_declaration"]["evidence_intent"] == "draft"
+
+
+def test_build_branch_context_routes_grandma_validation_profile(tmp_path) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-grandma-context", tmp_path / "research")
+    discovery = _sample_discovery()
+    readiness = _sample_readiness()
+    ni.write_graph_frontier_from_discovery_payload(session, discovery)
+    ni.write_readiness(session, readiness)
+    branch = ni.init_branch_dir(session, "simple-return")
+
+    spec = ni.load_branch_spec(branch)
+    spec.update(
+        {
+            "target": "TSLA",
+            "strategy_mode": "grandma",
+            "validation_profile": "grandma_daily",
+            "position_bounds": [-1.0, 1.0],
+        }
+    )
+    ni.write_branch_spec(branch, spec)
+
+    context = ni.build_branch_context(
+        branch=branch,
+        session=session,
+        discovery=discovery,
+        readiness=readiness,
+        round_id="round-001",
+        backtest_start="2020-01-01",
+    )
+
+    assert context["runtime_profile"]["validation_profile"] == "grandma_daily"
+    assert context["validation_context"]["profile"] == "grandma_daily"
+    assert context["_execution_constraints"]["position_bounds"] == [-1.0, 1.0]
 
 
 def test_build_branch_context_declares_session_dsr_trials(tmp_path) -> None:

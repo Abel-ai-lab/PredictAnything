@@ -55,13 +55,24 @@ SELECTION_MODE_AUTO_BEST_PASS = "auto_best_validation_by_pass_rate"
 SELECTION_MODE_EXPLICIT_BRANCH_ROUND = "explicit_branch_round"
 SELECTION_SCOPE_SESSION = "session"
 SELECTION_SCOPE_BRANCH = "branch"
-SELECTION_METRIC_ORDER = ("pass_rate", "sharpe", "calmar", "max_dd")
+SELECTION_METRIC_ORDER = (
+    "sharpe",
+    "annual_return",
+    "max_dd_abs",
+    "pass_rate",
+)
+SELECTION_MANIFEST_METRIC_ORDER = (
+    "pass_rate",
+    "sharpe",
+    "calmar",
+    "max_dd",
+)
 SELECTION_RULE_AUTO_BEST_PASS = (
-    "pass_rate_desc_sharpe_desc_calmar_desc_max_dd_desc_latest_v1"
+    "sharpe_desc_annual_return_desc_max_dd_abs_asc_pass_rate_desc_latest_v3"
 )
 SELECTION_REASON_AUTO_BEST_PASS = (
-    "highest validation pass rate, then highest Sharpe, then highest Calmar, "
-    "then least severe max drawdown; ties use latest recorded round"
+    "highest Sharpe, then highest annualized return, then least severe max "
+    "drawdown, then highest validation pass rate; ties use latest recorded round"
 )
 DEFAULT_PROMOTIONS_DIRNAME = "promotions"
 RUNTIME_STATE_SCHEMA = "abel-invest.runtime-state/v1"
@@ -137,6 +148,7 @@ class StrategyArtifactCandidate:
     pass_rate: float
     sharpe: float
     lo_adjusted: float
+    annual_return: float | None
     calmar: float
     max_dd: float
     row: dict[str, str]
@@ -147,12 +159,15 @@ class StrategyArtifactCandidate:
     selection_scope: str = SELECTION_SCOPE_SESSION
 
     @property
-    def selection_metric_values(self) -> dict[str, float]:
+    def selection_metric_values(self) -> dict[str, float | None]:
         return {
+            "lo_adjusted": self.lo_adjusted,
+            "annual_return": self.annual_return,
             "pass_rate": self.pass_rate,
             "sharpe": self.sharpe,
             "calmar": self.calmar,
             "max_dd": self.max_dd,
+            "max_dd_abs": abs(self.max_dd),
         }
 
 
@@ -197,8 +212,6 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
     for branch, row in validation_rows:
         branch_id = _clean(row.get("branch_id")) or branch.name
         round_id = _clean(row.get("round_id"))
-        if _clean(row.get("decision")).lower() != "keep":
-            continue
         if session_round_indexes and (branch_id, round_id) not in session_round_indexes:
             continue
         candidate = _candidate_from_row(
@@ -220,14 +233,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
 
     ranked = sorted(
         candidates,
-        key=lambda item: (
-            item.pass_rate,
-            item.sharpe,
-            item.calmar,
-            item.max_dd,
-            item.session_round_index,
-        ),
-        reverse=True,
+        key=_auto_best_strategy_rank_key,
     )
     selected = _with_rank(ranked[0], selection_rank=1)
     return StrategySelectionResult(
@@ -394,7 +400,7 @@ def build_strategy_artifact_manifest(
             "roundId": candidate.round_id,
             "selectionMode": candidate.selection_mode,
             "selectionScope": candidate.selection_scope,
-            "selectionMetricOrder": list(SELECTION_METRIC_ORDER)
+            "selectionMetricOrder": list(SELECTION_MANIFEST_METRIC_ORDER)
             if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS
             else [],
             "selectionMetricValues": candidate.selection_metric_values,
@@ -712,6 +718,7 @@ def _candidate_from_row(
     pass_rate = _score_pass_rate(_clean(row.get("score")) or _clean(edge_result.get("score")))
     sharpe = _metric(row, metrics, row_key="sharpe", result_key="sharpe")
     lo_adjusted = _metric(row, metrics, row_key="lo_adj", result_key="lo_adjusted")
+    annual_return = _to_float(metrics.get("annual_return"))
     calmar = _to_float(metrics.get("calmar"))
     max_dd = _metric(row, metrics, row_key="max_dd", result_key="max_dd")
     if (
@@ -745,6 +752,7 @@ def _candidate_from_row(
         pass_rate=pass_rate,
         sharpe=sharpe,
         lo_adjusted=lo_adjusted,
+        annual_return=annual_return,
         calmar=calmar,
         max_dd=max_dd,
         row=dict(row),
@@ -762,6 +770,21 @@ def _with_rank(
     selection_rank: int,
 ) -> StrategyArtifactCandidate:
     return replace(candidate, selection_rank=selection_rank)
+
+
+def _auto_best_strategy_rank_key(
+    item: StrategyArtifactCandidate,
+) -> tuple[float, float, float, float, int]:
+    annual_return = (
+        item.annual_return if item.annual_return is not None else float("-inf")
+    )
+    return (
+        -item.sharpe,
+        -annual_return,
+        abs(item.max_dd),
+        -item.pass_rate,
+        -item.session_round_index,
+    )
 
 
 def _artifact_skip_result(

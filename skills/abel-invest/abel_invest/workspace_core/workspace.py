@@ -221,7 +221,7 @@ def render_workspace_status(root: Path, manifest: dict | None = None) -> str:
         f"Workspace: {manifest.get('workspace', {}).get('name', root.name)}",
         f"Root: {root}",
         f"Manifest: {root / MANIFEST_NAME}",
-        "Workspace mode: alpha-managed branch research",
+        "Workspace mode: alpha-managed strategy search",
         f"Workspace env file: {resolve_workspace_env_file(root)}",
         f"Research root: {resolved['research_root']}",
         f"Docs root: {resolved['docs_root']}",
@@ -239,21 +239,22 @@ def render_workspace_readme(name: str) -> str:
     """Render the starter README for a new workspace."""
     return f"""# {name}
 
-This is an Abel strategy discovery research workspace.
+This is an Abel Invest alpha-search workspace.
 
 Treat this directory as the canonical workspace for this working area.
-Treat this workspace's `.venv` as the canonical runtime for daily research.
+Treat this workspace's `.venv` as the canonical runtime for daily alpha search.
 From this workspace root, use `./.venv/bin/abel-invest` as the command prefix,
 or activate `.venv` first and then use `abel-invest`.
 If `alpha.workspace.yaml` already exists here, this directory is already the
 workspace root. Do not bootstrap `./abel-invest-workspace` inside it.
 
-The CLI commands below are the tools Abel strategy discovery uses to continue research
-inside this workspace. The point is not to memorize a checklist. The point is
-to keep the current research state legible while you move from session setup
-into branch evidence.
+The CLI commands below keep alpha search auditable inside this workspace. The
+point is not to memorize a checklist. The point is to search hard while keeping
+the current state legible from session setup into branch evidence.
 
 ## A Usual Path
+
+Run these commands from the workspace root:
 
 ```bash
 ./.venv/bin/abel-invest workspace context --path . --json
@@ -261,19 +262,31 @@ into branch evidence.
 {default_activate_command()}
 ./.venv/bin/abel-invest init-session --ticker TSLA --exp-id tsla-v1
 ./.venv/bin/abel-invest frontier status --session research/tsla/tsla-v1
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
-edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
-edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
-read research/tsla/tsla-v1/exploration_path.md before choosing the next Edge run
-edit research/tsla/tsla-v1/research_journal.md
-edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
+./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <candidate-branch>
+```
+
+Read or edit these files before the first recorded round:
+
+- `research/tsla/tsla-v1/branches/<candidate-branch>/branch.yaml`
+- `research/tsla/tsla-v1/exploration_path.md`
+- `research/tsla/tsla-v1/branches/<chosen-branch>/engine.py`
+
+Then run the branch preflight and recorded round:
+
+```bash
 ./.venv/bin/abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 ./.venv/bin/abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
-./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
-edit research/tsla/tsla-v1/research_journal.md
-# ask first when the session is mature enough for visual review
-./.venv/bin/abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
+./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "candidate search result"
+```
+
+After every recorded round, keep `exploration_path.md` covered with ledger ref,
+chosen path, compact reason, Edge feedback, and artifact refs before another
+recorded round.
+
+Only after asking the user and getting agreement for visual review, run:
+
+```bash
+./.venv/bin/abel-invest visualize-session --session research/tsla/tsla-v1
 ```
 
 Use that path as orientation, not as a rigid script. The important boundary is:
@@ -281,14 +294,20 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `workspace context --json` tells you the owning workspace and `research_root`
 - `branch.yaml` makes the branch inputs explicit
 - `prepare-branch` resolves inputs before you treat any round as evidence
-- the starter `engine.py` is only there to verify branch wiring before a branch-specific mechanism exists
-- new sessions default to graph-first research: use `graph_frontier.json` and
-  `frontier expand` to widen graph breadth first, then strategy variants, then
-  parameters
-- every recorded round requires an agent-written `research_journal.md` entry
-  with the round ledger ref before the next recorded round
+- the starter `engine.py` is only there to verify branch wiring before a branch-specific candidate exists
+- new sessions default to data-led alpha search with graph-enriched context:
+  use `graph_frontier.json` as the high-value expanded feature universe for
+  feature factories, model/denoise lanes, node-subset search, lag/sign search,
+  regimes, filters, sizing, and ensembles; do not reduce graph use to a
+  full-frontier quota or a few hand-written node rules
+- target-only candidates are baselines, seeds, ablations, and competitors for
+  measuring graph-derived marginal contribution, not the default main lane when
+  graph-derived data is live and unsearched
+- every recorded round requires an `exploration_path.md` entry with ledger ref,
+  chosen path, compact reason, Edge feedback, and artifact refs before the next
+  recorded round
 - every next Edge run should be chosen after reading `exploration_path.md` and
-  the latest Edge result; `run-branch` appends the new Edge feedback there
+  the latest Edge result; `run-branch` appends a concise entry there
 
 ## Re-entry
 
@@ -304,23 +323,23 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 
 - session owns `graph_frontier.json` and `readiness.json`
 - session owns `evidence_ledger.json`, `frontier.md`, `agent_context.md`,
-  `exploration_path.md`, and `research_journal.md` after rendering
+  and `exploration_path.md` after rendering
 - branch owns `branch.yaml`
 - edge owns the market-data cache
 - `prepare-branch` should run before a recorded round
 - `frontier.md` reports input realization: declared graph-supported inputs only
   count as realized when the engine reads prepared graph inputs
 - `visualize-session` creates an online session view from the session folder;
-  use `--with-strategy-artifact` by default so the review includes the selected
-  best ranked hostable strategy artifact when one is available, and omit it only for
-  narrative-only views
+  it includes the selected best ranked hostable strategy artifact when one is
+  available by default. Use `--without-strategy-artifact` only for narrative-only
+  views
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
-- the generated `engine.py` is a starter baseline for the first end-to-end run, not a finished branch thesis
+- the generated `engine.py` is a starter wiring scaffold for the first end-to-end run, not a finished strategy
 
 ## Workspace Boundary
 
-- This workspace is for alpha-managed branch research.
-- Keep research sessions and branches under `research/`.
+- This workspace is for alpha-managed strategy search.
+- Keep sessions and branches under `research/`.
 - Do not run `abel-edge init` inside this workspace.
 - If you need a standalone Abel-edge project, create it in a separate directory outside this workspace.
 
@@ -337,7 +356,7 @@ command.
 Run `./.venv/bin/abel-invest workspace context --path . --json` and `./.venv/bin/abel-invest doctor`
 before opening a session.
 
-- `ready`: you can start research
+- `ready`: you can start alpha search
 - `ready` means continue with `init-session -> init-branch -> branch.yaml -> prepare-branch`
 - `auth_missing`: no reusable auth was found; use `abel-auth`, then rerun `doctor`
 - `runtime_stale`, `env_missing`, `edge_missing`, or `edge_contract_missing`:
@@ -347,9 +366,9 @@ before opening a session.
 
 def render_workspace_agents() -> str:
     """Render the starter AGENTS guide for a new workspace."""
-    return """# AGENTS.md — Abel strategy discovery Workspace
+    return """# AGENTS.md — Abel Invest Alpha Search Workspace
 
-Use this workspace as the default place to continue research for this working
+Use this workspace as the default place to continue alpha search for this working
 area. The CLI commands below are tools for operating inside this workspace, but
 the goal is to keep the current branch state understandable rather than to
 follow a rigid script.
@@ -369,24 +388,35 @@ If `alpha.workspace.yaml` is already present in this directory, this directory
 is the workspace root. Do not create `./abel-invest-workspace` inside it.
 
 ### Start a new exploration session
+Run these commands from the workspace root:
+
 ```bash
 ./.venv/bin/abel-invest workspace context --path . --json
 ./.venv/bin/abel-invest doctor
 ./.venv/bin/abel-invest init-session --ticker TSLA --exp-id tsla-v1
 ./.venv/bin/abel-invest frontier status --session research/tsla/tsla-v1
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-a-branch>
-./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <family-b-branch>
-edit research/tsla/tsla-v1/branches/<family-a-branch>/branch.yaml
-edit research/tsla/tsla-v1/branches/<family-b-branch>/branch.yaml
-read research/tsla/tsla-v1/exploration_path.md before choosing the next Edge run
-edit research/tsla/tsla-v1/research_journal.md
-edit research/tsla/tsla-v1/branches/<chosen-branch>/engine.py
+./.venv/bin/abel-invest init-branch --session research/tsla/tsla-v1 --branch-id <candidate-branch>
+```
+
+Read or edit these files before branch execution:
+
+- `research/tsla/tsla-v1/branches/<candidate-branch>/branch.yaml`
+- `research/tsla/tsla-v1/exploration_path.md`
+- `research/tsla/tsla-v1/branches/<chosen-branch>/engine.py`
+
+Then run:
+
+```bash
 ./.venv/bin/abel-invest prepare-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
 ./.venv/bin/abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
-./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
-edit research/tsla/tsla-v1/research_journal.md
-# ask first when the session is mature enough for visual review
-./.venv/bin/abel-invest visualize-session --session research/tsla/tsla-v1 --with-strategy-artifact
+./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "candidate search result"
+```
+
+Keep `exploration_path.md` covered before another recorded round. Ask the user
+before creating an online session view. If the user agrees:
+
+```bash
+./.venv/bin/abel-invest visualize-session --session research/tsla/tsla-v1
 ```
 
 Run `doctor` before `init-session`. If it reports `auth_missing`, use
@@ -399,34 +429,42 @@ Run `workspace context --path . --json` before creating a session so the
 session lands under this workspace's `research/` directory. Do not pass
 `--root` unless intentionally creating a legacy/offline session outside the
 workspace, and then pass `--allow-outside-workspace`.
-Treat `branch.yaml` as the place where target, start, graph inputs, and overlap
-become explicit. Treat `prepare-branch` as the moment that makes those graph
-inputs real. Treat the generated `engine.py` as a starter path check; once the
-branch path is proven, encode the branch-specific mechanism there. Treat
-session readiness as advisory context; the branch's explicit `requested_start`
-is the runtime start when it is set. Treat this workspace `.venv` as the
-canonical runtime for daily work. Treat branch count as a file-organization
-fact, not as proof of graph breadth. Use `research_journal.md` to record your
-own evidence-linked insight and continue/pivot reasoning after each recorded
-round. Read `exploration_path.md` and the latest Edge result before choosing
-the next Edge run; after Edge feedback, keep the path updated. Check journal coverage before starting another round. Check input
-realization before treating a declared graph-supported branch as graph-supported
-evidence. Do not create the online session view automatically; after a
+Treat `branch.yaml` as the place where target, start, selected inputs, objective,
+search width, and validation scope become explicit enough to audit. Treat
+`prepare-branch` as the moment that makes those inputs real. Treat the generated
+`engine.py` as a starter path check; once the branch path is proven, encode the
+candidate logic there. Treat session readiness as advisory context; the branch's explicit
+`requested_start` is the runtime start when it is set. Treat this workspace
+`.venv` as the canonical runtime for daily work. Treat branch count as a
+file-organization fact, not as proof of search breadth. Use `exploration_path.md`
+as the single human-facing exploration log: record each chosen path, compact
+reason, Edge feedback, and ledger ref. Read `exploration_path.md` and the latest
+Edge result before choosing the next Edge run; after Edge feedback, keep the
+path updated. Check path coverage before starting another round. Check input
+realization before claiming graph-derived contribution. Do not create the online
+session view automatically; after a
 candidate PASS, ask the user first. If the user agrees or explicitly asks to
-publish the paper-ready session, `visualize-session --with-strategy-artifact`
+publish the paper-ready session, `visualize-session --session <session>`
 builds the view from the session folder and uploads the selected strategy
 artifact. If the command reports `needs_agent_refactor`, read the emitted
 `refactor-request.json`, edit only the promoted copy named there, write
 `refactor-report.json`, and rerun the same command. Do not start a separate
-agent process. Omit the flag only for narrative-only views.
-This workspace is for alpha-managed branch research, so do not create a
+agent process. Use `--without-strategy-artifact` only for narrative-only views.
+This workspace is for alpha-managed strategy search, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.
 
-### Run one research round
+### Report to the user
+- resolved workspace root and doctor status
+- current session and branch path
+- live/auth blockers and the exact next command only when you are going to run it
+- evidence status honestly: branch declarations are not evidence until prepared and run
+- after a recorded round, say that `exploration_path.md` must be updated before another recorded round
+
+### Run one recorded round
 ```bash
 ./.venv/bin/abel-invest debug-branch --branch research/tsla/tsla-v1/branches/<chosen-branch>
-./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "baseline"
+./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "candidate search result"
 ./.venv/bin/abel-invest promote-strategy --branch research/tsla/tsla-v1/branches/<chosen-branch> --round <round-id>
 ```
 
