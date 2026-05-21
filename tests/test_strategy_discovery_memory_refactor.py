@@ -934,7 +934,7 @@ def test_select_best_pass_strategy_sorts_validation_rounds_by_sharpe_first(
     assert result.skip_reason == ""
     assert result.validation_round_count == 4
     assert result.pass_round_count == 4
-    assert result.eligible_count == 3
+    assert result.eligible_count == 4
     assert result.selected_branch_id == "momentum_lead"
     assert result.selected_round_id == "round-006"
     assert result.selected is not None
@@ -995,6 +995,61 @@ def test_select_best_pass_strategy_sorts_by_sharpe_return_drawdown_then_latest(
     assert result.selected_branch_id == "later"
     assert result.selected is not None
     assert result.selected.session_round_index == 5
+
+
+def test_select_best_pass_strategy_can_host_discarded_fail_validation_rounds(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("AAPL", "aapl-v1", tmp_path / "research")
+    lower = ni.init_branch_dir(session, "lower_discarded_fail")
+    higher = ni.init_branch_dir(session, "higher_discarded_fail")
+    for index, (branch, sharpe, annual_return, max_dd) in enumerate(
+        [
+            (lower, 1.1, 0.10, -0.08),
+            (higher, 1.4, 0.05, -0.12),
+        ],
+        start=1,
+    ):
+        _write_strategy_result_row(
+            session,
+            branch,
+            round_id="round-001",
+            verdict="FAIL",
+            sharpe=sharpe,
+            lo_adj=sharpe,
+            max_dd=max_dd,
+            score="7/9",
+            annual_return=annual_return,
+            decision="discard",
+        )
+        ni.append_tsv_row(
+            session / "events.tsv",
+            ni.EVENTS_HEADER,
+            {
+                "timestamp": f"2026-04-24T01:2{index}:00+00:00",
+                "event": "round_recorded",
+                "branch_id": branch.name,
+                "round_id": "round-001",
+                "mode": "explore",
+                "verdict": "FAIL",
+                "decision": "discard",
+                "description": branch.name,
+                "artifact_path": (
+                    f"branches/{branch.name}/outputs/round-001-edge-result.json"
+                ),
+            },
+        )
+
+    result = ni.select_best_pass_strategy(session)
+
+    assert result.skip_reason == ""
+    assert result.validation_round_count == 2
+    assert result.eligible_count == 2
+    assert result.selected_branch_id == "higher_discarded_fail"
+    assert result.selected_round_id == "round-001"
+    assert result.selected is not None
+    assert result.selected.decision == "discard"
+    assert result.selected.selection_metric_values["sharpe"] == 1.4
 
 
 def test_select_best_pass_strategy_returns_skip_when_no_validation(tmp_path: Path) -> None:

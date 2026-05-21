@@ -206,8 +206,6 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
     for branch, row in validation_rows:
         branch_id = _clean(row.get("branch_id")) or branch.name
         round_id = _clean(row.get("round_id"))
-        if _clean(row.get("decision")).lower() != "keep":
-            continue
         if session_round_indexes and (branch_id, round_id) not in session_round_indexes:
             continue
         candidate = _candidate_from_row(
