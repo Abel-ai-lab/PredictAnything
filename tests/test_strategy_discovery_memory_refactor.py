@@ -1152,14 +1152,9 @@ def test_build_strategy_artifact_manifest_uses_router_contract_fields(
         "ticker": "TSLA",
         "branchId": "momentum_lead",
         "roundId": "round-006",
-        "selectionMode": "auto_best_validation_by_sharpe_annual_return",
+        "selectionMode": "auto_best_validation_by_pass_rate",
         "selectionScope": "session",
-        "selectionMetricOrder": [
-            "sharpe",
-            "annual_return",
-            "max_dd_abs",
-            "pass_rate",
-        ],
+        "selectionMetricOrder": ["pass_rate", "sharpe", "calmar", "max_dd"],
         "selectionMetricValues": {
             "lo_adjusted": 1.056,
             "annual_return": 0.42,
@@ -1354,7 +1349,7 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
     ]
     assert (
         manifest["source"]["selectionMode"]
-        == "auto_best_validation_by_sharpe_annual_return"
+        == "auto_best_validation_by_pass_rate"
     )
     assert manifest["source"]["selectionScope"] == "session"
     assert manifest["promotion"]["mode"] == "zero_change"

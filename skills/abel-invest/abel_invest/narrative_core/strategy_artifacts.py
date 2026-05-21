@@ -51,7 +51,7 @@ STRATEGY_ARTIFACT_ENTRYPOINT = "strategy/strategy.py"
 STRATEGY_ARTIFACT_CLASS_NAME = "BranchEngine"
 STRATEGY_ARTIFACT_PAPER_MODE = "paper_signal"
 STRATEGY_ARTIFACT_WORKSPACE_KIND = "abel-invest"
-SELECTION_MODE_AUTO_BEST_PASS = "auto_best_validation_by_sharpe_annual_return"
+SELECTION_MODE_AUTO_BEST_PASS = "auto_best_validation_by_pass_rate"
 SELECTION_MODE_EXPLICIT_BRANCH_ROUND = "explicit_branch_round"
 SELECTION_SCOPE_SESSION = "session"
 SELECTION_SCOPE_BRANCH = "branch"
@@ -60,6 +60,12 @@ SELECTION_METRIC_ORDER = (
     "annual_return",
     "max_dd_abs",
     "pass_rate",
+)
+SELECTION_MANIFEST_METRIC_ORDER = (
+    "pass_rate",
+    "sharpe",
+    "calmar",
+    "max_dd",
 )
 SELECTION_RULE_AUTO_BEST_PASS = (
     "sharpe_desc_annual_return_desc_max_dd_abs_asc_pass_rate_desc_latest_v3"
@@ -394,7 +400,7 @@ def build_strategy_artifact_manifest(
             "roundId": candidate.round_id,
             "selectionMode": candidate.selection_mode,
             "selectionScope": candidate.selection_scope,
-            "selectionMetricOrder": list(SELECTION_METRIC_ORDER)
+            "selectionMetricOrder": list(SELECTION_MANIFEST_METRIC_ORDER)
             if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS
             else [],
             "selectionMetricValues": candidate.selection_metric_values,
