@@ -47,7 +47,7 @@ tuning to improve the ratio.
 - Do not treat this profile as a way to ignore validation or search-width
   accounting.
 - Do not promote a levered candidate even if total return looks attractive.
-- Do not present the profile as Abel Invest's conservative personality; it is an
+- Do not present the profile as a separate Abel Invest personality; it is an
   explicit user constraint and validation profile.
 - Do not compare these constrained candidates by Sharpe, DSR, Position IC, or
   Omega as live pass/fail gates; those may be diagnostics, while `grandma_daily`

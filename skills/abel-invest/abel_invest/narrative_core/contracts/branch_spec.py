@@ -644,8 +644,9 @@ def build_context_guide_markdown(
         "",
         "## Audit Checklist",
         "1. Inspect `probe_samples.json` and `data_manifest.json`.",
-        "2. Edit `engine.py` against `DecisionContext`.",
-        "3. Run debug-branch with the workspace command prefix first to read semantic preflight.",
-        "4. Record a round after runtime inputs, objective, search width, and validation scope are clear.",
+        "2. Use scratch probes when the feature universe is broad; probes are search aids, not validation evidence.",
+        "3. Edit `engine.py` against `DecisionContext`.",
+        "4. Run debug-branch with the workspace command prefix first to read semantic preflight.",
+        "5. Record a round after runtime inputs, objective, probe influence, search width, and validation scope are clear.",
     ]
     return "\n".join(lines) + "\n"

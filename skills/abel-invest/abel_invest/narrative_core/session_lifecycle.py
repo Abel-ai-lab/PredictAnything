@@ -104,13 +104,15 @@ def resolve_session_root(
 def render_data_led_start_lines(session: Path) -> list[str]:
     command_prefix = command_prefix_for_path(session)
     return [
-        "data-led graph-enriched alpha search:",
+        "aggressive audited alpha search:",
         f"read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing the next candidate or round",
-        "ordinary alpha search posture: empirical construction over a bounded target + graph-derived universe",
+        "default target when unspecified: Sharpe > 2 / strong tradable edge",
+        "default posture: broad scout/probe over a bounded target + graph-derived universe, then disciplined formal commit",
         f"{command_prefix} init-branch --session {session} --branch-id <candidate-branch>",
-        "edit branch.yaml with objective, selected inputs, search width when applicable, and validation scope",
+        "edit branch.yaml with objective, selected inputs, probe influence, search width when applicable, and validation scope",
         "let data decide how to express graph-derived information: features, models, subsets, lags, regimes, sizing, filters, or ensembles",
-        "use target-only as baseline, seed, ablation, or competitor; simple hand-written rules are diagnostics or refinements, not the default main lane",
+        "use target-only as baseline, seed, ablation, or competitor; simple hand-written rules are diagnostics or refinements, not the default search engine",
+        "treat scratch probes as search aids, not validation evidence; record probe-selected candidates with honest selection width",
         f"after each recorded round, keep {EXPLORATION_PATH_FILENAME} updated with ledger ref, chosen path, compact reason, Edge feedback, and artifact refs",
     ]
 

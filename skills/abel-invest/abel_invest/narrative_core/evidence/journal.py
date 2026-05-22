@@ -32,7 +32,8 @@ agent-owned search notes for session `{session.name}`
 - This journal is for the agent's candidate ideas, observations, pivots, and stop/continue reasoning.
 - Every recorded round requires an agent-written note below with its ledger evidence reference.
 - Capture what changed, what happened, what was learned, and what that implies for the next exploration step.
-- Before a new candidate branch, record the branch basis and whether any performance-like scout influenced the choice.
+- Before a new candidate branch, record the branch basis and whether any probe,
+  scout, or search-selection step influenced the choice.
 - Treat Abel Ask or narrative context as candidate-generation context, not validation evidence; note when it is off-target or weak.
 - The generated header above this marker never counts as journal coverage.
 

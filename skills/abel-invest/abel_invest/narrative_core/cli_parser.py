@@ -188,7 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--mode",
         default=None,
         choices=["standard", "grandma"],
-        help="Session strategy mode. Grandma mode routes branches to the conservative grandma_daily profile.",
+        help="Session compatibility profile. Use grandma only for explicit simple/no-leverage grandma_daily validation.",
     )
     discovery_group = init_session.add_mutually_exclusive_group()
     discovery_group.add_argument(
