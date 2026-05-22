@@ -56,9 +56,11 @@ came from one isolated hand-written idea.
 Disposable scripts, tables, notebooks, query cells, and shell heredocs are part
 of that workbench. Prefer `research/<ticker>/<session_id>/scratch/` for files,
 and use an equivalent one-off heredoc, notebook cell, or query cell when files
-are awkward. For a fresh or unfamiliar ticker, a compact first-look scout is
-normally the fastest way to learn whether target behavior, graph lags/signs,
-subsets, transforms, models, filters, or sizing deserve formal branch work.
+are awkward. For a fresh or unfamiliar ticker, use frontier/readiness facts to
+choose a bounded scout universe, prepare a narrow scout/candidate branch to
+materialize data, then run a compact first-look scout to learn whether target
+behavior, graph lags/signs, subsets, transforms, models, filters, or sizing
+deserve recorded branch work.
 
 **Graph-supported is not enough.**
 Runtime graph reads prove input realization. They do not by themselves prove the

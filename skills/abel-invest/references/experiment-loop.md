@@ -48,10 +48,18 @@ When resuming, read:
 
 ## First-Look Data Scout
 
-For a fresh or unfamiliar ticker, the first serious alpha lane should normally
-be probe-informed before a broad formal branch is recorded. Starting the
-experiment loop means learning the data shape, not immediately committing the
-first branch.
+For a fresh or unfamiliar ticker, the first serious recorded alpha candidate
+should normally be probe-informed before a broad candidate is run. Starting the
+experiment loop means learning the data shape, not immediately recording the
+first broad branch.
+
+This is not a request to measure data before data exists. `init-session`
+provides graph frontier and readiness facts. Use those facts to choose a
+bounded scout universe, then create and `prepare-branch` a narrow scout or
+candidate branch so Edge materializes cache plus `inputs/data_manifest.json`,
+`inputs/probe_samples.json`, and `inputs/context_guide.md`. Run the first-look
+scout from those prepared inputs or the warmed cache before deciding what
+deserves `debug-branch` / `run-branch`.
 
 Use a compact scout to answer the highest-leverage questions:
 
@@ -62,13 +70,13 @@ Use a compact scout to answer the highest-leverage questions:
 - construction choice: whether a feature factory, learned model, ensemble,
   filter, sizing rule, or simpler diagnostic is worth formal validation
 
-Store temporary scripts or summaries in
-`research/<ticker>/<exp_id>/scratch/` when useful. If the runtime discourages
-files, use an equivalent one-off shell heredoc, notebook cell, or query cell.
-Promote only the best 1-2 shapes into formal branch work, and account for any
-selection width that materially chose the submitted candidate.
+Store temporary scripts or summaries in `research/<ticker>/<exp_id>/scratch/`
+when useful. If the runtime discourages files, use an equivalent one-off shell
+heredoc, notebook cell, or query cell. Promote only the best 1-2 shapes into
+recorded branch work, and account for any selection width that materially chose
+the submitted candidate.
 
-Direct formal branches remain valid for user-specified strategies, existing
+Direct recorded branches remain valid for user-specified strategies, existing
 leads, continuations, baselines, controls, or very narrow diagnostic branches.
 
 ## Search Loop
@@ -83,9 +91,11 @@ Each round should push toward the user's objective.
    search, lag/sign/transformation search, regimes, sizing, and filters are
    available degrees of freedom, not a fixed checklist.
 3. For a fresh or unfamiliar ticker, begin serious search with a compact
-   first-look scout unless the path is user-specified, a continuation, a
-   baseline/control, or a very narrow diagnostic. Probes are search workbench
-   material, not validation evidence.
+   first-look scout before the first broad recorded run unless the path is
+   user-specified, a continuation, a baseline/control, or a very narrow
+   diagnostic. When that scout needs market data, materialize it through a
+   prepared scout/candidate branch first. Probes are search workbench material,
+   not validation evidence.
 4. Keep graph-enriched ideas active early and throughout the search when live
    graph candidates exist. Use target-only candidates as baselines, seeds,
    ablations, and competitors, not as the default escape from graph search.

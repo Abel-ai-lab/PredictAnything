@@ -2125,8 +2125,10 @@ def test_init_session_output_uses_data_led_graph_enriched_alpha_search() -> None
     assert "Sharpe > 2 is aspirational" in rendered
     assert "disposable probes may live in research/tsla/demo/scratch" in rendered
     assert "equivalent heredoc/notebook/query cell" in rendered
-    assert "first serious alpha branch should normally be probe-informed" in rendered
-    assert "first-look data scout -> promote 1-2 candidate shapes" in rendered
+    assert "first serious recorded alpha candidate should normally be probe-informed" in rendered
+    assert "prepare a narrow scout/candidate branch before measuring market data" in rendered
+    assert "after prepare-branch, disposable probes may live" in rendered
+    assert "run broad candidates only after data/cache are prepared" in rendered
     assert "simple hand-written rules are diagnostics or refinements" in rendered
     assert "validation gates estimate reliability" in rendered
     assert "exploration_path.md" in rendered

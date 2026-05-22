@@ -216,7 +216,9 @@ Disposable empirical search can live in
 `research/<ticker>/<session_id>/scratch/`, or in an equivalent one-off heredoc,
 notebook cell, or query cell when files are awkward. These probes are not
 validation evidence; they are a normal way to decide what deserves formal
-branch code, especially on a fresh or unfamiliar ticker.
+recorded evidence, especially on a fresh or unfamiliar ticker. When the probe
+needs market data, first prepare a narrow scout/candidate branch so the cache
+and `inputs/` exist.
 
 ## Minimal Runtime Path
 

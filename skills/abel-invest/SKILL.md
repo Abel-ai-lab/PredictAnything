@@ -112,15 +112,18 @@ Always:
   status, blockers, what evidence exists, and the next action you will take.
 - Treat `agent_context.md` as the compact factual resume surface,
   `exploration_path.md` as the human-facing chosen-path and Edge-feedback log.
-- On a fresh or unfamiliar ticker, treat the first serious alpha lane as
-  probe-informed by default. Use a compact first-look data scout before or while
-  opening formal branches to check target behavior plus graph lead/lag/sign,
-  node subset, feature family, model family, filter, sizing, and risk shape.
+- On a fresh or unfamiliar ticker, treat the first serious recorded alpha round
+  as probe-informed by default. Use `init-session` frontier/readiness facts to
+  choose a bounded scout universe, then create and `prepare-branch` a narrow
+  scout or candidate branch so data/cache and `inputs/` exist before a
+  first-look data scout measures target behavior, graph lead/lag/sign, node
+  subsets, feature families, model families, filters, sizing, or risk shape.
   Temporary scripts, feature screens, quick model comparisons, notebooks, query
   cells, or compact tables may live under
   `research/<ticker>/<session_id>/scratch/`; when file creation is awkward, an
   equivalent one-off shell heredoc or notebook/query cell is fine. Scratch work
-  is normal Abel Invest research, not product code and not validation evidence.
+  is normal Abel Invest research, not product code and not
+  validation evidence.
 
 Never:
 
@@ -159,14 +162,14 @@ Alpha search stance:
   target behavior, feature construction, model comparison, denoise, subset
   search, regimes, sizing, filters, or ensembles as data calls for them; these
   are degrees of freedom, not a scripted route.
-- For a fresh or unfamiliar ticker, the first serious alpha branch should
-  normally be probe-informed. Starting the experiment loop does not mean
-  immediately committing a broad formal branch. First run a compact data scout
-  to learn the target's own behavior and the graph universe's rough
-  lead/lag/sign/subset/transform shape, then promote the best 1-2 candidate
-  shapes into audited branch work. Direct formal branches remain valid for
-  user-specified strategies, existing leads, baselines, controls, continuations,
-  or very narrow diagnostic branches.
+- For a fresh or unfamiliar ticker, the first serious recorded alpha candidate
+  should normally be probe-informed. Starting the experiment loop does not mean
+  immediately recording a broad candidate. Use the graph frontier to pick a
+  bounded scout universe, prepare a narrow scout/candidate branch to materialize
+  data, run a compact scout on prepared inputs or cache, then promote the best
+  1-2 candidate shapes into audited branch work. Direct recorded branches remain
+  valid for user-specified strategies, existing leads, baselines, controls,
+  continuations, or very narrow diagnostic branches.
 - New sessions use live causal graph discovery when available. Treat the graph
   as the default high-value alpha feature universe beyond target-only history:
   node subsets, lags, signs, transformations, ratios, regimes, model features,
