@@ -85,8 +85,8 @@ Always start by resolving workspace state before strategy work.
   risks becoming another simple hand-written rule:
   read `references/data-driven-construction.md`. Core path.
 - No explicit metric target:
-  use the normal experiment loop with Sharpe > 2 as the aspirational default
-  objective; do not treat this as a separate mode.
+  use the normal experiment loop and default objective; do not treat this as a
+  separate mode.
 
 ## Operating Rules
 
@@ -113,21 +113,13 @@ Always:
 - Treat `agent_context.md` as the compact factual resume surface,
   `exploration_path.md` as the human-facing chosen-path and Edge-feedback log.
 - On a fresh or unfamiliar ticker, treat the first serious recorded alpha round
-  as probe-informed by default. Use `init-session` frontier/readiness facts to
-  choose a bounded scout universe, then create and `prepare-branch` a narrow
-  scout or candidate branch so data/cache and `inputs/` exist before a
-  first-look data scout measures target behavior, graph lead/lag/sign, node
-  subsets, feature families, model families, filters, sizing, or risk shape.
-  Temporary scripts, feature screens, quick model comparisons, notebooks, query
-  cells, or compact tables may live under
-  `research/<ticker>/<session_id>/scratch/`; when file creation is awkward, an
-  equivalent one-off shell heredoc or notebook/query cell is fine. Scratch work
-  is normal Abel Invest research, not product code and not
-  validation evidence. Keep the scout compact but real: compare target
-  baseline behavior, graph lead/lag/subset shape, and the best available
-  construction/risk axis before committing a broad candidate. A single linear
-  correlation table is a diagnostic, not enough by itself to abandon
-  graph-informed empirical construction.
+  as probe-informed by default. Follow `experiment-loop.md`: use
+  `init-session` frontier/readiness facts to choose a bounded scout universe,
+  `prepare-branch` a narrow scout/candidate branch so data/cache and `inputs/`
+  exist, then run a compact first-look data scout before committing a broad
+  candidate. Scratch work in `research/<ticker>/<session_id>/scratch/`,
+  one-off heredocs, notebooks, or query cells is normal Abel Invest research,
+  not product code and not validation evidence.
 
 Never:
 
@@ -149,6 +141,8 @@ Never:
 - Do not `run-branch` a flat/no-signal branch solely to warm cache or make a
   scout feel official. `prepare-branch` is enough for data materialization; use
   recorded runs for meaningful candidates, controls, diagnostics, or ablations.
+- Do not treat a single linear correlation table as a completed first-look
+  scout when graph/model construction remains available.
 - Never pass a running/cumulative total to `--selection-trials`; pass this
   round's search width only.
 - Do not depend on any external skill for guarded optimization; abel-invest runs
@@ -169,34 +163,18 @@ Alpha search stance:
   target behavior, feature construction, model comparison, denoise, subset
   search, regimes, sizing, filters, or ensembles as data calls for them; these
   are degrees of freedom, not a scripted route.
-- For a fresh or unfamiliar ticker, the first serious recorded alpha candidate
-  should normally be probe-informed. Starting the experiment loop does not mean
-  immediately recording a broad candidate. Use the graph frontier to pick a
-  bounded scout universe, prepare a narrow scout/candidate branch to materialize
-  data, run a compact multi-axis scout on prepared inputs or cache, then
-  promote the best 1-2 candidate shapes into audited branch work. A
-  prepare-only scout branch is fine when its job is cache/input materialization;
-  do not record a no-signal round just to start scouting. Direct recorded
-  branches remain valid for user-specified strategies, existing leads,
-  baselines, controls, continuations, or very narrow diagnostic branches.
-- New sessions use live causal graph discovery when available. Treat the graph
-  as the default high-value alpha feature universe beyond target-only history:
-  node subsets, lags, signs, transformations, ratios, regimes, model features,
-  sizing signals, filters, and ensemble members are all fair game.
-- Graph-enriched ideas should appear early and recur throughout ordinary search
-  unless the user explicitly chose simple-return constraints, a validated
-  baseline already defines the immediate path, or live graph access is blocked.
-  Do not turn this into a full-frontier quota or a broad basket ritual.
-- Target-only work is useful as a baseline, seed, ablation, or competing
-  candidate. It should not become the lazy default when live graph candidates
-  are available; use it to measure whether graph-derived information improves
-  the objective or robustness.
-- A graph-supported branch is not automatically data-driven. Runtime graph reads
-  prove input realization; they do not replace feature construction, model
-  comparison, subset/lag/sign search, denoise, or ensemble search.
-- Hand-written single-mechanism branches are diagnostics, controls, ablations,
-  or refinements around empirical construction. They are useful, but they are
-  not the product's default search posture when live graph-derived data is
+- Fresh or unfamiliar tickers should normally use the prepared first-look scout
+  sequence in `experiment-loop.md` before the first broad recorded candidate.
+  Direct recorded branches remain valid for user-specified strategies, existing
+  leads, baselines, controls, continuations, or very narrow diagnostics.
+- Live graph discovery is the default high-value alpha universe when available.
+  Use `discovery-protocol.md` for graph semantics and expansion; use
+  `data-driven-construction.md` for feature factories, model comparison,
+  denoise, node subsets, lags, regimes, sizing, filters, and ensembles.
+- Target-only work is a baseline, seed, ablation, or competitor. A
+  graph-supported branch is not automatically data-driven: runtime graph reads
+  prove input realization, not construction breadth. Hand-written single-mechanism branches are diagnostics, controls, ablations, or refinements around empirical
+  construction, not the default search posture when live graph-derived data is
   available.
 - A hard user metric target (Sharpe / MaxDD / PnL) is an optimization request.
   Search is expected: use target/baseline context, graph-derived features,
@@ -211,10 +189,6 @@ Alpha search stance:
   high return, and useful risk control; a higher pass rate means the candidate
   is more reliable and reportable under the current validation profile. A
   high-ceiling near-pass is search information, not waste.
-- Graph-derived search should mine the causal node universe empirically. Let
-  data select subsets, lags, transformations, models, and graph roles. Graph
-  expansion is available when evidence points outside the current view, but it
-  is not a coverage ritual.
 - Exhaustion is ledger-proven, never asserted. Do not write "exhausted",
   "ceiling", or "no edge" unless the ledger shows, K-accounted: the bounded
   candidate universe, materially different search axes, graph-derived and
@@ -222,22 +196,10 @@ Alpha search stance:
   its search impact, and all attempted width including otherwise-skipped
   ERROR/preflight variants. One validated candidate does not certify search
   exhaustiveness.
-- CAP graph nodes are model-supported causal priors. Trust that they carry
-  target-relevant information, but do not infer disclosed weight, exact lag,
-  signed effect, monotone strength, or tradable direction from the role alone.
-  Parent and child roles disclose causal-flow orientation; Abel Invest's
-  `blanket` role is a Markov-blanket discovery bucket, not a fixed causal-flow
-  direction.
-- When claiming graph-derived contribution, keep the graph use contract clear:
-  selected nodes, construction, intended role, unresolved assumption, and
-  falsification scope. This can be lightweight before validation and richer
-  after a pass or meaningful near-pass.
-- Expand the graph frontier only when it helps the empirical search question.
-  Do not expand merely to satisfy graph coverage or make the exploration look
-  broader.
-- Use narrative scout context only when it helps generate candidate features,
-  graph expansion anchors, or interpretation. It is optional context, not a
-  required ritual.
+- CAP graph nodes are model-supported causal priors, not trading instructions.
+  Do not infer hidden weight, exact lag, signed effect, or tradable direction
+  from graph role alone. Expand the graph or use narrative scout context only
+  when it helps the empirical search question.
 - Every recorded round requires an `exploration_path.md` entry with the chosen
   path, compact reason, Edge feedback, round ledger reference, and any scout
   influence before the next recorded round.

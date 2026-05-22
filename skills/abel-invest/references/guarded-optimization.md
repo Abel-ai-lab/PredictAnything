@@ -39,13 +39,8 @@ During screening:
   scope
 - record enough detail to reproduce the submitted candidate
 - keep count of effective search width
-- for a fresh or unfamiliar ticker, prefer a compact first-look scout before a
-  broad recorded run; when the scout needs market data, use a prepared
-  scout/candidate branch first, and do not record a flat/no-signal run solely
-  for cache materialization
+- for fresh-ticker first-look scout sequencing, use `experiment-loop.md`
 - failures are information; they do not need to pass final validation
-- use `research/<ticker>/<session_id>/scratch/`, a one-off shell heredoc,
-  notebook cell, or query cell for disposable screening when useful
 
 ### 2. Validation Selection
 

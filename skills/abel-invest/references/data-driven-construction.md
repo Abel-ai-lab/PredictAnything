@@ -3,10 +3,10 @@
 Use this reference for ordinary non-grandma alpha search, especially when the
 next idea is drifting toward another hand-written rule.
 
-This is the default construction stance, not a separate workflow. Runtime
-legality, honest search-width accounting, and validation still decide what can
-be reported. When the user gives no metric target, the ordinary objective is a
-strong tradable strategy with Sharpe > 2 as the aspirational target.
+This is the default construction stance, not a separate workflow. This file
+owns candidate-expression choices; `experiment-loop.md` owns sequencing and
+first-look scout mechanics, and `guarded-optimization.md` owns hard-target
+reportability.
 
 ## Default Posture
 
@@ -47,18 +47,13 @@ research. Prefer `research/<ticker>/<session_id>/scratch/` for files. Scratch
 outputs are not validation evidence; they help choose what is worth formal,
 audited validation.
 
-For a fresh or unfamiliar ticker, a compact first-look scout is the usual start
-to serious empirical construction, but data measurements need prepared data.
-Use frontier/readiness facts to choose a bounded scout universe, then
-`prepare-branch` a narrow scout or candidate branch before measuring target
-behavior, graph lead/lag/sign, node subset, transformation, feature family,
-model family, filter, sizing, or risk shape. The prepared branch can stop at
-prepare when its job is data/cache materialization; do not record a flat or
-no-signal round just to make the scout official. A single correlation table is
-a diagnostic, not the whole scout when graph/model construction is still
-available. Do not turn scratch into paperwork; promote the best shapes and
-record selection influence plus effective width when the scout materially chose
-the submitted candidate.
+Use scratch to compare construction axes, not to create paperwork. A compact
+first-look scout should be multi-axis enough to distinguish target baseline
+behavior, graph lag/subset shape, and plausible feature/model/risk expression.
+A single correlation table is a diagnostic, not the whole construction scout
+when graph/model alternatives are still available. For prepared-data ordering,
+prepare-only scout branches, and promotion into recorded rounds, follow
+`experiment-loop.md`.
 
 ## What Simple Rules Are For
 
@@ -76,16 +71,10 @@ hand-written mechanism.
 ## Search Accounting
 
 If the submitted branch was selected from a scan, grid, model comparison, HPO
-run, node-subset choice, or feature-factory screen, record the effective width
-with `--selection-trials N` or the current candidate search metadata path.
-`N` is this round's search width only, never the campaign total.
-
-Do not report a raw search winner as robust until required validation and
-honest width accounting support that claim.
-
-K is an audit meter, not an exploration brake. Large empirical searches are
-allowed when the candidate ceiling justifies them; they simply carry their real
-selection width.
+run, node-subset choice, or feature-factory screen, record the effective width.
+K is an audit meter, not an exploration brake. `experiment-loop.md` owns the
+per-round `--selection-trials` rule; `guarded-optimization.md` owns final-K
+reportability.
 
 ## Failure Reading
 

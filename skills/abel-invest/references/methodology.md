@@ -21,11 +21,10 @@ accounting, and the exploration path surface. The agent owns what to try next.
 
 **Search hard, then explain.**
 The job is to find a high-quality strategy for the user's objective, usually
-high Sharpe, high return, or a constrained risk-return profile. When the user
-does not specify a metric target, Sharpe > 2 is the aspirational default, with
-high return, controlled drawdown, and reportable evidence quality. Mechanism
-stories organize results after evidence appears; they should not slow the first
-useful empirical test.
+high Sharpe, high return, or a constrained risk-return profile. The default
+objective is defined in `SKILL.md` and `experiment-loop.md`. Mechanism stories
+organize results after evidence appears; they should not slow the first useful
+empirical test.
 
 **Empirical construction by default.**
 For ordinary non-grandma alpha search, the default posture is empirical
@@ -52,16 +51,6 @@ Feature construction, model-family comparison, HPO, graph-node subset search,
 lag/sign search, ensembles, regime filters, and sizing search are legitimate
 exploration. Make the search width visible; do not pretend a selected winner
 came from one isolated hand-written idea.
-
-Disposable scripts, tables, notebooks, query cells, and shell heredocs are part
-of that workbench. Prefer `research/<ticker>/<session_id>/scratch/` for files,
-and use an equivalent one-off heredoc, notebook cell, or query cell when files
-are awkward. For a fresh or unfamiliar ticker, use frontier/readiness facts to
-choose a bounded scout universe, prepare a narrow scout/candidate branch to
-materialize data, then run a compact first-look scout to learn whether target
-behavior, graph lags/signs, subsets, transforms, models, filters, or sizing
-deserve recorded branch work. The materialization branch can be prepare-only;
-do not record a flat/no-signal run just to make scouting official.
 
 **Graph-supported is not enough.**
 Runtime graph reads prove input realization. They do not by themselves prove the
@@ -100,17 +89,6 @@ Candidate-universe sources include:
 - feature factories, learned models, and ensembles
 - user constraints such as drawdown, no leverage, or grandma mode
 
-The runtime path stays stable:
-
-1. resolve workspace and doctor readiness
-2. start or resume a session; run live graph discovery when available
-3. search candidates empirically without temporal leakage
-4. declare enough candidate metadata for runtime and audit
-5. `prepare-branch` to materialize inputs
-6. `debug-branch` to check semantic legality
-7. `run-branch` to record selected candidates with `--selection-trials` when
-   search width was used
-8. read ledger/frontier/Edge facts
-9. keep `exploration_path.md` covered
-10. explain mechanism and graph contribution after there is evidence worth
-    explaining
+`experiment-loop.md` owns the runtime path. This file only explains why the
+path keeps strategy judgment with the agent while the framework owns legality,
+evidence facts, search-width accounting, and reportability.
