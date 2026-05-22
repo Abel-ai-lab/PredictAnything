@@ -1,13 +1,15 @@
 ---
 name: abel-invest
 description: >
-  Data-led quant alpha search, screening, and guarded validation with causal
-  graph priors. Use this skill whenever the user wants to find, improve,
-  screen, backtest, or stress a trading strategy / alpha / signal, hit a
-  Sharpe-or-drawdown target, run graph-enriched feature-factory + ensemble
-  search, or continue/prepare/debug an Abel strategy-discovery workspace —
-  even if they don't say "Abel" and even when they just ask for "a good
-  strategy for X" or "is there alpha in Y". Prefer this over ad-hoc
+  Aggressive audited quant alpha search, screening, and guarded validation with
+  causal graph priors. Use this skill whenever the user wants to find, improve,
+  screen, backtest, or stress a trading strategy / alpha / signal, explore
+  whether an asset has tradable edge, run graph-enriched feature-factory,
+  model, or ensemble search, or continue/prepare/debug an Abel
+  strategy-discovery workspace — even if they don't say "Abel" and even when
+  they do not name Sharpe, return, drawdown, or another metric target. Default
+  to broad empirical alpha exploration with Sharpe > 2 as the aspirational
+  target unless the user gives a different target. Prefer this over ad-hoc
   hand-designed strategy work.
 metadata:
   openclaw:
@@ -62,7 +64,7 @@ Always start by resolving workspace state before strategy work.
   read `references/workspace-bootstrap.md`.
 - New session, normal round loop, or resuming a session:
   read `references/experiment-loop.md`.
-- Grandma mode, simple-return screening, or conservative no-leverage exploration:
+- Explicit simple/no-leverage validation profile or compatibility work:
   read `references/grandma-mode.md`.
 - Live graph discovery, graph frontier expansion, or graph-informed alpha context:
   read `references/discovery-protocol.md`.
@@ -76,9 +78,10 @@ Always start by resolving workspace state before strategy work.
   optionally read `references/methodology.md`.
 - Choosing concrete constructions while writing the engine:
   read `references/proven-patterns.md` (battle-tested patterns). Core path.
-- A hard Sharpe / MaxDD / PnL target is set:
-  read `references/guarded-optimization.md` (self-contained gauntlet-gated
-  optimization). Core path — not optional — when a performance bar is set.
+- Search-width accounting, selected-candidate reporting, or final-K validation:
+  read `references/guarded-optimization.md`. Core path when a submitted
+  candidate was selected from probes, sweeps, grids, model comparison, HPO,
+  feature screening, node-subset search, or any other empirical search.
 - Before writing "exhausted / ceiling / no edge":
   read `references/experiment-loop.md` and check the ledger requirements there.
 - Data-driven candidate construction, especially when ordinary alpha search
@@ -124,6 +127,11 @@ Never:
   generated strategy advice. They are factual surfaces.
 - Do not hide parameter, sizing, threshold, filter, model, factor, or node-subset
   search inside one "single" strategy. Name search width honestly.
+- Do not treat scratch scripts, local probes, scout results, or narrative
+  context as validation evidence.
+- Do not submit an unscouted whole-frontier or whole-feature basket as formal
+  evidence when a small probe could first identify sign, horizon, subset,
+  feature-family, model-family, or risk-shape facts.
 - Do not report a raw-metric winner as a robust strategy before it clears the
   gauntlet with honest search-width accounting.
 - Do not treat `--selection-trials` as a strategy-quality shortcut; it is honest
@@ -135,12 +143,31 @@ Never:
 
 Alpha search stance:
 
-- User objective first. The default job is to find a high-quality strategy for
-  the user's stated goal, usually high Sharpe, high return, or an explicit
-  risk-return target.
+- Abel Invest has one default identity: aggressive audited alpha search. User
+  constraints such as simple, interpretable, no leverage, only validate this
+  idea, or no parameter search narrow the search space for that request; they
+  do not switch the product into a different research personality.
+- Absence of an explicit metric target is not a request for narrow validation.
+  The default objective is to find a strong tradable strategy, with Sharpe > 2
+  as the aspirational target unless the user gives another target, while
+  controlling drawdown and preserving reportable evidence quality.
 - Search hard, then explain. Let observed results, failure modes, and metric
   shape choose the next candidate family. Mechanism stories are useful after
   evidence appears; they are not admission tickets.
+- Default loop: broad scout/probe over a bounded target + graph-derived
+  universe, identify promising sign, horizon, subset, feature-family,
+  model-family, regime, sizing, filter, or risk-shape facts, then commit
+  selected formal candidates through prepare/debug/run with honest current-round
+  search-width accounting.
+- Scratch scripts, quick probes, local feature scans, model-family comparisons,
+  and small diagnostic sweeps are allowed and expected during exploration. They
+  are not validation evidence. If they influence which formal candidate is
+  submitted, record that influence in `exploration_path.md` and account for the
+  effective selection width with `--selection-trials` or final-K analysis.
+- Formal candidates do not have to be simple or hand-written. They can be
+  learned models, ensembles, feature-factory outputs, graph-node subset models,
+  or hybrids. Disciplined commit means reproducible, temporally legal, bounded,
+  and honestly K-accounted.
 - Ordinary alpha search has a default posture: empirical construction over a
   bounded target + graph-derived universe. The agent should use the graph,
   target behavior, feature construction, model comparison, denoise, subset
@@ -151,9 +178,9 @@ Alpha search stance:
   node subsets, lags, signs, transformations, ratios, regimes, model features,
   sizing signals, filters, and ensemble members are all fair game.
 - Graph-enriched ideas should appear early and recur throughout ordinary search
-  unless the user chose a simple/conservative lane, a validated baseline already
-  defines the immediate path, or live graph access is blocked. Do not turn this
-  into a full-frontier quota or a broad basket ritual.
+  unless a validated baseline already defines the immediate path, user
+  constraints explicitly narrow the allowed inputs, or live graph access is
+  blocked. Do not turn this into a full-frontier quota or a broad basket ritual.
 - Target-only work is useful as a baseline, seed, ablation, or competing
   candidate. It should not become the lazy default when live graph candidates
   are available; use it to measure whether graph-derived information improves
@@ -165,11 +192,6 @@ Alpha search stance:
   or refinements around empirical construction. They are useful, but they are
   not the product's default search posture when live graph-derived data is
   available.
-- A hard user metric target (Sharpe / MaxDD / PnL) is an optimization request.
-  Search is expected: use target/baseline context, graph-derived features,
-  feature factories, ensembles, parameter search, model-family comparison,
-  HPO, regime/sizing/filter search, and node-subset search when useful. Then
-  report only gauntlet-surviving candidates honestly.
 - `--selection-trials N` is mandatory for any search width. `N` is this round's
   width only; the framework accumulates the campaign total from prior PASS/FAIL
   rounds itself. Fold preflight/ERROR-disqualified variants into a later
@@ -219,9 +241,9 @@ Alpha search stance:
   fact rather than overstating edge-native field-level proof.
 - The framework defines legality, evidence validity, search-width accounting,
   and reportability. The agent owns the alpha search.
-- In grandma mode, prefer simple target-only or low-complexity branches, keep
-  executed exposure unlevered, and judge candidates by simple return plus
-  `pnl_to_maxdd` evidence from the `grandma_daily` profile.
+- Explicit simple/no-leverage compatibility sessions may use the `grandma_daily`
+  profile. Treat that as a user constraint and validation profile, not a second
+  Abel Invest research personality.
 
 Visualization and promotion:
 
@@ -250,5 +272,7 @@ Glossary:
 - Ledger: `evidence_ledger.json`, the evidence record.
 - Frontier: `frontier.md` / `frontier.json`, factual search coverage.
 - PASS/FAIL: Edge validation verdicts, not instructions to stop thinking.
+- Scout/probe: temporary exploration used to choose a formal candidate; useful
+  for search, not validation evidence.
 - Narrative scout: Abel Ask/domain-context pass used for candidate generation,
   not validation.

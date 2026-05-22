@@ -28,10 +28,9 @@ Run:
 
 Live graph discovery should run by default when available. Its output is the
 default high-value alpha feature universe, not a mandatory first branch and not
-a requirement to run the whole depth-1 frontier as one basket. For ordinary
-non-grandma alpha search, keep the search posture empirical and graph-informed
-over a bounded target + graph-derived universe, not another hand-written single
-mechanism.
+a requirement to run the whole depth-1 frontier as one basket. Keep the search
+posture empirical and graph-informed over a bounded target + graph-derived
+universe, not another hand-written single mechanism.
 
 When resuming, read:
 
@@ -40,6 +39,51 @@ When resuming, read:
   concentration, metric failures, and path coverage
 - `exploration_path.md` for the human-facing path log
 - latest `edge-result.json` / `edge-validation.md` for concrete feedback
+
+## Default Objective
+
+When the user does not specify a metric target, use Sharpe > 2 as the
+aspirational target for a strong tradable strategy while controlling drawdown
+and preserving reportable evidence quality. Treat explicit user targets as
+overrides or additional constraints, not as permission that was missing before.
+
+## Default Search Funnel
+
+Use this shape for ordinary Abel Invest work:
+
+```text
+resolve workspace and doctor
+-> start or resume session; run live graph discovery when available
+-> build bounded target + graph-derived candidate universe
+-> scout/probe sign, horizon, node subset, feature family, model family, regime,
+   sizing, filters, and candidate shape
+-> commit selected formal candidates
+-> prepare-branch
+-> debug-branch
+-> run-branch with honest current-round selection width
+-> read Edge/ledger/frontier facts
+-> iterate or report from evidence
+```
+
+Wild scout, disciplined commit:
+
+- Scratch scripts, notebooks, local probes, quick feature scans, model-family
+  comparisons, and small diagnostic sweeps are allowed and expected during
+  exploration.
+- Probes are not validation evidence.
+- If a probe influences which formal candidate is submitted, record the
+  selection influence in `exploration_path.md` and account for effective width
+  with `--selection-trials N` or final-K analysis.
+- Effective width is the number of materially compared variants used to select
+  the submitted candidate for this round. It is not automatically the raw number
+  of graph nodes or generated features.
+- Do not submit an unscouted whole-frontier or whole-feature basket as formal
+  evidence when a small probe could first identify sign, horizon, subset,
+  feature-family, model-family, or risk-shape facts.
+- A formal candidate can be a learned model, ensemble, feature-factory output,
+  graph-node subset model, hybrid strategy, or compact rule. Disciplined commit
+  means reproducible, temporally legal, bounded, and honestly K-accounted, not
+  low-complexity.
 
 ## Search Loop
 
@@ -74,9 +118,9 @@ Each round should push toward the user's objective.
 11. Keep `exploration_path.md` covered with ledger ref, chosen path, compact
     reason, Edge feedback, and artifact refs before another recorded round.
 
-Optimization is not a deviation. The failure mode is reporting an unvalidated
-raw winner, not searching. Use honest K/search-width accounting and final
-validation before claiming success.
+Search is not a deviation. The failure mode is reporting an unvalidated raw
+winner, not searching. Use honest K/search-width accounting and final validation
+before claiming success.
 
 ## Branch Execution
 
@@ -97,6 +141,8 @@ Then prepare, debug, and record the agent-chosen candidate:
 If performance scouting happened before the recorded candidate, declare the
 effective search width and record what happened in `exploration_path.md`. Treat
 the result as search-informed rather than pretending it was one isolated idea.
+Do not count raw feature count as K unless those features were materially
+screened as competing variants for the submitted candidate.
 
 ## Layer Ownership
 
@@ -129,7 +175,7 @@ Before making that claim, check that the ledger shows:
 2. empirical construction was tried when the lane was available, rather than
    only simple hand-written mechanisms
 3. graph-derived candidates were searched when live graph discovery was
-   available, unless the user chose a simple/conservative lane
+   available, unless user constraints explicitly narrowed the allowed inputs
 4. target/baseline performance was compared against graph-enriched performance
    where useful
 5. materially different search axes were tried, not only one hand-written rule
