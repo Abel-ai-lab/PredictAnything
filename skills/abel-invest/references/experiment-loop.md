@@ -65,19 +65,23 @@ Do not run a flat or no-signal materialization branch just to warm cache or make
 the scout official. A prepared branch may be prepare-only; `run-branch` is for
 meaningful candidates, controls, diagnostics, or ablations.
 
-Use a compact scout to answer the highest-leverage questions:
+Use a compact scored scout to choose, not just describe. The useful output is a
+ranked short list of candidate-shaped variants with objective metrics such as
+Sharpe, total return, drawdown, and turnover:
 
-- target-only behavior: autocorrelation, trend/reversal, volatility regime, and
-  drawdown shape
-- graph universe behavior: rough lead/lag/sign strength, node subsets,
-  transformations, spreads, and horizons
-- construction choice: whether a feature factory, learned model, ensemble,
-  filter, sizing rule, or simpler diagnostic is worth formal validation
+- target-only scored baselines: trend, momentum, reversal, volatility regime,
+  and drawdown-aware controls
+- graph candidate shapes: lead/lag/sign, node subset, transformation, spread,
+  horizon, and single-feature threshold/vote variants
+- construction choices: feature factories, model-family comparisons, ensembles,
+  filters, sizing rules, and risk expressions that can be locally scored before
+  formal validation
 
-A single linear correlation table is a useful first diagnostic, not a completed
-first-look scout when graph/model construction remains available. Do not abandon
-the graph-derived universe unless graph subset, lag/sign, transformation, model,
-or risk-expression alternatives have been tested or intentionally ruled out.
+Diagnostic tables such as IC, correlation, and feature importance are useful raw
+material, not the completed first-look scout when graph/model construction
+remains available. Do not abandon the graph-derived universe unless graph
+subset, lag/sign, transformation, model, or risk-expression alternatives have
+been scored or intentionally ruled out.
 
 Store temporary scripts or summaries in `research/<ticker>/<exp_id>/scratch/`
 when useful. If the runtime discourages files, use an equivalent one-off shell

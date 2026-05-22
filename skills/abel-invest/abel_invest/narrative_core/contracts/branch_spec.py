@@ -647,7 +647,7 @@ def build_context_guide_markdown(
         "- for a fresh or unfamiliar ticker, the first serious recorded alpha candidate should normally be probe-informed",
         "- use this prepared branch's data/cache and `inputs/` for any first-look scout that needs market data",
         "- a prepared scout branch can be prepare-only; do not run a flat/no-signal materialization round",
-        "- a single correlation table is a diagnostic, not the whole first-look scout when graph/model construction is available",
+        "- IC/correlation/feature-importance tables are diagnostics; a first-look scout should rank scored candidate-shaped variants when graph/model construction is available",
         "- scratch/probe outputs are search workbench material, not validation evidence",
         "- if a probe materially selects this candidate, record the influence and effective search width before `run-branch`, including inline heredoc or notebook/query probes",
         "",

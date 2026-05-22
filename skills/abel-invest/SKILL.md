@@ -117,9 +117,11 @@ Always:
   `init-session` frontier/readiness facts to choose a bounded scout universe,
   `prepare-branch` a narrow scout/candidate branch so data/cache and `inputs/`
   exist, then run a compact first-look data scout before committing a broad
-  candidate. Scratch work in `research/<ticker>/<session_id>/scratch/`,
-  one-off heredocs, notebooks, or query cells is normal Abel Invest research,
-  not product code and not validation evidence.
+  candidate. The scout should score candidate-shaped variants with objective
+  metrics and produce a ranked short list, not only diagnostic tables. Scratch
+  work in `research/<ticker>/<session_id>/scratch/`, one-off heredocs,
+  notebooks, or query cells is normal Abel Invest research, not product code
+  and not validation evidence.
 
 Never:
 
@@ -141,8 +143,9 @@ Never:
 - Do not `run-branch` a flat/no-signal branch solely to warm cache or make a
   scout feel official. `prepare-branch` is enough for data materialization; use
   recorded runs for meaningful candidates, controls, diagnostics, or ablations.
-- Do not treat a single linear correlation table as a completed first-look
-  scout when graph/model construction remains available.
+- Do not treat a diagnostic table such as IC, correlation, or feature
+  importance as a completed first-look scout when graph/model construction
+  remains available. Pair diagnostics with scored candidate-shaped variants.
 - Never pass a running/cumulative total to `--selection-trials`; pass this
   round's search width only.
 - Do not depend on any external skill for guarded optimization; abel-invest runs
@@ -165,6 +168,8 @@ Alpha search stance:
   are degrees of freedom, not a scripted route.
 - Fresh or unfamiliar tickers should normally use the prepared first-look scout
   sequence in `experiment-loop.md` before the first broad recorded candidate.
+  Its practical output is a ranked short list of scored candidate shapes, not
+  only an analysis memo.
   Direct recorded branches remain valid for user-specified strategies, existing
   leads, baselines, controls, continuations, or very narrow diagnostics.
 - Live graph discovery is the default high-value alpha universe when available.

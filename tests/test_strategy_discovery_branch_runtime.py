@@ -488,7 +488,8 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
     assert "session `scratch/` directory" in context_guide
     assert "prepare-only" in context_guide
     assert "flat/no-signal materialization round" in context_guide
-    assert "single correlation table is a diagnostic" in context_guide
+    assert "diagnostics" in context_guide
+    assert "scored candidate-shaped variants" in context_guide
     assert "inline heredoc" in context_guide
     assert "not validation evidence" in context_guide
 
@@ -2134,7 +2135,8 @@ def test_init_session_output_uses_data_led_graph_enriched_alpha_search() -> None
     assert "prepare-only scout branches are fine" in rendered
     assert "do not run flat/no-signal rounds" in rendered
     assert "after prepare-branch, disposable probes may live" in rendered
-    assert "target baseline, graph lag/subset, and feature/model/risk shape" in rendered
+    assert "score candidate-shaped target baselines" in rendered
+    assert "ranked shortlist" in rendered
     assert "run broad candidates only after data/cache are prepared" in rendered
     assert "simple hand-written rules are diagnostics or refinements" in rendered
     assert "validation gates estimate reliability" in rendered

@@ -48,12 +48,30 @@ outputs are not validation evidence; they help choose what is worth formal,
 audited validation.
 
 Use scratch to compare construction axes, not to create paperwork. A compact
-first-look scout should be multi-axis enough to distinguish target baseline
-behavior, graph lag/subset shape, and plausible feature/model/risk expression.
-A single correlation table is a diagnostic, not the whole construction scout
-when graph/model alternatives are still available. For prepared-data ordering,
-prepare-only scout branches, and promotion into recorded rounds, follow
-`experiment-loop.md`.
+first-look scout should score candidate-shaped variants closely enough to
+choose what deserves formal validation. Prefer a ranked table over a prose-only
+memo: target baselines, graph single-feature shapes, feature factories,
+model-family variants, ensembles, filters, sizing, or risk expressions should
+be compared with objective metrics such as Sharpe, total return, drawdown, and
+turnover when feasible.
+
+Diagnostic tables are raw material. IC, correlation, or feature-importance
+screens can rank inputs, but they do not by themselves show whether a tradable
+position rule or model expression works.
+
+Useful construction surfaces include:
+
+- target trend, momentum, reversal, and volatility-regime baselines
+- graph single-feature threshold/vote variants across plausible lags, signs,
+  horizons, transforms, spreads, and subsets
+- feature factories that include rolling cumulative returns, trend deviation,
+  volatility or regime context, not only one-day shifted returns
+- model-family comparisons such as rolling linear/ridge, tree or GBDT, hybrid
+  models, and lightweight ensembles when the feature set justifies them
+
+These are examples, not a fixed route or minimum count. For prepared-data
+ordering, prepare-only scout branches, and promotion into recorded rounds,
+follow `experiment-loop.md`.
 
 ## What Simple Rules Are For
 

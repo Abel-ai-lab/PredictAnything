@@ -31,7 +31,8 @@ def test_strategy_discovery_skill_explains_workspace_first_boundary() -> None:
     assert "sharpe > 2" in text
     assert "research/<ticker>/<session_id>/scratch/" in text
     assert "flat/no-signal branch" in text
-    assert "single linear" in text
+    assert "diagnostic table" in text
+    assert "scored candidate-shaped variants" in text
     assert "gates estimate reliability" in text
     assert "hand-written single-mechanism branches are diagnostics" in text
     assert "gauntlet" not in text
