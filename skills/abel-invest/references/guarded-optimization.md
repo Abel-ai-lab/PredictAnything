@@ -1,41 +1,37 @@
-# Guarded Optimization
+# Search Accounting And Reporting Gates
 
-Use this reference when a hard performance target is set, such as Sharpe, Lo,
-MaxDD, PnL, or a constrained risk-return objective.
+Use this reference whenever a formal candidate was selected from empirical
+search, whether the target was user-specified or the default Abel Invest target
+of Sharpe > 2 / strong tradable edge.
 
-Optimization is first-class. When the user gives a hard performance target,
-Abel Invest should behave like an alpha searcher, not like a hand-authored
-mechanism essay. The failure mode is not search; the failure mode is reporting a
-raw search winner as robust before legality, K accounting, and the gauntlet
-agree.
+Search is first-class. The failure mode is not search; the failure mode is
+reporting a raw search winner as robust before legality, K accounting, and Edge
+validation agree.
 
 Self-contained: the agent runs this via abel-invest's own CLI only. No external
 optimizer skill is required.
 
 ## Objective
 
-- Objective = one primary scalar matched to the strategy goal, normally Sharpe
-  or Lo-adjusted Sharpe.
+- Default objective = find a strong tradable strategy, with Sharpe > 2 as the
+  aspirational target unless the user gives a different target.
+- Explicit user targets override or constrain the default objective; they do not
+  grant permission that was missing before.
 - MaxDD / PnL / LossYrs / Lo / IC / DSR / triangle are validation gates or
   diagnostics, not a reason to hide the primary objective.
 - Use target/baseline behavior to measure whether graph-enriched candidates add
   value beyond target self-history, but keep graph-derived search active when
   graph candidates are live.
 
-## Two-Stage Loop
+## Scout Then Commit
 
-### 1. Exploration Screening
-
-Use a bounded candidate universe and search it empirically. For ordinary
-non-grandma alpha search, empirical construction is the posture, not an
-optional late broadening step.
-
-Candidate-universe sources can include:
+Use a bounded candidate universe and search it empirically. Candidate-universe
+sources can include:
 
 - target-only features as baseline and competitor
 - validated baseline or catalog strategies
-- graph nodes and graph-derived feeds as the default high-value expanded
-  feature universe
+- graph nodes and graph-derived feeds as the default high-value expanded feature
+  universe
 - sector, cross-asset, liquidity, volume, and regime features when justified by
   user goal or evidence
 - proven patterns, feature factories, learned models, and ensembles
@@ -51,20 +47,26 @@ Search degrees of freedom can include:
 - regime, sizing, and filter search
 - denoise or compression when temporally legal
 
-Hand-written single-mechanism branches can benchmark, diagnose, ablate, or
-refine a promising shape. They should not replace the empirical construction
-posture when live graph-derived data is available.
-
-During screening:
+During scouting:
 
 - do not use future information
 - do not search an unbounded universe unless the user explicitly asks for that
   scope
 - record enough detail to reproduce the submitted candidate
-- keep count of effective search width
+- keep count of effective search width when scouting influences formal
+  candidate selection
 - failures are information; they do not need to clear the gauntlet
 
-### 2. Validation Selection
+Do not submit an unscouted whole-frontier or whole-feature basket as formal
+evidence when a small probe can first identify sign, horizon, subset, feature
+family, model family, regime, sizing, filter, or risk-shape facts.
+
+Formal candidates do not have to be simple. They can be learned models,
+ensembles, feature-factory outputs, graph-node subset models, or hybrids.
+Disciplined commit means reproducible, temporally legal, bounded, and honestly
+K-accounted.
+
+## Validation Selection
 
 Submit selected candidates through Abel Invest / Edge:
 
@@ -74,13 +76,18 @@ Submit selected candidates through Abel Invest / Edge:
 <command_prefix> run-branch --branch <branch-path> -d "<candidate description>" --selection-trials <N>
 ```
 
-`N` is this round's effective search width only: every variant tried to select
-the submitted candidate for this round, not a cumulative campaign total.
+`N` is this round's effective search width only: every materially compared
+variant used to select the submitted candidate for this round, not a cumulative
+campaign total.
+
+Raw graph-node count or raw generated-feature count is not automatically K. It
+becomes K only when those nodes, features, or variants were screened as competing
+choices for the submitted candidate.
 
 Only report, promote, or visualize as a robust candidate after the selected
 strategy clears the required validation.
 
-## Gate
+## Reporting Gate
 
 Final reported candidates must clear the applicable validation profile:
 
@@ -99,16 +106,17 @@ invalidate the usefulness of the search path.
 accumulates campaign K from recorded rounds. Never pass a running/cumulative
 total, because that double-counts prior rounds.
 
-If preflight or workflow failures occurred during screening and would otherwise
+If preflight or workflow failures occurred during scouting and would otherwise
 be invisible to future DSR accounting, fold that width into a later recorded
 round's `--selection-trials` or include it in the final-K analytic check.
 
 ## Final-K Revalidation
 
 Before reporting an optimum selected from multiple candidates, ensure the
-survivor still clears the gauntlet at final campaign K. If stored PASS metrics
-were computed at smaller mid-campaign K, analytically recompute the DSR/gate
-against stored artifacts rather than issuing another recorded `run-branch`.
+survivor still clears the reporting gate at final campaign K. If stored PASS
+metrics were computed at smaller mid-campaign K, analytically recompute the
+DSR/gate against stored artifacts rather than issuing another recorded
+`run-branch`.
 
 If the survivor fails at final K, check the next survivor. Report the null
 honestly when no survivor clears final-K validation.
@@ -125,6 +133,7 @@ honestly when no survivor clears final-K validation.
 - Reporting a raw search winner as robust.
 - Hiding search width inside one branch.
 - Treating the whole depth-1 frontier as the only legitimate first candidate.
+- Submitting an unscouted whole-feature basket as formal evidence.
 - Letting target-only become the default escape from live graph-derived search.
 - Treating graph-supported hand-written rules as a substitute for feature
   factories, model-family comparison, denoise, subset search, or ensembles.

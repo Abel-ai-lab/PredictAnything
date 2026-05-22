@@ -20,17 +20,17 @@ accounting, and the exploration path surface. The agent owns what to try next.
 ## Core Stance
 
 **Search hard, then explain.**
-The job is to find a high-quality strategy for the user's objective, usually
-high Sharpe, high return, or a constrained risk-return profile. Mechanism
-stories organize results after evidence appears; they should not slow the first
-useful empirical test.
+The job is to find a high-quality strategy for the user's objective. When the
+user does not specify a target, default to Sharpe > 2 / strong tradable edge.
+Mechanism stories organize results after evidence appears; they should not slow
+the first useful empirical test.
 
 **Empirical construction by default.**
-For ordinary non-grandma alpha search, the default posture is empirical
-construction over target and graph-derived data. Feature factories, model
-families, denoise, subsets, ensembles, regimes, filters, and sizing are
-degrees of freedom. Simple rules can benchmark, diagnose, ablate, or refine an
-empirical lead, but they are not the default search engine.
+The default posture is empirical construction over target and graph-derived
+data. Feature factories, model families, denoise, subsets, ensembles, regimes,
+filters, and sizing are degrees of freedom. Simple rules can benchmark,
+diagnose, ablate, or refine an empirical lead, but they are not the default
+search engine.
 
 **Graph as alpha universe.**
 Abel-discovered causal structure is a validated prior and should normally enter
@@ -57,6 +57,11 @@ agent searched the graph as data. Abel Invest should mine the graph-derived
 universe for subsets, lags, transformations, models, regimes, filters, sizing
 signals, and ensemble roles.
 
+**Scout/probe first when the universe is wide.**
+Temporary scripts, quick feature scans, and model comparisons help identify
+sign, horizon, subset, feature family, and model family before a formal branch.
+They are search aids, not validation evidence.
+
 **Gate validates; it does not throttle.**
 The gauntlet, DSR, leakage checks, walk-forward behavior, and promotion gate
 decide what can be reported as robust. They should not prevent empirical
@@ -74,7 +79,7 @@ mechanism essay.
 The natural path is:
 
 ```text
-user objective -> bounded candidate universe -> empirical construction/search -> recorded validation -> explanation/reporting
+default or user objective -> bounded candidate universe -> scout/probe -> formal candidate -> recorded validation -> explanation/reporting
 ```
 
 Candidate-universe sources include:
@@ -85,7 +90,7 @@ Candidate-universe sources include:
 - sector, cross-asset, liquidity, volume, and regime feeds
 - proven empirical patterns
 - feature factories, learned models, and ensembles
-- user constraints such as drawdown, no leverage, or grandma mode
+- user constraints such as drawdown, no leverage, or explicit simple profile
 
 The runtime path stays stable:
 

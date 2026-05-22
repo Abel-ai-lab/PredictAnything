@@ -64,6 +64,11 @@ are possible expressions, not a checklist. A hand-written rule that happens to
 read graph nodes is graph-realized evidence, but it is not by itself
 data-driven graph search.
 
+Use graph breadth to scout promising expressions before formal evidence. A large
+frontier can be probed for sign, horizon, subset, model family, regime, filter,
+or sizing role. Do not submit the whole frontier as one formal basket before a
+small probe can narrow the candidate shape.
+
 Target-only candidates are baselines, seeds, ablations, and competing strategy
 candidates. Their job is to make graph-derived marginal contribution visible,
 not to replace graph search as the default when graph candidates are live.
@@ -102,6 +107,11 @@ Graph context can shape the search prior and feature universe:
 - use graph-derived signals as alpha core, confirmation, filter, sizing signal,
   or regime context according to what the data supports
 - keep weak standalone graph signals if they add diversity inside an ensemble
+
+Local graph probes and model/feature scans are search aids, not validation
+evidence. If they select the formal candidate, record their influence in
+`exploration_path.md` and declare the effective current-round width when running
+the selected branch.
 
 Do not expand the graph merely to satisfy coverage. Expand when it helps the
 empirical search question:

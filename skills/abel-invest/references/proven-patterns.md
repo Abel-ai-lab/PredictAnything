@@ -2,7 +2,8 @@
 
 These are patterns that worked on specific assets at specific times.
 They are evidence of what's possible, not instructions for what to do.
-Read them as candidate generators and feature-library ideas during EXPLORE mode.
+Read them as candidate generators and feature-library ideas during scout/probe
+and formal candidate construction.
 Do NOT copy-paste or treat the listed metrics as targets. Understand the
 candidate shape, adapt it to the current alpha universe, and let new evidence
 decide whether it deserves more search width.

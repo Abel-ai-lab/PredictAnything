@@ -1,7 +1,7 @@
 # Data-Driven Construction
 
-Use this reference for ordinary non-grandma alpha search, especially when the
-next idea is drifting toward another hand-written rule.
+Use this reference for ordinary alpha search, especially when the next idea is
+drifting toward another hand-written rule or an unscouted whole-universe basket.
 
 This is the default construction stance, not a separate workflow. Runtime
 legality, honest search-width accounting, and validation still decide what can
@@ -21,6 +21,11 @@ The graph bounds and enriches the alpha universe. It does not prescribe one
 tradable basket, and it is not satisfied by placing a few nodes into a simple
 hand-written rule. The agent owns how to express the data.
 
+Use broad inputs for scouting and construction, not as a reason to submit the
+entire graph or feature matrix as one formal branch. First probe the likely sign,
+horizon, node subset, feature family, model family, regime, sizing, filter, or
+risk-shape question. Then commit a selected, reproducible candidate.
+
 ## Construction Space
 
 Data-driven construction can use many empirical degrees of freedom:
@@ -38,6 +43,11 @@ This list is not a route plan. Use the bounded feature universe most likely to
 improve the user's objective, and let observed behavior decide how the search
 evolves.
 
+Formal candidates can be learned models, ensembles, feature-factory outputs,
+graph-node subset models, or hybrids. Disciplined commit means temporally legal,
+reproducible, bounded, and honestly K-accounted. It does not mean low-complexity
+or hand-written.
+
 ## What Simple Rules Are For
 
 Simple target-only or graph-node rules are useful as:
@@ -53,10 +63,16 @@ hand-written mechanism.
 
 ## Search Accounting
 
+Scratch scripts, local probes, model comparisons, and quick scans are allowed
+and useful. They are not validation evidence.
+
 If the submitted branch was selected from a scan, grid, model comparison, HPO
-run, node-subset choice, or feature-factory screen, record the effective width
-with `--selection-trials N` or the current candidate search metadata path.
-`N` is this round's search width only, never the campaign total.
+run, node-subset choice, feature-factory screen, or other probe, record the
+effective width with `--selection-trials N` or the current candidate search
+metadata path. `N` is this round's search width only, never the campaign total.
+Effective width is the number of materially compared variants used to select
+the submitted candidate, not automatically the raw count of generated features
+or available graph nodes.
 
 Do not report a raw search winner as robust until it clears the gauntlet with
 honest width accounting.

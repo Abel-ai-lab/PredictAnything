@@ -20,6 +20,11 @@ coverage facts, not a veto. A branch is a candidate strategy expression:
 objective, input universe, runtime constraints, and enough detail to make the
 search reproducible and auditable.
 
+Do not use a formal branch as a dumping ground for an unscouted feature universe.
+Scout first when the input space is wide, then commit a selected candidate whose
+failure will teach something about sign, horizon, subset, feature family, model
+family, regime, sizing, filter, or risk shape.
+
 ## Candidate Audit Surface
 
 Do not make every branch carry a full mechanism essay before it can run.
@@ -34,6 +39,8 @@ Minimum metadata for ordinary candidate exploration:
 - selected runtime inputs
 - requested/effective window
 - search width when the candidate was selected from multiple variants
+- any probe, scout, model comparison, or feature screen that selected the formal
+  candidate
 - validation scope and runtime constraints
 
 Explanation metadata, useful but not always blocking before a first run:
@@ -209,8 +216,10 @@ Keep this compact before validation; expand it after a pass or meaningful
 near-pass.
 
 If a branch was chosen because it ranked best in a local metric scan, that is
-normal candidate search. Declare the search width with `--selection-trials` and
-record the selection influence in `exploration_path.md`.
+normal candidate search. Declare the effective search width with
+`--selection-trials` and record the selection influence in
+`exploration_path.md`. Do not count raw feature count as K unless those features
+were materially screened as competing variants for the submitted candidate.
 
 ## Minimal Runtime Path
 
