@@ -57,17 +57,17 @@ like an alpha source rather than a checklist:
 - proven patterns, feature factories, ML models, and ensembles turn the universe
   into candidate signals
 
-For ordinary alpha search, graph context should feed empirical construction
-early. Feature factories, model comparisons, denoise/compression, node-subset
-search, lag/sign/transformation search, regimes, sizing, filters, and ensembles
-are possible expressions, not a checklist. A hand-written rule that happens to
-read graph nodes is graph-realized evidence, but it is not by itself
-data-driven graph search.
+For ordinary alpha search, graph context should feed high-capacity empirical
+construction early. Feature factories, model comparisons, denoise/compression,
+node-subset search, lag/sign/transformation search, regimes, sizing, filters,
+and ensembles are possible expressions, not a checklist. A hand-written rule
+that happens to read graph nodes is graph-realized evidence, but it is not by
+itself data-driven graph search.
 
 Use graph breadth to scout promising expressions before formal evidence. A large
-frontier can be probed for sign, horizon, subset, model family, regime, filter,
-or sizing role. Do not submit the whole frontier as one formal basket before a
-small probe can narrow the candidate shape.
+frontier can be probed for sign, horizon, subset, feature family, model family,
+regime, filter, or sizing role. Do not submit the whole frontier as one formal
+basket before a narrow scout question can identify the candidate shape.
 
 Target-only candidates are baselines, seeds, ablations, and competing strategy
 candidates. Their job is to make graph-derived marginal contribution visible,

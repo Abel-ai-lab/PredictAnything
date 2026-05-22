@@ -29,8 +29,9 @@ Run:
 Live graph discovery should run by default when available. Its output is the
 default high-value alpha feature universe, not a mandatory first branch and not
 a requirement to run the whole depth-1 frontier as one basket. Keep the search
-posture empirical and graph-informed over a bounded target + graph-derived
-universe, not another hand-written single mechanism.
+posture graph-informed and high-capacity: feature factories, model families,
+ensembles, graph subsets, regimes, sizing, and filters are normal search
+material, not late exceptions.
 
 When resuming, read:
 
@@ -54,10 +55,11 @@ Use this shape for ordinary Abel Invest work:
 ```text
 resolve workspace and doctor
 -> start or resume session; run live graph discovery when available
--> build bounded target + graph-derived candidate universe
--> scout cheaply for sign, horizon, node subset, feature family, model family,
-   regime, sizing, filters, and candidate shape
--> promote selected formal candidates faithfully
+-> build target + live graph candidate universe with high-capacity construction options
+-> scout one sharp question: sign, horizon, node subset, feature family,
+   model family, regime, sizing, filters, or candidate shape
+-> promote the strongest discovered candidate shape faithfully, including
+   feature factories, learned models, dense ensembles, or hybrids
 -> prepare-branch
 -> debug-branch
 -> run-branch with honest current-round selection width
@@ -65,17 +67,17 @@ resolve workspace and doctor
 -> iterate or report from evidence
 ```
 
-Scout cheaply, promote faithfully, validate harshly:
+Wide universe. Narrow question. High-capacity promotion. Harsh reporting.
 
 - Scratch scripts, notebooks, local probes, quick feature scans, model-family
-  comparisons, and small diagnostic sweeps are allowed and expected during
-  exploration.
+  comparisons, dense ensemble screens, and diagnostic sweeps are allowed and
+  expected during exploration.
 - Use `research/<ticker>/<exp_id>/scratch/` as the session-local disposable
   workbench. It can hold one-off scripts, notebooks, query snippets, compact
   probe outputs, and scout notes. If the runtime makes files awkward, an
   equivalent one-off shell heredoc, notebook cell, or query cell is acceptable.
-- Scratch/probe outputs are not validation evidence. Their job is to summarize
-  what candidate shape is worth promoting.
+- Scratch/probe outputs are not validation evidence. Their job is to answer a
+  narrow scout question and summarize what candidate shape is worth promoting.
 - If a probe influences which formal candidate is submitted, record the
   selection influence in `exploration_path.md` and account for effective width
   with `--selection-trials N` or final-K analysis.
@@ -83,26 +85,28 @@ Scout cheaply, promote faithfully, validate harshly:
   the submitted candidate for this round. It is not automatically the raw number
   of graph nodes or generated features.
 - Do not submit an unscouted whole-frontier or whole-feature basket as formal
-  evidence when a small probe could first identify sign, horizon, subset,
-  feature-family, model-family, or risk-shape facts.
+  evidence when a narrow scout question could first identify sign, horizon,
+  subset, feature-family, model-family, or risk-shape facts.
 - A formal candidate can be a learned model, ensemble, feature-factory output,
   graph-node subset model, hybrid strategy, or compact rule. Promote the
   discovered form faithfully: do not turn an ML, feature-factory, ensemble, or
   hybrid lead into a simple proxy just to make the branch feel easier to
-  explain. Formal promotion means reproducible, temporally legal, bounded, and
-  honestly K-accounted, not low-complexity.
+  explain. Formal promotion means reproducible, temporally legal, selected, and
+  honestly K-accounted; it does not mean low-capacity.
 
 ## Search Loop
 
 Each round should push toward the user's objective.
 
-1. Build a bounded candidate universe from validated baselines, target-only
-   features, graph nodes, graph-derived feeds, cross-assets, sector/regime
-   context, proven patterns, feature factories, and user constraints.
-2. Make empirical construction the main stance. Feature factories, weak-signal
-   ensembles, model-family comparison, denoise/compression, graph-node subset
-   search, lag/sign/transformation search, regimes, sizing, and filters are
-   available degrees of freedom, not a fixed checklist.
+1. Build a wide but scoped candidate universe from validated baselines,
+   target-only features, graph nodes, graph-derived feeds, cross-assets,
+   sector/regime context, proven patterns, feature factories, and user
+   constraints.
+2. Make high-capacity empirical construction the main stance. Feature
+   factories, weak-signal ensembles, model-family comparison,
+   denoise/compression, graph-node subset search, lag/sign/transformation
+   search, regimes, sizing, and filters are available degrees of freedom, not a
+   fixed checklist.
 3. Keep graph-enriched ideas active early and throughout the search when live
    graph candidates exist. Use target-only candidates as baselines, seeds,
    ablations, and competitors, not as the default escape from graph search.
@@ -151,7 +155,8 @@ the result as search-informed rather than pretending it was one isolated idea.
 Do not count raw feature count as K unless those features were materially
 screened as competing variants for the submitted candidate. Keep scratch work
 under `research/<ticker>/<exp_id>/scratch/` or an equivalent disposable surface;
-write durable branch code only after the scout identifies what to promote.
+write durable branch code only after the scout identifies what to promote, and
+preserve the discovered high-capacity form when it wins.
 
 ## Layer Ownership
 
@@ -180,7 +185,7 @@ Exhaustion is a ledger conclusion.
 
 Before making that claim, check that the ledger shows:
 
-1. a bounded candidate universe was actually searched or intentionally ruled out
+1. a wide but scoped candidate universe was actually searched or intentionally ruled out
 2. empirical construction was tried when the lane was available, rather than
    only simple hand-written mechanisms
 3. graph-derived candidates were searched when live graph discovery was
@@ -256,7 +261,7 @@ the default URL in the skill code if this endpoint changes.
 Preserve this shape:
 
 ```text
-user objective -> bounded alpha universe -> empirical construction/search -> recorded validation -> explanation/reporting
+user objective -> wide graph-capable alpha universe -> narrow scout question -> high-capacity formal candidate -> recorded validation -> explanation/reporting
 ```
 
 Multiple branches on one input set can still be narrow if they do not change a

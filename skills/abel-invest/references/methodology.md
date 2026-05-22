@@ -25,12 +25,12 @@ user does not specify a target, default to Sharpe > 2 / strong tradable edge.
 Mechanism stories organize results after evidence appears; they should not slow
 the first useful empirical test.
 
-**Empirical construction by default.**
+**High-capacity empirical construction by default.**
 The default posture is empirical construction over target and graph-derived
-data. Feature factories, model families, denoise, subsets, ensembles, regimes,
-filters, and sizing are degrees of freedom. Simple rules can benchmark,
-diagnose, ablate, or refine an empirical lead, but they are not the default
-search engine.
+data with feature factories, model families, denoise, subsets, dense ensembles,
+regimes, filters, and sizing as normal degrees of freedom. Simple rules can
+benchmark, diagnose, ablate, or refine an empirical lead, but they are not the
+default search engine.
 
 **Graph as alpha universe.**
 Abel-discovered causal structure is a validated prior and should normally enter
@@ -57,10 +57,12 @@ agent searched the graph as data. Abel Invest should mine the graph-derived
 universe for subsets, lags, transformations, models, regimes, filters, sizing
 signals, and ensemble roles.
 
-**Scout/probe first when the universe is wide.**
-Temporary scripts, quick feature scans, and model comparisons help identify
-sign, horizon, subset, feature family, and model family before a formal branch.
-They are search aids, not validation evidence.
+**Scout one sharp question when the universe is wide.**
+Temporary scripts, feature screens, dense ensemble screens, and model
+comparisons help identify sign, horizon, subset, feature family, model family,
+regime, sizing, filter, or risk shape before a formal branch. They are search
+aids, not validation evidence. If the best lead is high-capacity, promote that
+form rather than a low-capacity proxy.
 
 **Gate validates; it does not throttle.**
 The gauntlet, DSR, leakage checks, walk-forward behavior, and promotion gate
@@ -79,7 +81,7 @@ mechanism essay.
 The natural path is:
 
 ```text
-default or user objective -> bounded candidate universe -> scout/probe -> formal candidate -> recorded validation -> explanation/reporting
+default or user objective -> wide graph-capable universe -> narrow scout question -> high-capacity formal candidate -> recorded validation -> explanation/reporting
 ```
 
 Candidate-universe sources include:

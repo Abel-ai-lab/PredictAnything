@@ -21,15 +21,16 @@ objective, input universe, runtime constraints, and enough detail to make the
 search reproducible and auditable.
 
 Do not use a formal branch as a dumping ground for an unscouted feature universe.
-Scout first when the input space is wide, then commit a selected candidate whose
-failure will teach something about sign, horizon, subset, feature family, model
-family, regime, sizing, filter, or risk shape.
+Scout one sharp question when the input space is wide, then commit a selected
+candidate whose failure will teach something about sign, horizon, subset,
+feature family, model family, regime, sizing, filter, or risk shape.
 
 Use `research/<ticker>/<session_id>/scratch/` as the session-local disposable
 workbench for those scout probes. Scratch is outside `branches/<branch_id>/`;
-it can contain one-off scripts, notebooks, query snippets, compact probe
-outputs, and notes, but it is not validation evidence. Keep durable branch code
-for the candidate shape you are ready to promote.
+it can contain one-off scripts, notebooks, query snippets, compact feature
+screens, model comparisons, dense ensemble screens, outputs, and notes, but it
+is not validation evidence. Keep durable branch code for the candidate shape you
+are ready to promote.
 
 ## Candidate Audit Surface
 
@@ -208,7 +209,7 @@ used by the current runtime.
 Before recording a branch, be able to state the minimum audit facts:
 
 - the objective or metric target
-- the input universe and why it is bounded
+- the input universe and why it is selected or scoped
 - whether the candidate is target/baseline, graph-enriched, mixed, or supplement
 - any search width used to select the submitted candidate
 - whether this is the empirical construction lane, a diagnostic/control, an
@@ -226,8 +227,9 @@ normal candidate search. Declare the effective search width with
 `--selection-trials` and record the selection influence in
 `exploration_path.md`. Do not count raw feature count as K unless those features
 were materially screened as competing variants for the submitted candidate.
-If the scan found a model, feature factory, ensemble, or hybrid lead, promote
-that form faithfully rather than replacing it with a simple rule proxy.
+If the scan found a model, feature factory, dense ensemble, or hybrid lead,
+promote that high-capacity form faithfully rather than replacing it with a
+simple rule proxy.
 
 ## Minimal Runtime Path
 
@@ -250,9 +252,9 @@ that form faithfully rather than replacing it with a simple rule proxy.
   become the default when graph candidates are live
 - graph-enriched search should appear early and recur when graph discovery is
   available
-- ordinary alpha search should keep an empirical construction posture over the
-  bounded target + graph-derived universe; simple hand-written mechanisms are
-  diagnostics, controls, ablations, or refinements
+- ordinary alpha search should keep a high-capacity empirical construction
+  posture over the target + graph-derived universe; simple hand-written
+  mechanisms are diagnostics, controls, ablations, or refinements
 - branch count is not search breadth if every branch hides the same search axis
 - weird low-attention graph nodes are not automatically noise
 - narrative scout can inspire features, but it is not evidence truth
@@ -260,4 +262,4 @@ that form faithfully rather than replacing it with a simple rule proxy.
 - metric failure is evidence about the candidate expression, not a reason to
   hack metrics
 - stop honestly when recent rounds are no longer improving and no high-quality
-  new direction remains after the bounded search is ledger-supported
+  new direction remains after the scoped search is ledger-supported

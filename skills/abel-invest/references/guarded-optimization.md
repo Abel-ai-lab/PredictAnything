@@ -23,10 +23,10 @@ optimizer skill is required.
   value beyond target self-history, but keep graph-derived search active when
   graph candidates are live.
 
-## Scout Cheaply, Promote Faithfully
+## Wide Universe, Narrow Scout, High-Capacity Promotion
 
-Use a bounded candidate universe and search it empirically. Candidate-universe
-sources can include:
+Use a wide but scoped candidate universe and search it empirically. Candidate
+universe sources can include:
 
 - target-only features as baseline and competitor
 - validated baseline or catalog strategies
@@ -52,23 +52,26 @@ During scouting:
 - do not use future information
 - do not search an unbounded universe unless the user explicitly asks for that
   scope
-- use a short disposable scout surface such as
+- use a disposable scout surface such as
   `research/<ticker>/<session_id>/scratch/`, a one-off heredoc, a notebook cell,
   or a query cell
+- ask one sharp question at a time: sign, horizon, subset, feature family,
+  model family, regime, sizing, filter, or risk shape
 - record enough detail to reproduce the submitted candidate
 - keep count of effective search width when scouting influences formal
   candidate selection
 - failures are information; they do not need to clear the gauntlet
 
 Do not submit an unscouted whole-frontier or whole-feature basket as formal
-evidence when a small probe can first identify sign, horizon, subset, feature
-family, model family, regime, sizing, filter, or risk-shape facts.
+evidence when a narrow scout question can first identify sign, horizon, subset,
+feature family, model family, regime, sizing, filter, or risk-shape facts.
 
 Formal candidates do not have to be simple. They can be learned models,
-ensembles, feature-factory outputs, graph-node subset models, or hybrids.
-Promote the discovered form faithfully instead of replacing a model or
-feature-factory lead with a simple proxy. Formal promotion means reproducible,
-temporally legal, bounded, and honestly K-accounted.
+dense ensembles, feature-factory outputs, graph-node subset models, or hybrids.
+Promote the discovered form faithfully instead of replacing a model,
+feature-factory, dense ensemble, or hybrid lead with a simple proxy. Formal
+promotion means reproducible, temporally legal, selected, and honestly
+K-accounted; it does not mean low-capacity.
 
 ## Validation Selection
 
@@ -130,7 +133,7 @@ honestly when no survivor clears final-K validation.
 - A survivor that clears validation at final K meets the target -> report it.
 - A raw-metric winner that fails validation -> report it as a failed or
   near-pass candidate, not success.
-- None clears after a bounded, K-accounted search -> report the null honestly.
+- None clears after a scoped, K-accounted search -> report the null honestly.
 
 ## Anti-Patterns
 
