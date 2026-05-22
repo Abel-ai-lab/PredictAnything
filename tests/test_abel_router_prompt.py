@@ -26,6 +26,9 @@ def test_strategy_discovery_skill_explains_workspace_first_boundary() -> None:
     assert "abel-auth" in text
     assert "references/data-driven-construction.md" in text
     assert "sharpe > 2" in text
+    assert "empirical alpha lab" in text
     assert "aggressive audited alpha search" in text
-    assert "scout/probe" in text
+    assert "short scout/probe" in text
+    assert "research/<ticker>/<session_id>/scratch/" in text
+    assert "promote the discovered form faithfully" in text
     assert "hand-written single-mechanism branches are diagnostics" in text

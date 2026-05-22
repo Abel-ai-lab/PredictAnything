@@ -55,9 +55,9 @@ Use this shape for ordinary Abel Invest work:
 resolve workspace and doctor
 -> start or resume session; run live graph discovery when available
 -> build bounded target + graph-derived candidate universe
--> scout/probe sign, horizon, node subset, feature family, model family, regime,
-   sizing, filters, and candidate shape
--> commit selected formal candidates
+-> scout cheaply for sign, horizon, node subset, feature family, model family,
+   regime, sizing, filters, and candidate shape
+-> promote selected formal candidates faithfully
 -> prepare-branch
 -> debug-branch
 -> run-branch with honest current-round selection width
@@ -65,12 +65,17 @@ resolve workspace and doctor
 -> iterate or report from evidence
 ```
 
-Wild scout, disciplined commit:
+Scout cheaply, promote faithfully, validate harshly:
 
 - Scratch scripts, notebooks, local probes, quick feature scans, model-family
   comparisons, and small diagnostic sweeps are allowed and expected during
   exploration.
-- Probes are not validation evidence.
+- Use `research/<ticker>/<exp_id>/scratch/` as the session-local disposable
+  workbench. It can hold one-off scripts, notebooks, query snippets, compact
+  probe outputs, and scout notes. If the runtime makes files awkward, an
+  equivalent one-off shell heredoc, notebook cell, or query cell is acceptable.
+- Scratch/probe outputs are not validation evidence. Their job is to summarize
+  what candidate shape is worth promoting.
 - If a probe influences which formal candidate is submitted, record the
   selection influence in `exploration_path.md` and account for effective width
   with `--selection-trials N` or final-K analysis.
@@ -81,9 +86,11 @@ Wild scout, disciplined commit:
   evidence when a small probe could first identify sign, horizon, subset,
   feature-family, model-family, or risk-shape facts.
 - A formal candidate can be a learned model, ensemble, feature-factory output,
-  graph-node subset model, hybrid strategy, or compact rule. Disciplined commit
-  means reproducible, temporally legal, bounded, and honestly K-accounted, not
-  low-complexity.
+  graph-node subset model, hybrid strategy, or compact rule. Promote the
+  discovered form faithfully: do not turn an ML, feature-factory, ensemble, or
+  hybrid lead into a simple proxy just to make the branch feel easier to
+  explain. Formal promotion means reproducible, temporally legal, bounded, and
+  honestly K-accounted, not low-complexity.
 
 ## Search Loop
 
@@ -142,7 +149,9 @@ If performance scouting happened before the recorded candidate, declare the
 effective search width and record what happened in `exploration_path.md`. Treat
 the result as search-informed rather than pretending it was one isolated idea.
 Do not count raw feature count as K unless those features were materially
-screened as competing variants for the submitted candidate.
+screened as competing variants for the submitted candidate. Keep scratch work
+under `research/<ticker>/<exp_id>/scratch/` or an equivalent disposable surface;
+write durable branch code only after the scout identifies what to promote.
 
 ## Layer Ownership
 

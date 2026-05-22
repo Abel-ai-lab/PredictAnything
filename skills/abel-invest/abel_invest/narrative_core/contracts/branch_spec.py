@@ -644,9 +644,10 @@ def build_context_guide_markdown(
         "",
         "## Audit Checklist",
         "1. Inspect `probe_samples.json` and `data_manifest.json`.",
-        "2. Use scratch probes when the feature universe is broad; probes are search aids, not validation evidence.",
-        "3. Edit `engine.py` against `DecisionContext`.",
-        "4. Run debug-branch with the workspace command prefix first to read semantic preflight.",
-        "5. Record a round after runtime inputs, objective, probe influence, search width, and validation scope are clear.",
+        "2. For broad input spaces, scout cheaply in `research/<ticker>/<session_id>/scratch/`, a one-off heredoc, or a notebook/query cell; scratch is not validation evidence.",
+        "3. Promote the discovered form faithfully; do not replace an ML, feature-factory, ensemble, or hybrid lead with a simple proxy.",
+        "4. Edit `engine.py` against `DecisionContext` only after the candidate shape is ready to promote.",
+        "5. Run debug-branch with the workspace command prefix first to read semantic preflight.",
+        "6. Record a round after runtime inputs, objective, probe influence, search width, and validation scope are clear.",
     ]
     return "\n".join(lines) + "\n"

@@ -22,9 +22,10 @@ tradable basket, and it is not satisfied by placing a few nodes into a simple
 hand-written rule. The agent owns how to express the data.
 
 Use broad inputs for scouting and construction, not as a reason to submit the
-entire graph or feature matrix as one formal branch. First probe the likely sign,
-horizon, node subset, feature family, model family, regime, sizing, filter, or
-risk-shape question. Then commit a selected, reproducible candidate.
+entire graph or feature matrix as one formal branch. First run a cheap empirical
+probe for the likely sign, horizon, node subset, feature family, model family,
+regime, sizing, filter, or risk-shape question. Then promote a selected,
+reproducible candidate.
 
 ## Construction Space
 
@@ -44,9 +45,11 @@ improve the user's objective, and let observed behavior decide how the search
 evolves.
 
 Formal candidates can be learned models, ensembles, feature-factory outputs,
-graph-node subset models, or hybrids. Disciplined commit means temporally legal,
-reproducible, bounded, and honestly K-accounted. It does not mean low-complexity
-or hand-written.
+graph-node subset models, or hybrids. Promote the discovered form faithfully: if
+the scout lead is a model, feature factory, ensemble, or hybrid, submit that
+form rather than a hand-written proxy that merely imitates it. Formal promotion
+means temporally legal, reproducible, bounded, and honestly K-accounted. It does
+not mean low-complexity or hand-written.
 
 ## What Simple Rules Are For
 
@@ -64,7 +67,10 @@ hand-written mechanism.
 ## Search Accounting
 
 Scratch scripts, local probes, model comparisons, and quick scans are allowed
-and useful. They are not validation evidence.
+and useful. The preferred disposable surface is
+`research/<ticker>/<session_id>/scratch/`; a one-off heredoc, notebook cell, or
+query cell is equivalent when that fits the runtime better. They are not
+validation evidence.
 
 If the submitted branch was selected from a scan, grid, model comparison, HPO
 run, node-subset choice, feature-factory screen, or other probe, record the

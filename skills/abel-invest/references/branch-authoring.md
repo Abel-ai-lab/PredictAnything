@@ -25,6 +25,12 @@ Scout first when the input space is wide, then commit a selected candidate whose
 failure will teach something about sign, horizon, subset, feature family, model
 family, regime, sizing, filter, or risk shape.
 
+Use `research/<ticker>/<session_id>/scratch/` as the session-local disposable
+workbench for those scout probes. Scratch is outside `branches/<branch_id>/`;
+it can contain one-off scripts, notebooks, query snippets, compact probe
+outputs, and notes, but it is not validation evidence. Keep durable branch code
+for the candidate shape you are ready to promote.
+
 ## Candidate Audit Surface
 
 Do not make every branch carry a full mechanism essay before it can run.
@@ -220,6 +226,8 @@ normal candidate search. Declare the effective search width with
 `--selection-trials` and record the selection influence in
 `exploration_path.md`. Do not count raw feature count as K unless those features
 were materially screened as competing variants for the submitted candidate.
+If the scan found a model, feature factory, ensemble, or hybrid lead, promote
+that form faithfully rather than replacing it with a simple rule proxy.
 
 ## Minimal Runtime Path
 

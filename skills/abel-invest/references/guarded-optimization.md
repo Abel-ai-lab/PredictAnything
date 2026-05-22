@@ -23,7 +23,7 @@ optimizer skill is required.
   value beyond target self-history, but keep graph-derived search active when
   graph candidates are live.
 
-## Scout Then Commit
+## Scout Cheaply, Promote Faithfully
 
 Use a bounded candidate universe and search it empirically. Candidate-universe
 sources can include:
@@ -52,6 +52,9 @@ During scouting:
 - do not use future information
 - do not search an unbounded universe unless the user explicitly asks for that
   scope
+- use a short disposable scout surface such as
+  `research/<ticker>/<session_id>/scratch/`, a one-off heredoc, a notebook cell,
+  or a query cell
 - record enough detail to reproduce the submitted candidate
 - keep count of effective search width when scouting influences formal
   candidate selection
@@ -63,8 +66,9 @@ family, model family, regime, sizing, filter, or risk-shape facts.
 
 Formal candidates do not have to be simple. They can be learned models,
 ensembles, feature-factory outputs, graph-node subset models, or hybrids.
-Disciplined commit means reproducible, temporally legal, bounded, and honestly
-K-accounted.
+Promote the discovered form faithfully instead of replacing a model or
+feature-factory lead with a simple proxy. Formal promotion means reproducible,
+temporally legal, bounded, and honestly K-accounted.
 
 ## Validation Selection
 

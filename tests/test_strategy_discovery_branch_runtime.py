@@ -484,6 +484,8 @@ def test_prepare_branch_inputs_writes_runtime_contract_artifacts(tmp_path, monke
     assert probe_samples["target"] == "TSLA"
     assert len(probe_samples["sample_decision_dates"]) >= 2
     assert "DecisionContext" in context_guide
+    assert "research/<ticker>/<session_id>/scratch/" in context_guide
+    assert "simple proxy" in context_guide
 
 
 def test_default_branch_spec_starts_with_graph_enriched_candidate_context(tmp_path) -> None:
@@ -2115,9 +2117,11 @@ def test_init_session_output_uses_data_led_graph_enriched_alpha_search() -> None
     rendered = "\n".join(lines)
 
     assert "graph-v1" not in rendered
-    assert "aggressive audited alpha search" in rendered
+    assert "empirical alpha lab" in rendered
     assert "Sharpe > 2 / strong tradable edge" in rendered
-    assert "broad scout/probe" in rendered
+    assert "short scout/probe" in rendered
+    assert "research/tsla/demo/scratch" in rendered
+    assert "promote that form instead of a simple proxy" in rendered
     assert "simple hand-written rules are diagnostics or refinements" in rendered
     assert "scratch probes as search aids, not validation evidence" in rendered
     assert "exploration_path.md" in rendered

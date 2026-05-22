@@ -104,13 +104,15 @@ def resolve_session_root(
 def render_data_led_start_lines(session: Path) -> list[str]:
     command_prefix = command_prefix_for_path(session)
     return [
-        "aggressive audited alpha search:",
+        "empirical alpha lab: scout cheaply, promote faithfully, validate harshly",
         f"read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing the next candidate or round",
         "default target when unspecified: Sharpe > 2 / strong tradable edge",
-        "default posture: broad scout/probe over a bounded target + graph-derived universe, then disciplined formal commit",
+        "default posture: short scout/probe over a bounded target + graph-derived universe, then faithful formal promotion",
+        f"use session scratch for disposable probes: {session / 'scratch'}",
         f"{command_prefix} init-branch --session {session} --branch-id <candidate-branch>",
         "edit branch.yaml with objective, selected inputs, probe influence, search width when applicable, and validation scope",
         "let data decide how to express graph-derived information: features, models, subsets, lags, regimes, sizing, filters, or ensembles",
+        "if the scout lead is ML, a feature factory, an ensemble, or a hybrid, promote that form instead of a simple proxy",
         "use target-only as baseline, seed, ablation, or competitor; simple hand-written rules are diagnostics or refinements, not the default search engine",
         "treat scratch probes as search aids, not validation evidence; record probe-selected candidates with honest selection width",
         f"after each recorded round, keep {EXPLORATION_PATH_FILENAME} updated with ledger ref, chosen path, compact reason, Edge feedback, and artifact refs",

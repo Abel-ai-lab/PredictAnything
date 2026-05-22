@@ -1,9 +1,9 @@
 ---
 name: abel-invest
 description: >
-  Aggressive audited quant alpha search, screening, and guarded validation with
-  causal graph priors. Use this skill whenever the user wants to find, improve,
-  screen, backtest, or stress a trading strategy / alpha / signal, explore
+  Empirical alpha lab for aggressive audited quant search, screening, and
+  guarded validation with causal graph priors. Use this skill whenever the user
+  wants to find, improve, screen, backtest, or stress a trading strategy / alpha / signal, explore
   whether an asset has tradable edge, run graph-enriched feature-factory,
   model, or ensemble search, or continue/prepare/debug an Abel
   strategy-discovery workspace — even if they don't say "Abel" and even when
@@ -129,6 +129,9 @@ Never:
   search inside one "single" strategy. Name search width honestly.
 - Do not treat scratch scripts, local probes, scout results, or narrative
   context as validation evidence.
+- Do not edit durable branch code just to scout. Use the session scratch
+  workbench or an equivalent disposable surface until the candidate shape is
+  ready to promote.
 - Do not submit an unscouted whole-frontier or whole-feature basket as formal
   evidence when a small probe could first identify sign, horizon, subset,
   feature-family, model-family, or risk-shape facts.
@@ -151,23 +154,27 @@ Alpha search stance:
   The default objective is to find a strong tradable strategy, with Sharpe > 2
   as the aspirational target unless the user gives another target, while
   controlling drawdown and preserving reportable evidence quality.
-- Search hard, then explain. Let observed results, failure modes, and metric
-  shape choose the next candidate family. Mechanism stories are useful after
-  evidence appears; they are not admission tickets.
-- Default loop: broad scout/probe over a bounded target + graph-derived
+- Scout cheaply, promote faithfully, validate harshly. Let observed results,
+  failure modes, and metric shape choose the next candidate family. Mechanism
+  stories are useful after evidence appears; they are not admission tickets.
+- Default loop: short scout/probe over a bounded target + graph-derived
   universe, identify promising sign, horizon, subset, feature-family,
-  model-family, regime, sizing, filter, or risk-shape facts, then commit
+  model-family, regime, sizing, filter, or risk-shape facts, then promote
   selected formal candidates through prepare/debug/run with honest current-round
   search-width accounting.
-- Scratch scripts, quick probes, local feature scans, model-family comparisons,
-  and small diagnostic sweeps are allowed and expected during exploration. They
-  are not validation evidence. If they influence which formal candidate is
-  submitted, record that influence in `exploration_path.md` and account for the
-  effective selection width with `--selection-trials` or final-K analysis.
+- Use `research/<ticker>/<session_id>/scratch/` as the session-local scout
+  workbench for short empirical probes. Scratch files can be one-off scripts,
+  notebooks, query snippets, compact outputs, or notes. If the runtime makes
+  scratch files awkward, an equivalent one-off shell heredoc, notebook cell, or
+  query cell is fine. Scratch outputs are not validation evidence; only their
+  scout summary, promotion rationale, and effective selection width belong in
+  `exploration_path.md`, `branch.yaml`, or a recorded run.
 - Formal candidates do not have to be simple or hand-written. They can be
   learned models, ensembles, feature-factory outputs, graph-node subset models,
-  or hybrids. Disciplined commit means reproducible, temporally legal, bounded,
-  and honestly K-accounted.
+  or hybrids. Promote the discovered form faithfully; do not replace an ML,
+  feature-factory, ensemble, or hybrid lead with a simple rule proxy just
+  because it feels easier to explain. Formal promotion means reproducible,
+  temporally legal, bounded, and honestly K-accounted.
 - Ordinary alpha search has a default posture: empirical construction over a
   bounded target + graph-derived universe. The agent should use the graph,
   target behavior, feature construction, model comparison, denoise, subset
