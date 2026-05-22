@@ -47,10 +47,12 @@ research. Prefer `research/<ticker>/<session_id>/scratch/` for files. Scratch
 outputs are not validation evidence; they help choose what is worth formal,
 audited validation.
 
-Do not make scratch a ceremony. Use it before or between recorded rounds when
-it helps discover sign, horizon, subset, feature family, model family, filter,
-sizing, or risk shape. If it materially selects the formal candidate, record the
-selection influence and effective width.
+For a fresh or unfamiliar ticker, a compact first-look scout is the usual start
+to serious empirical construction. Use it to discover target behavior, graph
+lead/lag/sign, node subset, transformation, feature family, model family,
+filter, sizing, or risk shape. Do not turn scratch into paperwork; promote the
+best shapes and record selection influence plus effective width when the scout
+materially chose the submitted candidate.
 
 ## What Simple Rules Are For
 
@@ -72,8 +74,8 @@ run, node-subset choice, or feature-factory screen, record the effective width
 with `--selection-trials N` or the current candidate search metadata path.
 `N` is this round's search width only, never the campaign total.
 
-Do not report a raw search winner as robust until it clears the gauntlet with
-honest width accounting.
+Do not report a raw search winner as robust until required validation and
+honest width accounting support that claim.
 
 K is an audit meter, not an exploration brake. Large empirical searches are
 allowed when the candidate ceiling justifies them; they simply carry their real

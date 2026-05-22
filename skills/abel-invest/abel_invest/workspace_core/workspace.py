@@ -357,7 +357,7 @@ Run `./.venv/bin/abel-invest workspace context --path . --json` and `./.venv/bin
 before opening a session.
 
 - `ready`: you can start alpha search
-- `ready` means continue with `init-session -> init-branch -> branch.yaml -> prepare-branch`
+- `ready` means continue with `init-session -> first-look data scout or narrow diagnostic -> init-branch -> branch.yaml -> prepare-branch`
 - `auth_missing`: no reusable auth was found; use `abel-auth`, then rerun `doctor`
 - `runtime_stale`, `env_missing`, `edge_missing`, or `edge_contract_missing`:
   run the exact env repair command from `next_step`, then rerun `doctor`

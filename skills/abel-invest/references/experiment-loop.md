@@ -46,6 +46,31 @@ When resuming, read:
 - `exploration_path.md` for the human-facing path log
 - latest `edge-result.json` / `edge-validation.md` for concrete feedback
 
+## First-Look Data Scout
+
+For a fresh or unfamiliar ticker, the first serious alpha lane should normally
+be probe-informed before a broad formal branch is recorded. Starting the
+experiment loop means learning the data shape, not immediately committing the
+first branch.
+
+Use a compact scout to answer the highest-leverage questions:
+
+- target-only behavior: autocorrelation, trend/reversal, volatility regime, and
+  drawdown shape
+- graph universe behavior: rough lead/lag/sign strength, node subsets,
+  transformations, spreads, and horizons
+- construction choice: whether a feature factory, learned model, ensemble,
+  filter, sizing rule, or simpler diagnostic is worth formal validation
+
+Store temporary scripts or summaries in
+`research/<ticker>/<exp_id>/scratch/` when useful. If the runtime discourages
+files, use an equivalent one-off shell heredoc, notebook cell, or query cell.
+Promote only the best 1-2 shapes into formal branch work, and account for any
+selection width that materially chose the submitted candidate.
+
+Direct formal branches remain valid for user-specified strategies, existing
+leads, continuations, baselines, controls, or very narrow diagnostic branches.
+
 ## Search Loop
 
 Each round should push toward the user's objective.
@@ -57,12 +82,10 @@ Each round should push toward the user's objective.
    ensembles, model-family comparison, denoise/compression, graph-node subset
    search, lag/sign/transformation search, regimes, sizing, and filters are
    available degrees of freedom, not a fixed checklist.
-3. Use disposable empirical probes when they accelerate search. Temporary
-   scripts, feature screens, quick model comparisons, notebooks, query cells, or
-   compact tables may live under `research/<ticker>/<exp_id>/scratch/`; if the
-   runtime makes files awkward, use an equivalent one-off shell heredoc or
-   notebook/query cell. Probes are search workbench material, not validation
-   evidence and not a prerequisite ceremony.
+3. For a fresh or unfamiliar ticker, begin serious search with a compact
+   first-look scout unless the path is user-specified, a continuation, a
+   baseline/control, or a very narrow diagnostic. Probes are search workbench
+   material, not validation evidence.
 4. Keep graph-enriched ideas active early and throughout the search when live
    graph candidates exist. Use target-only candidates as baselines, seeds,
    ablations, and competitors, not as the default escape from graph search.
@@ -133,7 +156,7 @@ campaign total. `guarded-optimization.md` owns the final-K reporting rules.
 ## Before Exhaustion Or No-Edge Claims
 
 Do not write "exhausted", "ceiling", or "no edge" from a single failed
-candidate family, a small round count, or a green per-candidate gauntlet.
+candidate family, a small round count, or one candidate passing validation.
 Exhaustion is a ledger conclusion.
 
 Before making that claim, check that the ledger shows:
@@ -142,15 +165,15 @@ Before making that claim, check that the ledger shows:
 2. empirical construction was tried when the lane was available, rather than
    only simple hand-written mechanisms
 3. graph-derived candidates were searched when live graph discovery was
-   available, unless the user chose a simple/conservative lane
+   available, unless the user explicitly chose simple-return constraints
 4. target/baseline performance was compared against graph-enriched performance
    where useful
 5. materially different search axes were tried, not only one hand-written rule
 6. all attempted width is K-accounted, including preflight or workflow ERROR
    variants that would otherwise be audited but skipped from future DSR
 
-Stop conditions are a gauntlet-PASS candidate at the target or ledger-supported
-exhaustion. Do not stop by round count.
+Stop conditions are a validated candidate that meets the objective or
+ledger-supported exhaustion. Do not stop by round count.
 
 ## Evidence Reading
 

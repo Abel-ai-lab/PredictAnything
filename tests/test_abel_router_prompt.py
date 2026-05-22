@@ -25,8 +25,11 @@ def test_strategy_discovery_skill_explains_workspace_first_boundary() -> None:
     assert "bootstrap the workspace" in text
     assert "abel-auth" in text
     assert "references/data-driven-construction.md" in text
-    assert "first serious non-grandma" in text
+    assert "first serious alpha branch should" in text
+    assert "first-look data scout" in text
     assert "sharpe > 2" in text
     assert "research/<ticker>/<session_id>/scratch/" in text
-    assert "scout/probe is a tool, not a gate" in text
+    assert "gates estimate reliability" in text
     assert "hand-written single-mechanism branches are diagnostics" in text
+    assert "gauntlet" not in text
+    assert "survivor" not in text

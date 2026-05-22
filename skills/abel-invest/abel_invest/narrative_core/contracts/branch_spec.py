@@ -644,6 +644,7 @@ def build_context_guide_markdown(
         "",
         "## Disposable Search",
         "- temporary scripts, feature screens, model comparisons, and summaries may live in the session `scratch/` directory",
+        "- for a fresh or unfamiliar ticker, the first serious alpha branch should normally be probe-informed",
         "- scratch/probe outputs are search workbench material, not validation evidence",
         "- if a probe materially selects this candidate, record the influence and effective search width before `run-branch`",
         "",

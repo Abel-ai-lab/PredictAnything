@@ -107,8 +107,9 @@ def render_data_led_start_lines(session: Path) -> list[str]:
     return [
         "data-led graph-enriched alpha search:",
         f"read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing the next candidate or round",
-        "default objective when unspecified: pursue a strong strategy; Sharpe > 2 is aspirational, with high return, controlled drawdown, and audited evidence",
-        "first serious non-grandma lane should be empirical construction over a scoped target + graph-derived universe",
+        "default objective when unspecified: pursue a strong strategy; Sharpe > 2 is aspirational, with high return, controlled drawdown, and reportable evidence",
+        "for a fresh ticker, the first serious alpha branch should normally be probe-informed",
+        "starting the experiment loop means first-look data scout -> promote 1-2 candidate shapes, not immediately committing a broad formal branch",
         f"disposable probes may live in {scratch_dir} or an equivalent heredoc/notebook/query cell; they are search workbench material, not validation evidence",
         f"{command_prefix} init-branch --session {session} --branch-id <feature-factory-branch>",
         f"{command_prefix} init-branch --session {session} --branch-id <model-or-denoise-branch>",
@@ -116,6 +117,7 @@ def render_data_led_start_lines(session: Path) -> list[str]:
         "edit branch.yaml with objective, selected inputs, search width when applicable, and validation scope",
         "let data decide how to express graph-derived information: features, models, subsets, lags, regimes, sizing, filters, or ensembles",
         "use target-only as baseline, seed, ablation, or competitor; simple hand-written rules are diagnostics or refinements, not the default main lane",
+        "validation gates estimate reliability and reportability; they are not the final objective",
         f"after each recorded round, keep {EXPLORATION_PATH_FILENAME} updated with ledger ref, chosen path, compact reason, Edge feedback, and artifact refs",
     ]
 

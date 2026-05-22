@@ -1,17 +1,14 @@
 ---
 name: abel-invest
 description: >
-  Audited high-capacity quant alpha discovery, screening, and guarded
-  validation with causal graph priors. Use this skill whenever the user asks
-  how to invest, trade, buy or sell, find alpha, find or improve a trading
-  strategy, backtest or stress a signal, screen candidates, hit or discover a
-  Sharpe/return/drawdown target, run graph-enriched feature-factory/model/
-  ensemble search, or continue/prepare/debug an Abel strategy-discovery
-  workspace — even if they don't say "Abel" and even when they just ask for
-  "a good strategy for X" or "is there alpha in Y". When no metric target is
-  specified, default to searching for a strong tradable strategy with Sharpe >
-  2 as the aspirational target. Prefer this over ad-hoc hand-designed strategy
-  work.
+  Use when the user asks how to invest, trade, buy or sell, find alpha, find or
+  improve a trading strategy, backtest or stress a signal, screen candidates,
+  optimize Sharpe/return/drawdown, run graph-enriched feature/model/ensemble
+  search, or continue/prepare/debug an Abel strategy-discovery workspace —
+  even if they don't say "Abel" and even when they just ask for "a good
+  strategy for X" or "is there alpha in Y". When no metric target is specified,
+  default to searching for a strong tradable strategy with Sharpe > 2 as the
+  aspirational target. Prefer this over ad-hoc hand-designed strategy work.
 metadata:
   openclaw:
     requires:
@@ -80,8 +77,8 @@ Always start by resolving workspace state before strategy work.
 - Choosing concrete constructions while writing the engine:
   read `references/proven-patterns.md` (battle-tested patterns). Core path.
 - A hard Sharpe / MaxDD / PnL target is set:
-  read `references/guarded-optimization.md` (self-contained gauntlet-gated
-  optimization). Core path — not optional — when a performance bar is set.
+  read `references/guarded-optimization.md` (performance-target search and
+  reportability rules). Core path — not optional — when a performance bar is set.
 - Before writing "exhausted / ceiling / no edge":
   read `references/experiment-loop.md` and check the ledger requirements there.
 - Data-driven candidate construction, especially when ordinary alpha search
@@ -115,16 +112,15 @@ Always:
   status, blockers, what evidence exists, and the next action you will take.
 - Treat `agent_context.md` as the compact factual resume surface,
   `exploration_path.md` as the human-facing chosen-path and Edge-feedback log.
-- Baseline-first: before from-scratch search, check whether a validated
-  strategy for this target already exists in any baseline / strategy catalog the
-  user maintains. If one exists, treat it as a benchmark and launchpad; iterate
-  from it when useful rather than wasting rounds rediscovering it.
-- Use disposable empirical search when useful. Temporary scripts, feature
-  screens, quick model comparisons, notebooks, query cells, or compact tables
-  may live under `research/<ticker>/<session_id>/scratch/`; when file creation
-  is awkward, an equivalent one-off shell heredoc or notebook/query cell is
-  fine. Scratch work is normal Abel Invest research, not product code and not
-  validation evidence.
+- On a fresh or unfamiliar ticker, treat the first serious alpha lane as
+  probe-informed by default. Use a compact first-look data scout before or while
+  opening formal branches to check target behavior plus graph lead/lag/sign,
+  node subset, feature family, model family, filter, sizing, and risk shape.
+  Temporary scripts, feature screens, quick model comparisons, notebooks, query
+  cells, or compact tables may live under
+  `research/<ticker>/<session_id>/scratch/`; when file creation is awkward, an
+  equivalent one-off shell heredoc or notebook/query cell is fine. Scratch work
+  is normal Abel Invest research, not product code and not validation evidence.
 
 Never:
 
@@ -136,10 +132,13 @@ Never:
   generated strategy advice. They are factual surfaces.
 - Do not hide parameter, sizing, threshold, filter, model, factor, or node-subset
   search inside one "single" strategy. Name search width honestly.
-- Do not report a raw-metric winner as a robust strategy before it clears the
-  gauntlet with honest search-width accounting.
-- Do not treat `--selection-trials` as a strategy-quality shortcut; it is honest
-  DSR/K accounting that makes empirical search reportable.
+- Do not report a raw-metric winner as a robust strategy before required
+  validation and honest search-width accounting support that claim.
+- Do not optimize for gate-passing at the expense of Sharpe, return, or the
+  user's objective. Gates estimate reliability and reportability; they are not
+  the final purpose of the search.
+- Do not treat `--selection-trials` as a strategy-quality shortcut; it is
+  reportability accounting, not a brake on empirical search.
 - Never pass a running/cumulative total to `--selection-trials`; pass this
   round's search width only.
 - Do not depend on any external skill for guarded optimization; abel-invest runs
@@ -156,18 +155,26 @@ Alpha search stance:
   shape choose the next candidate family. Mechanism stories are useful after
   evidence appears; they are not admission tickets.
 - Ordinary alpha search has a default posture: high-capacity empirical
-  construction over a scoped target + graph-derived universe. The first serious non-grandma lane should be empirical construction:
-  use the graph, target behavior, feature construction, model comparison,
-  denoise, subset search, regimes, sizing, filters, or ensembles as data calls
-  for them; these are degrees of freedom, not a scripted route.
+  construction over a scoped target + graph-derived universe. Use the graph,
+  target behavior, feature construction, model comparison, denoise, subset
+  search, regimes, sizing, filters, or ensembles as data calls for them; these
+  are degrees of freedom, not a scripted route.
+- For a fresh or unfamiliar ticker, the first serious alpha branch should
+  normally be probe-informed. Starting the experiment loop does not mean
+  immediately committing a broad formal branch. First run a compact data scout
+  to learn the target's own behavior and the graph universe's rough
+  lead/lag/sign/subset/transform shape, then promote the best 1-2 candidate
+  shapes into audited branch work. Direct formal branches remain valid for
+  user-specified strategies, existing leads, baselines, controls, continuations,
+  or very narrow diagnostic branches.
 - New sessions use live causal graph discovery when available. Treat the graph
   as the default high-value alpha feature universe beyond target-only history:
   node subsets, lags, signs, transformations, ratios, regimes, model features,
   sizing signals, filters, and ensemble members are all fair game.
 - Graph-enriched ideas should appear early and recur throughout ordinary search
-  unless the user chose a simple/conservative lane, a validated baseline already
-  defines the immediate path, or live graph access is blocked. Do not turn this
-  into a full-frontier quota or a broad basket ritual.
+  unless the user explicitly chose simple-return constraints, a validated
+  baseline already defines the immediate path, or live graph access is blocked.
+  Do not turn this into a full-frontier quota or a broad basket ritual.
 - Target-only work is useful as a baseline, seed, ablation, or competing
   candidate. It should not become the lazy default when live graph candidates
   are available; use it to measure whether graph-derived information improves
@@ -175,17 +182,6 @@ Alpha search stance:
 - A graph-supported branch is not automatically data-driven. Runtime graph reads
   prove input realization; they do not replace feature construction, model
   comparison, subset/lag/sign search, denoise, or ensemble search.
-- Disposable empirical probes are part of the search workbench. Use
-  `research/<ticker>/<session_id>/scratch/` or an equivalent heredoc,
-  notebook cell, or query cell to test sign, horizon, node subset, feature
-  family, model family, filter, sizing, or risk shape when that is faster than
-  a formal branch. These probes can happen before or between recorded rounds.
-  They are not validation evidence; if they materially select the formal
-  candidate, record the influence and effective search width.
-- Scout/probe is a tool, not a gate. Direct formal branches remain valid as
-  useful empirical tests, baselines, controls, user-specified strategies, or
-  continuations of known leads. The failure mode is unaccounted search, not
-  moving quickly.
 - Hand-written single-mechanism branches are diagnostics, controls, ablations,
   or refinements around empirical construction. They are useful, but they are
   not the product's default search posture when live graph-derived data is
@@ -194,14 +190,15 @@ Alpha search stance:
   Search is expected: use target/baseline context, graph-derived features,
   feature factories, ensembles, parameter search, model-family comparison,
   HPO, regime/sizing/filter search, and node-subset search when useful. Then
-  report only gauntlet-surviving candidates honestly.
-- `--selection-trials N` is mandatory for any search width. `N` is this round's
-  width only; the framework accumulates the campaign total from prior PASS/FAIL
-  rounds itself. Fold preflight/ERROR-disqualified variants into a later
-  per-round count when they would otherwise be skipped. See
-  `references/guarded-optimization.md`.
-- K records search cost honestly; it should not make the agent timid about
-  pursuing a high-ceiling empirical lead.
+  report candidates according to their objective quality and validation
+  reliability.
+- Record the effective width of any search that materially selected the
+  submitted candidate. Search-width accounting should not make the agent timid
+  about pursuing a high-ceiling empirical lead.
+- Passing all gates is not the product goal by itself. The goal is high Sharpe,
+  high return, and useful risk control; a higher pass rate means the candidate
+  is more reliable and reportable under the current validation profile. A
+  high-ceiling near-pass is search information, not waste.
 - Graph-derived search should mine the causal node universe empirically. Let
   data select subsets, lags, transformations, models, and graph roles. Graph
   expansion is available when evidence points outside the current view, but it
@@ -211,8 +208,8 @@ Alpha search stance:
   candidate universe, materially different search axes, graph-derived and
   target/baseline contrasts where useful, any intentionally tested principle and
   its search impact, and all attempted width including otherwise-skipped
-  ERROR/preflight variants. A green per-candidate gauntlet does not certify
-  search exhaustiveness.
+  ERROR/preflight variants. One validated candidate does not certify search
+  exhaustiveness.
 - CAP graph nodes are model-supported causal priors. Trust that they carry
   target-relevant information, but do not infer disclosed weight, exact lag,
   signed effect, monotone strength, or tradable direction from the role alone.
@@ -223,17 +220,9 @@ Alpha search stance:
   selected nodes, construction, intended role, unresolved assumption, and
   falsification scope. This can be lightweight before validation and richer
   after a pass or meaningful near-pass.
-- If a branch combines multiple graph nodes as one same-direction, equal-weight,
-  or same-lag basket, declare that construction explicitly. A failed basket only
-  invalidates that construction unless other evidence supports a broader graph
-  conclusion.
 - Expand the graph frontier only when it helps the empirical search question.
   Do not expand merely to satisfy graph coverage or make the exploration look
   broader.
-- Branch count is not proof of breadth. Graph-node concentration, model/factor
-  coverage, strategy-variant coverage, and local refinement are separate facts.
-- Abel Ask or narrative context can scout candidate ideas, supplemental drivers,
-  or graph expansion questions. It is not validation evidence.
 - Use narrative scout context only when it helps generate candidate features,
   graph expansion anchors, or interpretation. It is optional context, not a
   required ritual.

@@ -55,8 +55,10 @@ came from one isolated hand-written idea.
 
 Disposable scripts, tables, notebooks, query cells, and shell heredocs are part
 of that workbench. Prefer `research/<ticker>/<session_id>/scratch/` for files,
-but do not make scratch a prerequisite ceremony. Use it whenever it helps move
-faster than a formal recorded branch.
+and use an equivalent one-off heredoc, notebook cell, or query cell when files
+are awkward. For a fresh or unfamiliar ticker, a compact first-look scout is
+normally the fastest way to learn whether target behavior, graph lags/signs,
+subsets, transforms, models, filters, or sizing deserve formal branch work.
 
 **Graph-supported is not enough.**
 Runtime graph reads prove input realization. They do not by themselves prove the
@@ -64,11 +66,12 @@ agent searched the graph as data. Abel Invest should mine the graph-derived
 universe for subsets, lags, transformations, models, regimes, filters, sizing
 signals, and ensemble roles.
 
-**Gate validates; it does not throttle.**
-The gauntlet, DSR, leakage checks, walk-forward behavior, and promotion gate
-decide what can be reported as robust. They should not prevent empirical
-screening. A raw-metric winner is not a strategy success until it clears the
-required validation with honest search-width accounting.
+**Validation estimates reliability; it does not throttle search.**
+Gates, DSR, leakage checks, walk-forward behavior, and promotion checks decide
+how confidently a candidate can be reported. They should not prevent empirical
+screening. Passing more gates makes a high-Sharpe/high-return candidate more
+reliable; a raw-metric winner is not robust until required validation and honest
+search-width accounting support that claim.
 
 **Artifact completeness stays hard.**
 `exploration_path.md` preserves each recorded round's selected path, compact

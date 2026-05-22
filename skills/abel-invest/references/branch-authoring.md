@@ -171,7 +171,7 @@ construction. Do not conclude that graph nodes are useless unless materially
 different graph-derived constructions, target/baseline comparisons, and search
 axes have been tested or intentionally ruled out.
 
-When an insight should survive as a strategy conclusion, cite evidence such as
+When an insight should become a strategy conclusion, cite evidence such as
 `ledger:<branch_id>:<round_id>`, `frontier.md`, or a raw artifact path.
 
 ## Prepared Inputs
@@ -215,8 +215,8 @@ record the selection influence in `exploration_path.md`.
 Disposable empirical search can live in
 `research/<ticker>/<session_id>/scratch/`, or in an equivalent one-off heredoc,
 notebook cell, or query cell when files are awkward. These probes are not
-validation evidence and are not a prerequisite ceremony; they are a normal way
-to decide what deserves formal branch code.
+validation evidence; they are a normal way to decide what deserves formal
+branch code, especially on a fresh or unfamiliar ticker.
 
 ## Minimal Runtime Path
 
