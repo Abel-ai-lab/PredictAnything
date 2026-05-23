@@ -21,9 +21,10 @@ accounting, and the exploration path surface. The agent owns what to try next.
 
 **Search hard, then explain.**
 The job is to find a high-quality strategy for the user's objective, usually
-high Sharpe, high return, or a constrained risk-return profile. Mechanism
-stories organize results after evidence appears; they should not slow the first
-useful empirical test.
+high Sharpe, high return, or a constrained risk-return profile. The default
+objective is defined in `SKILL.md` and `experiment-loop.md`. Mechanism stories
+organize results after evidence appears; they should not slow the first useful
+empirical test.
 
 **Empirical construction by default.**
 For ordinary non-grandma alpha search, the default posture is empirical
@@ -57,11 +58,12 @@ agent searched the graph as data. Abel Invest should mine the graph-derived
 universe for subsets, lags, transformations, models, regimes, filters, sizing
 signals, and ensemble roles.
 
-**Gate validates; it does not throttle.**
-The gauntlet, DSR, leakage checks, walk-forward behavior, and promotion gate
-decide what can be reported as robust. They should not prevent empirical
-screening. A raw-metric winner is not a strategy success until it clears the
-required validation with honest search-width accounting.
+**Validation estimates reliability; it does not throttle search.**
+Gates, DSR, leakage checks, walk-forward behavior, and promotion checks decide
+how confidently a candidate can be reported. They should not prevent empirical
+screening. Passing more gates makes a high-Sharpe/high-return candidate more
+reliable; a raw-metric winner is not robust until required validation and honest
+search-width accounting support that claim.
 
 **Artifact completeness stays hard.**
 `exploration_path.md` preserves each recorded round's selected path, compact
@@ -87,17 +89,6 @@ Candidate-universe sources include:
 - feature factories, learned models, and ensembles
 - user constraints such as drawdown, no leverage, or grandma mode
 
-The runtime path stays stable:
-
-1. resolve workspace and doctor readiness
-2. start or resume a session; run live graph discovery when available
-3. search candidates empirically without temporal leakage
-4. declare enough candidate metadata for runtime and audit
-5. `prepare-branch` to materialize inputs
-6. `debug-branch` to check semantic legality
-7. `run-branch` to record selected candidates with `--selection-trials` when
-   search width was used
-8. read ledger/frontier/Edge facts
-9. keep `exploration_path.md` covered
-10. explain mechanism and graph contribution after there is evidence worth
-    explaining
+`experiment-loop.md` owns the runtime path. This file only explains why the
+path keeps strategy judgment with the agent while the framework owns legality,
+evidence facts, search-width accounting, and reportability.

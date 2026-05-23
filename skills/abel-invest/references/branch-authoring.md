@@ -171,7 +171,7 @@ construction. Do not conclude that graph nodes are useless unless materially
 different graph-derived constructions, target/baseline comparisons, and search
 axes have been tested or intentionally ruled out.
 
-When an insight should survive as a strategy conclusion, cite evidence such as
+When an insight should become a strategy conclusion, cite evidence such as
 `ledger:<branch_id>:<round_id>`, `frontier.md`, or a raw artifact path.
 
 ## Prepared Inputs
@@ -212,6 +212,11 @@ If a branch was chosen because it ranked best in a local metric scan, that is
 normal candidate search. Declare the search width with `--selection-trials` and
 record the selection influence in `exploration_path.md`.
 
+For first-look scout sequencing, scratch/heredoc use, prepare-only scout
+branches, and the no flat/no-signal materialization rule, follow
+`experiment-loop.md`. This file only owns how the promoted branch declares
+metadata, inputs, graph attribution, and exploration-path facts.
+
 ## Minimal Runtime Path
 
 1. State the audit-relevant candidate metadata in `branch.yaml`.
@@ -225,22 +230,3 @@ record the selection influence in `exploration_path.md`.
 8. Read `evidence_ledger.json`, `frontier.md`, and the Edge result.
 9. Keep `exploration_path.md` covered with ledger ref, chosen path, compact
    reason, Edge feedback, and artifact refs.
-
-## Alpha Search Judgment
-
-- causal discovery is a high-value prior, not a trading instruction
-- target-only is a baseline, seed, ablation, and competitor; it should not
-  become the default when graph candidates are live
-- graph-enriched search should appear early and recur when graph discovery is
-  available
-- ordinary alpha search should keep an empirical construction posture over the
-  bounded target + graph-derived universe; simple hand-written mechanisms are
-  diagnostics, controls, ablations, or refinements
-- branch count is not search breadth if every branch hides the same search axis
-- weird low-attention graph nodes are not automatically noise
-- narrative scout can inspire features, but it is not evidence truth
-- semantic failure is a signal about visibility or timing assumptions
-- metric failure is evidence about the candidate expression, not a reason to
-  hack metrics
-- stop honestly when recent rounds are no longer improving and no high-quality
-  new direction remains after the bounded search is ledger-supported

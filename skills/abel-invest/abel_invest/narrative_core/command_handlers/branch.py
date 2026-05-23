@@ -102,7 +102,7 @@ from abel_invest.narrative_core.state import (
 SELECTION_TRIALS_AUDIT_WARNING = (
     "Selection-trials audit: --selection-trials records accidental or explicitly requested "
     "search width for DSR accounting; it does not by itself validate raw sweep winners. "
-    "Record the branch basis and any scout or optimization influence "
+    "Record the branch basis and any disposable probe, scout, or optimization influence "
     f"in {EXPLORATION_PATH_FILENAME} before continuing."
 )
 

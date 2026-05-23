@@ -103,14 +103,24 @@ def resolve_session_root(
 
 def render_data_led_start_lines(session: Path) -> list[str]:
     command_prefix = command_prefix_for_path(session)
+    scratch_dir = session / "scratch"
     return [
         "data-led graph-enriched alpha search:",
         f"read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing the next candidate or round",
-        "ordinary alpha search posture: empirical construction over a bounded target + graph-derived universe",
-        f"{command_prefix} init-branch --session {session} --branch-id <candidate-branch>",
+        "default objective when unspecified: pursue a strong strategy; Sharpe > 2 is aspirational, with high return, controlled drawdown, and reportable evidence",
+        "for a fresh ticker, the first serious recorded alpha candidate should normally be probe-informed by a scored scout, not only diagnostics",
+        "use frontier/readiness to pick a bounded scout universe; prepare a narrow scout/candidate branch before measuring market data",
+        "prepare-only scout branches are fine; do not run flat/no-signal rounds just to warm cache",
+        f"after prepare-branch, disposable probes may live in {scratch_dir} or an equivalent heredoc/notebook/query cell; they are search workbench material, not validation evidence",
+        f"{command_prefix} init-branch --session {session} --branch-id <feature-factory-branch>",
+        f"{command_prefix} init-branch --session {session} --branch-id <model-or-denoise-branch>",
+        f"{command_prefix} init-branch --session {session} --branch-id <target-control-branch>",
         "edit branch.yaml with objective, selected inputs, search width when applicable, and validation scope",
+        "make the first-look scout compact but real: score candidate-shaped target baselines, graph lag/subset shapes, and feature/model/risk variants into a ranked shortlist",
         "let data decide how to express graph-derived information: features, models, subsets, lags, regimes, sizing, filters, or ensembles",
         "use target-only as baseline, seed, ablation, or competitor; simple hand-written rules are diagnostics or refinements, not the default main lane",
+        "run broad candidates only after data/cache are prepared and the scout shape is understood",
+        "validation gates estimate reliability and reportability; they are not the final objective",
         f"after each recorded round, keep {EXPLORATION_PATH_FILENAME} updated with ledger ref, chosen path, compact reason, Edge feedback, and artifact refs",
     ]
 

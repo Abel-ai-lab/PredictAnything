@@ -331,7 +331,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
   count as realized when the engine reads prepared graph inputs
 - `visualize-session` creates an online session view from the session folder;
   it includes the selected best ranked hostable strategy artifact when one is
-  available by default. Use `--without-strategy-artifact` only for narrative-only
+  available by default, selected from validation evidence rather than requiring
+  every gate to pass. Use `--without-strategy-artifact` only for narrative-only
   views
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter wiring scaffold for the first end-to-end run, not a finished strategy
@@ -357,7 +358,7 @@ Run `./.venv/bin/abel-invest workspace context --path . --json` and `./.venv/bin
 before opening a session.
 
 - `ready`: you can start alpha search
-- `ready` means continue with `init-session -> init-branch -> branch.yaml -> prepare-branch`
+- `ready` means continue with `init-session -> init narrow scout/candidate branch -> prepare-branch -> first-look data scout before any broad run`
 - `auth_missing`: no reusable auth was found; use `abel-auth`, then rerun `doctor`
 - `runtime_stale`, `env_missing`, `edge_missing`, or `edge_contract_missing`:
   run the exact env repair command from `next_step`, then rerun `doctor`
@@ -442,11 +443,11 @@ reason, Edge feedback, and ledger ref. Read `exploration_path.md` and the latest
 Edge result before choosing the next Edge run; after Edge feedback, keep the
 path updated. Check path coverage before starting another round. Check input
 realization before claiming graph-derived contribution. Do not create the online
-session view automatically; after a
-candidate PASS, ask the user first. If the user agrees or explicitly asks to
-publish the paper-ready session, `visualize-session --session <session>`
-builds the view from the session folder and uploads the selected strategy
-artifact. If the command reports `needs_agent_refactor`, read the emitted
+session view automatically; when the exploration is mature enough for review,
+ask the user first. If the user agrees or explicitly asks to publish the session
+view, `visualize-session --session <session>` builds the view from the session
+folder and attaches the selected hostable validation strategy artifact when one
+is available. If the command reports `needs_agent_refactor`, read the emitted
 `refactor-request.json`, edit only the promoted copy named there, write
 `refactor-report.json`, and rerun the same command. Do not start a separate
 agent process. Use `--without-strategy-artifact` only for narrative-only views.

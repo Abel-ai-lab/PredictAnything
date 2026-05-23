@@ -3,14 +3,15 @@
 Use this reference for ordinary non-grandma alpha search, especially when the
 next idea is drifting toward another hand-written rule.
 
-This is the default construction stance, not a separate workflow. Runtime
-legality, honest search-width accounting, and validation still decide what can
-be reported.
+This is the default construction stance, not a separate workflow. This file
+owns candidate-expression choices; `experiment-loop.md` owns sequencing and
+first-look scout mechanics, and `guarded-optimization.md` owns hard-target
+reportability.
 
 ## Default Posture
 
-Build candidates by empirical construction over a bounded universe. Usual
-ingredients include:
+Build candidates by high-capacity empirical construction over a scoped
+universe. Usual ingredients include:
 
 - target history and any validated baseline or catalog strategy
 - live graph nodes and graph-derived feeds when available
@@ -38,6 +39,40 @@ This list is not a route plan. Use the bounded feature universe most likely to
 improve the user's objective, and let observed behavior decide how the search
 evolves.
 
+## Disposable Search Workbench
+
+Temporary scripts, feature screens, quick model comparisons, CSV/JSON summaries,
+notebook cells, query cells, or one-off shell heredocs are normal Abel Invest
+research. Prefer `research/<ticker>/<session_id>/scratch/` for files. Scratch
+outputs are not validation evidence; they help choose what is worth formal,
+audited validation.
+
+Use scratch to compare construction axes, not to create paperwork. A compact
+first-look scout should score candidate-shaped variants closely enough to
+choose what deserves formal validation. Prefer a ranked table over a prose-only
+memo: target baselines, graph single-feature shapes, feature factories,
+model-family variants, ensembles, filters, sizing, or risk expressions should
+be compared with objective metrics such as Sharpe, total return, drawdown, and
+turnover when feasible.
+
+Diagnostic tables are raw material. IC, correlation, or feature-importance
+screens can rank inputs, but they do not by themselves show whether a tradable
+position rule or model expression works.
+
+Useful construction surfaces include:
+
+- target trend, momentum, reversal, and volatility-regime baselines
+- graph single-feature threshold/vote variants across plausible lags, signs,
+  horizons, transforms, spreads, and subsets
+- feature factories that include rolling cumulative returns, trend deviation,
+  volatility or regime context, not only one-day shifted returns
+- model-family comparisons such as rolling linear/ridge, tree or GBDT, hybrid
+  models, and lightweight ensembles when the feature set justifies them
+
+These are examples, not a fixed route or minimum count. For prepared-data
+ordering, prepare-only scout branches, and promotion into recorded rounds,
+follow `experiment-loop.md`.
+
 ## What Simple Rules Are For
 
 Simple target-only or graph-node rules are useful as:
@@ -54,12 +89,10 @@ hand-written mechanism.
 ## Search Accounting
 
 If the submitted branch was selected from a scan, grid, model comparison, HPO
-run, node-subset choice, or feature-factory screen, record the effective width
-with `--selection-trials N` or the current candidate search metadata path.
-`N` is this round's search width only, never the campaign total.
-
-Do not report a raw search winner as robust until it clears the gauntlet with
-honest width accounting.
+run, node-subset choice, or feature-factory screen, record the effective width.
+K is an audit meter, not an exploration brake. `experiment-loop.md` owns the
+per-round `--selection-trials` rule; `guarded-optimization.md` owns final-K
+reportability.
 
 ## Failure Reading
 

@@ -187,7 +187,7 @@ def render_strategy_artifact_upload_lines(artifact_result: dict | None) -> list[
     if not artifact_result:
         return []
     if artifact_result.get("artifactUploadSkipped"):
-        return [f"Strategy artifact skipped: {artifact_result.get('skipReason', 'unknown')}"]
+        return [_strategy_artifact_skip_line(artifact_result)]
     if artifact_result.get("artifactUploadFailed"):
         return [f"Strategy artifact upload failed: {artifact_result.get('artifactUploadError', '')}"]
     upload_id = str(artifact_result.get("artifactUploadId") or "").strip()
@@ -208,6 +208,23 @@ def render_strategy_artifact_upload_lines(artifact_result: dict | None) -> list[
     if details:
         summary += f" ({', '.join(details)})"
     return [summary]
+
+
+def _strategy_artifact_skip_line(artifact_result: dict) -> str:
+    reason = str(artifact_result.get("skipReason") or "unknown").strip()
+    reason_text = {
+        "hosted_session_id_missing": "the hosted session id was not returned",
+        "no_validation_strategy": "no recorded validation round is available yet",
+        "no_hostable_validation_strategy": (
+            "recorded validation rounds exist, but none currently has the files "
+            "needed for a hostable strategy artifact"
+        ),
+        "artifact_metric_input_unavailable": (
+            "the selected validation round is missing metric-input evidence needed "
+            "for artifact export"
+        ),
+    }.get(reason, reason)
+    return f"Session view created without a strategy artifact: {reason_text}"
 
 
 def strategy_artifact_client_request_id(manifest: dict) -> str:

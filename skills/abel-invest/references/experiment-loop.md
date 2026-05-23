@@ -29,9 +29,14 @@ Run:
 Live graph discovery should run by default when available. Its output is the
 default high-value alpha feature universe, not a mandatory first branch and not
 a requirement to run the whole depth-1 frontier as one basket. For ordinary
-non-grandma alpha search, keep the search posture empirical and graph-informed
-over a bounded target + graph-derived universe, not another hand-written single
-mechanism.
+non-grandma alpha search, keep the search posture empirical, high-capacity, and
+graph-informed over a scoped target + graph-derived universe, not another
+hand-written single mechanism.
+
+When the user gives no metric target, use a strong-strategy default: Sharpe > 2
+is the aspirational target, supported by high return, controlled drawdown, and
+reportable evidence quality. This is a search direction, not a promise and not
+a separate mode.
 
 When resuming, read:
 
@@ -40,6 +45,52 @@ When resuming, read:
   concentration, metric failures, and path coverage
 - `exploration_path.md` for the human-facing path log
 - latest `edge-result.json` / `edge-validation.md` for concrete feedback
+
+## First-Look Data Scout
+
+For a fresh or unfamiliar ticker, the first serious recorded alpha candidate
+should normally be probe-informed before a broad candidate is run. Starting the
+experiment loop means learning the data shape, not immediately recording the
+first broad branch.
+
+This is not a request to measure data before data exists. `init-session`
+provides graph frontier and readiness facts. Use those facts to choose a
+bounded scout universe, then create and `prepare-branch` a narrow scout or
+candidate branch so Edge materializes cache plus `inputs/data_manifest.json`,
+`inputs/probe_samples.json`, and `inputs/context_guide.md`. Run the first-look
+scout from those prepared inputs or the warmed cache before deciding what
+deserves `debug-branch` / `run-branch`.
+
+Do not run a flat or no-signal materialization branch just to warm cache or make
+the scout official. A prepared branch may be prepare-only; `run-branch` is for
+meaningful candidates, controls, diagnostics, or ablations.
+
+Use a compact scored scout to choose, not just describe. The useful output is a
+ranked short list of candidate-shaped variants with objective metrics such as
+Sharpe, total return, drawdown, and turnover:
+
+- target-only scored baselines: trend, momentum, reversal, volatility regime,
+  and drawdown-aware controls
+- graph candidate shapes: lead/lag/sign, node subset, transformation, spread,
+  horizon, and single-feature threshold/vote variants
+- construction choices: feature factories, model-family comparisons, ensembles,
+  filters, sizing rules, and risk expressions that can be locally scored before
+  formal validation
+
+Diagnostic tables such as IC, correlation, and feature importance are useful raw
+material, not the completed first-look scout when graph/model construction
+remains available. Do not abandon the graph-derived universe unless graph
+subset, lag/sign, transformation, model, or risk-expression alternatives have
+been scored or intentionally ruled out.
+
+Store temporary scripts or summaries in `research/<ticker>/<exp_id>/scratch/`
+when useful. If the runtime discourages files, use an equivalent one-off shell
+heredoc, notebook cell, or query cell. Promote only the best 1-2 shapes into
+recorded branch work, and account for any selection width that materially chose
+the submitted candidate.
+
+Direct recorded branches remain valid for user-specified strategies, existing
+leads, continuations, baselines, controls, or very narrow diagnostic branches.
 
 ## Search Loop
 
@@ -52,26 +103,35 @@ Each round should push toward the user's objective.
    ensembles, model-family comparison, denoise/compression, graph-node subset
    search, lag/sign/transformation search, regimes, sizing, and filters are
    available degrees of freedom, not a fixed checklist.
-3. Keep graph-enriched ideas active early and throughout the search when live
+3. For a fresh or unfamiliar ticker, begin serious search with a compact
+   first-look scout before the first broad recorded run unless the path is
+   user-specified, a continuation, a baseline/control, or a very narrow
+   diagnostic. When that scout needs market data, materialize it through a
+   prepared scout/candidate branch first; the branch can stop at prepare if
+   its job is data/cache materialization. Probes are search workbench material,
+   not validation evidence.
+4. Keep graph-enriched ideas active early and throughout the search when live
    graph candidates exist. Use target-only candidates as baselines, seeds,
    ablations, and competitors, not as the default escape from graph search.
-4. Use simple hand-written target or graph rules as diagnostics, controls,
+5. Use simple hand-written target or graph rules as diagnostics, controls,
    ablations, or refinements around an empirical lead; do not let them dominate
    the early search while the graph-derived feature universe is unsearched.
-5. Declare enough branch metadata for runtime and audit: objective, input
+6. Declare enough branch metadata for runtime and audit: objective, input
    universe, evaluation window, effective search width, validation scope, and
    any graph-attribution claim you need to make.
-6. Run `prepare-branch` to materialize branch inputs before trusting the
+7. Run `prepare-branch` to materialize branch inputs before trusting the
    candidate.
-7. Run `debug-branch` to check semantic legality before recording evidence.
-8. Run `run-branch` only when the selected candidate is ready to be recorded.
+8. Run `debug-branch` to check semantic legality before recording evidence.
+9. Run `run-branch` only when the selected candidate is ready to be recorded.
    If the candidate was selected from a search, pass `--selection-trials N`,
-   where `N` is this round's effective search width only.
-9. Re-read `evidence_ledger.json`, `frontier.md`, and the latest Edge result.
-10. Let metric shape and failure mode decide the next move. The framework shows
+   where `N` is this round's effective search width only. Inline heredocs,
+   notebook cells, and query cells count the same as saved scratch files when
+   they materially select the submitted candidate.
+10. Re-read `evidence_ledger.json`, `frontier.md`, and the latest Edge result.
+11. Let metric shape and failure mode decide the next move. The framework shows
    facts; it does not prescribe the next driver, proxy, threshold, model
    family, or route.
-11. Keep `exploration_path.md` covered with ledger ref, chosen path, compact
+12. Keep `exploration_path.md` covered with ledger ref, chosen path, compact
     reason, Edge feedback, and artifact refs before another recorded round.
 
 Optimization is not a deviation. The failure mode is reporting an unvalidated
@@ -97,6 +157,8 @@ Then prepare, debug, and record the agent-chosen candidate:
 If performance scouting happened before the recorded candidate, declare the
 effective search width and record what happened in `exploration_path.md`. Treat
 the result as search-informed rather than pretending it was one isolated idea.
+K records the search cost honestly; it is not a reason to avoid pursuing a
+high-ceiling lead.
 
 ## Layer Ownership
 
@@ -120,7 +182,7 @@ campaign total. `guarded-optimization.md` owns the final-K reporting rules.
 ## Before Exhaustion Or No-Edge Claims
 
 Do not write "exhausted", "ceiling", or "no edge" from a single failed
-candidate family, a small round count, or a green per-candidate gauntlet.
+candidate family, a small round count, or one candidate passing validation.
 Exhaustion is a ledger conclusion.
 
 Before making that claim, check that the ledger shows:
@@ -129,15 +191,15 @@ Before making that claim, check that the ledger shows:
 2. empirical construction was tried when the lane was available, rather than
    only simple hand-written mechanisms
 3. graph-derived candidates were searched when live graph discovery was
-   available, unless the user chose a simple/conservative lane
+   available, unless the user explicitly chose simple-return constraints
 4. target/baseline performance was compared against graph-enriched performance
    where useful
 5. materially different search axes were tried, not only one hand-written rule
 6. all attempted width is K-accounted, including preflight or workflow ERROR
    variants that would otherwise be audited but skipped from future DSR
 
-Stop conditions are a gauntlet-PASS candidate at the target or ledger-supported
-exhaustion. Do not stop by round count.
+Stop conditions are a validated candidate that meets the objective or
+ledger-supported exhaustion. Do not stop by round count.
 
 ## Evidence Reading
 
@@ -167,9 +229,9 @@ anchors, and interpretation. It is scout context, not validation evidence.
 
 Do not create an online session view automatically. When the strategy context
 is mature enough to be useful to review visually, ask the user whether to
-visualize the session. This can be after a strong candidate PASS, after several
+visualize the session. This can be after a strong candidate, after several
 informative candidate rounds, before promotion, or whenever the agent would
-naturally summarize that the strategy is worth a visual review. If the user
+naturally summarize that the exploration is worth a visual review. If the user
 agrees, or if the user explicitly asks to visualize the session, pass the
 session folder to the command:
 
@@ -177,9 +239,11 @@ session folder to the command:
 <command_prefix> visualize-session --session research/<ticker>/<exp_id>
 ```
 
-The command builds the online view from local session evidence and uploads the
-automatically selected best `PASS` strategy artifact when one is available. Use
-`visualize-session --without-strategy-artifact` only when the user explicitly
+The command builds the online view from local session evidence. By default it
+also attaches the automatically selected best hostable validation strategy
+artifact when one is available; this attachment is selected by Sharpe, return,
+drawdown, and validation pass-rate, and does not require every gate to pass.
+Use `visualize-session --without-strategy-artifact` only when the user explicitly
 asks for a session view without strategy artifact upload. If the command reports
 `needs_agent_refactor`, read the emitted `refactor-request.json` and handle it
 in the current skill loop. If `kind` is `state_intent_self_check`, inspect the
