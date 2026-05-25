@@ -242,14 +242,15 @@ session folder to the command:
 The command builds the online view from local session evidence. By default it
 also attaches the automatically selected best hostable validation strategy
 artifact when one is available; this attachment is selected by Sharpe, return,
-drawdown, and validation pass-rate, and does not require every gate to pass.
+drawdown, and validation pass-rate. Research validation gates and hosted-paper
+promotion gates are separate; a missing strategy artifact should not block
+session visualization.
+
 Use `visualize-session --without-strategy-artifact` only when the user explicitly
 asks for a session view without strategy artifact upload. If the command reports
-`needs_agent_refactor`, read the emitted `refactor-request.json` and handle it
-in the current skill loop. For `kind=hosted_paper_rewrite`, inspect the selected
-branch source, dependency scan, nearby assets, and state-like files; edit only
-the promoted copy named there; declare required immutable assets or initial
-runtime state in `refactor-report.json`; and rerun the same command. Do not
+`needs_agent_refactor`, read `references/hosted-paper-rewrite.md` and handle the
+emitted `refactor-request.json` in the current skill loop. Edit only the
+promoted copy, write `refactor-report.json`, and rerun the same command. Do not
 start a separate agent process. The agent should not hand-assemble the payload
 or choose a router URL.
 
