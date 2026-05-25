@@ -4,6 +4,15 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.4.2] - 2026-05-25
+
+### Changed
+
+- Released Abel Skills `1.4.2` with Abel Invest `3.7.0`.
+- Added Abel Invest runtime-bridge guidance so default research objectives carry through branch setup, workspace prompts, and validation checks.
+- Tightened Abel Invest first-look scout guidance around prepared data, scored scout outputs, and recorded search width before deeper optimization.
+- Softened visualization artifact handling so useful strategy artifacts can still be promoted when they include the required manifest and trade-log context.
+
 ## [1.4.1] - 2026-05-21
 
 ### Added
