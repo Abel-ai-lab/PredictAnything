@@ -171,7 +171,7 @@ Write `refactor-report.json` with this shape:
       }
     },
     "evidence": {
-      "observations": ["source or probe facts supporting the method"],
+      "observations": ["source or local evidence facts supporting the method"],
       "agentOverrides": [],
       "semanticChecks": [],
       "whySufficient": "why evidence supports this method"

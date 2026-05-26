@@ -118,10 +118,8 @@ def _paper_continuation(method: str = "stateless_recompute") -> dict:
     }
 
 
-def _paper_evidence(probe_mode: str = "not_needed") -> dict:
+def _paper_evidence() -> dict:
     return {
-        "probeMode": probe_mode,
-        "canonicalTimelineSource": None,
         "observations": ["test source reading observation"],
         "agentOverrides": [],
         "semanticChecks": ["test cutover state semantic check"],
@@ -3076,8 +3074,11 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     assert "compiled absolute target exposure" in request["runtimeApiFacts"][
         "paperSignalReturn"
     ]
-    assert request["probeCapability"]["selectionPolicy"].startswith("The agent chooses")
-    assert "windowed_semantic" in request["probeCapability"]["modes"]
+    assert request["attemptPolicy"]["fullReplayFallbackEligible"] is False
+    assert request["validation"]["attemptPolicy"]["liveRewriteFailures"] == 0
+    assert request["evidenceGuidance"]["purpose"].startswith(
+        "Use source reading and any small local probes"
+    )
     assert "promotion.py" in request["avoidBeforeFirstEdit"][0]
     assert request["reportContract"]["paperSignal"]["incrementalReady"] is not True
     assert "continuation" in request["reportContract"]["paperSignal"]
@@ -3086,11 +3087,81 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     cutover = request["reportContract"]["paperSignal"]["design"]["cutover"]
     assert "minimal_cutover_state" in cutover["mode"]
     evidence = request["reportContract"]["paperSignal"]["evidence"]
-    assert "full_path" in evidence["probeMode"]
+    assert "agentOverrides" in evidence
     assert "gateContract" in request
-    assert "probeEvidence" in request["gateContract"]
+    assert "semanticEvidence" in request["gateContract"]
     assert "acceptanceCriteria" not in request
     assert "agentQuestions" not in request
+
+
+def test_hosted_paper_request_opens_full_replay_fallback_after_failures(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    promoted_dir = branch / "promoted"
+    promoted_dir.mkdir(parents=True)
+    source = promoted_dir / "engine.py"
+    source.write_text("# promoted\n", encoding="utf-8")
+    scan = {
+        "paperSignal": {"implemented": True},
+        "backtestWindow": {
+            "effectiveWindow": {"start": "2020-01-01", "end": "2020-12-31"}
+        },
+    }
+    failure = {"status": "failed", "failedGates": [{"name": "paper_dry_run"}]}
+
+    for _ in range(3):
+        request_path = promotion_helpers._write_hosted_paper_rewrite_request(
+            promoted_dir,
+            branch=branch,
+            source_path=source,
+            dependency_scan=scan,
+            signals=[],
+            validation_failure=failure,
+        )
+
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    policy = request["attemptPolicy"]
+    assert policy["liveRewriteFailures"] == 3
+    assert policy["fullReplayFallbackEligible"] is True
+    assert policy["notHostableAllowed"] is True
+
+
+def test_refactor_report_rejects_full_replay_fallback_before_policy_allows() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    design = _paper_design()
+    design["history"]["boundary"] = "full_replay"
+    design["cutover"]["mode"] = "full_replay"
+    report = {
+        "paperSignal": _paper_signal(
+            method="full_replay_fallback",
+            design=design,
+            live_readiness="continuing paper signal via fallback path under hosted limits",
+        ),
+        "limitations": [],
+    }
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="fullReplayFallbackEligible=true",
+    ):
+        promotion_helpers._validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+        )
+
+    promotion_helpers._validate_agent_paper_signal_contract(
+        report,
+        source,
+        require_paper_signal=True,
+        full_replay_fallback_allowed=True,
+    )
 
 
 def test_training_scan_reports_observed_calls_without_false_trainy_match() -> None:

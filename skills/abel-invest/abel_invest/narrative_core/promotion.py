@@ -34,6 +34,8 @@ PROMOTION_AGENT_REQUEST_SCHEMA = "abel-invest.agent-refactor-request/v1"
 PROMOTION_HOSTED_REWRITE_SCOPE = "hosted_paper_rewrite"
 PROMOTION_PAPER_SMOKE_WARN_SECONDS = 5.0
 PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS = 5.0
+PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS = 150.0
+PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK = 3
 PROMOTION_PAPER_TAIL_COMPARE_COUNT = 3
 PROMOTION_PAPER_TAIL_TOLERANCE = 1e-9
 PROMOTION_LIVE_READINESS_CONFLICT_PHRASES = (
@@ -79,12 +81,6 @@ PROMOTION_CONTINUATION_METHODS = {
     "stateful_continuation",
     "full_replay_fallback",
     "not_hostable",
-}
-PROMOTION_PROBE_EVIDENCE_MODES = {
-    "not_needed",
-    "calendar_only",
-    "windowed_semantic",
-    "full_path",
 }
 STATE_SELF_CHECK_FILE_SUFFIXES = {
     ".joblib",
@@ -297,6 +293,7 @@ def prepare_promotion(
             promoted_text,
             require_paper_signal=True,
             candidate=candidate,
+            full_replay_fallback_allowed=_full_replay_fallback_allowed(promoted_dir),
         )
         mode = PROMOTION_MODE_AGENT_REFACTOR
         strategy_source_path = promoted_source
@@ -1081,11 +1078,14 @@ def _hosted_paper_rewrite_work_order(
             "support the continuation design, not just describe gate output."
         ),
         (
-            "If timeline or state semantics are uncertain, choose the lightest "
-            "probe evidence that can answer your question: calendar_only, "
-            "windowed_semantic, or full_path. Full-path probing is a fallback "
-            "only when you can explain why lighter probes are insufficient or "
-            "failed."
+            "If timeline or state semantics are uncertain, create the smallest "
+            "local probe that answers your semantic question, and summarize the "
+            "finding in paperSignal.evidence. Do not make probe shape the "
+            "rewrite goal."
+        ),
+        (
+            "Do not choose full_replay_fallback or not_hostable unless "
+            "attemptPolicy.fullReplayFallbackEligible is true."
         ),
         (
             "Rerun the same promote/export/visualize command after the promoted "
@@ -1140,6 +1140,67 @@ def _validation_failure_has_tail_consistency(validation_failure: dict[str, Any])
     return False
 
 
+def _rewrite_attempt_policy(
+    promoted_dir: Path,
+    *,
+    validation_failure: dict[str, Any] | None,
+) -> dict[str, Any]:
+    previous = _read_previous_rewrite_attempt_policy(
+        promoted_dir / PROMOTION_REFACTOR_REQUEST_FILENAME
+    )
+    failures = _nonnegative_int(previous.get("liveRewriteFailures"))
+    if validation_failure is not None:
+        failures += 1
+    eligible = failures >= PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK
+    return {
+        "liveRewriteFailures": failures,
+        "fullReplayFallbackEligible": eligible,
+        "notHostableAllowed": eligible,
+        "fallbackAfterFailures": PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK,
+        "fullReplayFallbackMaxSeconds": PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS,
+        "rule": (
+            "Use stateless_recompute or stateful_continuation first. "
+            "full_replay_fallback and not_hostable are only available after "
+            "the live rewrite gate has failed enough complete attempts."
+        ),
+    }
+
+
+def _full_replay_fallback_allowed(promoted_dir: Path) -> bool:
+    policy = _read_previous_rewrite_attempt_policy(
+        promoted_dir / PROMOTION_REFACTOR_REQUEST_FILENAME
+    )
+    return bool(policy.get("fullReplayFallbackEligible"))
+
+
+def _read_previous_rewrite_attempt_policy(request_path: Path) -> dict[str, Any]:
+    if not request_path.is_file():
+        return {}
+    try:
+        payload = json.loads(request_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    policy = payload.get("attemptPolicy")
+    if isinstance(policy, dict):
+        return policy
+    validation = payload.get("validation")
+    if isinstance(validation, dict) and isinstance(validation.get("attemptPolicy"), dict):
+        return validation["attemptPolicy"]
+    return {}
+
+
+def _nonnegative_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(number, 0)
+
+
 def _write_hosted_paper_rewrite_request(
     promoted_dir: Path,
     *,
@@ -1150,6 +1211,10 @@ def _write_hosted_paper_rewrite_request(
     validation_failure: dict[str, Any] | None = None,
 ) -> Path:
     request_path = promoted_dir / PROMOTION_REFACTOR_REQUEST_FILENAME
+    attempt_policy = _rewrite_attempt_policy(
+        promoted_dir,
+        validation_failure=validation_failure,
+    )
     work_order = _hosted_paper_rewrite_work_order(
         dependency_scan,
         signals=signals,
@@ -1164,6 +1229,7 @@ def _write_hosted_paper_rewrite_request(
     }
     if validation_failure:
         validation_payload["lastGateFailure"] = validation_failure
+    validation_payload["attemptPolicy"] = attempt_policy
     cutover_end = _scan_cutover_end(dependency_scan)
     facts = dict(dependency_scan)
     if "sourceScan" not in facts:
@@ -1212,17 +1278,12 @@ def _write_hosted_paper_rewrite_request(
                 "workOrder": work_order,
                 "signals": signals,
                 "facts": facts,
-                "probeCapability": {
+                "attemptPolicy": attempt_policy,
+                "evidenceGuidance": {
                     "purpose": (
-                        "Use probes as agent-owned evidence tools when reading "
-                        "the source is not enough to prove continuation calendar, "
-                        "cutover, state, or parity semantics."
-                    ),
-                    "selectionPolicy": (
-                        "The agent chooses the suitable probe mode from strategy "
-                        "analysis. Do not treat the modes as a strategy taxonomy. "
-                        "Do not use full_path unless calendar_only/windowed_semantic "
-                        "cannot establish the required facts or already failed."
+                        "Use source reading and any small local probes as evidence "
+                        "for the continuation design. The evidence should answer "
+                        "strategy semantics; it is not a fixed mode taxonomy."
                     ),
                     "canonicalTimeline": (
                         "facts.validationOracle.canonicalDecisionTimeline, when "
@@ -1231,27 +1292,16 @@ def _write_hosted_paper_rewrite_request(
                         "anchoring and semantic evidence; never package it as "
                         "a live strategy dependency."
                     ),
-                    "modes": {
-                        "calendar_only": (
-                            "Inspect dates, row ordinals, lookback boundaries, "
-                            "and retrain/cutover calendars without running the "
-                            "expensive strategy path."
-                        ),
-                        "windowed_semantic": (
-                            "Run or instrument the original semantics over a "
-                            "bounded window while preserving canonical decision "
-                            "indexes and dates."
-                        ),
-                        "full_path": (
-                            "Run the complete original path only as a documented "
-                            "fallback when lighter probes cannot recover the "
-                            "state or timeline facts needed for a safe rewrite."
-                        ),
-                    },
+                    "fullReplayPolicy": (
+                        "Do not use full historical replay as the first rewrite "
+                        "design. It is only a fallback when attemptPolicy says "
+                        "fullReplayFallbackEligible=true."
+                    ),
                     "artifactPolicy": (
-                        "Probe scripts and probe outputs are temporary evidence. "
-                        "Do not list them in packagedFiles or initialStateFiles "
-                        "unless the file is genuine strategy-owned startup state."
+                        "Temporary evidence scripts and outputs are not live "
+                        "strategy inputs. Do not list them in packagedFiles or "
+                        "initialStateFiles unless the file is genuine strategy-owned "
+                        "startup state."
                     ),
                 },
                 "runtimeApiFacts": {
@@ -1379,22 +1429,17 @@ def _write_hosted_paper_rewrite_request(
                             },
                             "dailyStep": {
                                 "reason": (
-                                    "<how one future as_of advances without full replay "
-                                    "and what expensive work is avoided>"
+                                    "<how one future as_of runs, how state advances "
+                                    "if any, and what expensive work is avoided>"
                                 )
                             },
                         },
                         "evidence": {
-                            "probeMode": (
-                                "<not_needed | calendar_only | "
-                                "windowed_semantic | full_path>"
-                            ),
-                            "canonicalTimelineSource": (
-                                "<facts.validationOracle.canonicalDecisionTimeline "
-                                "or null>"
-                            ),
                             "observations": [
-                                "<facts learned from source reading or probes>"
+                                "<facts learned from source reading or local probes>"
+                            ],
+                            "agentOverrides": [
+                                "<optional explanations for static observations the agent found irrelevant>"
                             ],
                             "semanticChecks": [
                                 "<calendar/state/cutover/parity checks that support the design>"
@@ -1426,8 +1471,8 @@ def _write_hosted_paper_rewrite_request(
                         "repeat the latest sampled as_of and require idempotence",
                         "record elapsed time, state changes, and warm-start diagnostics",
                     ],
-                    "probeEvidence": [
-                        "agent chooses probe mode from source analysis, not from strategy-type classification",
+                    "semanticEvidence": [
+                        "agent chooses evidence from source analysis, not from strategy-type classification",
                         "canonical decision indexes come from selected-round trade-log row order when available",
                         "full replay fallback is available only after the fallback policy opens it",
                     ],
@@ -1798,6 +1843,7 @@ def _validate_agent_paper_signal_contract(
     *,
     require_paper_signal: bool,
     candidate: Any | None = None,
+    full_replay_fallback_allowed: bool = False,
 ) -> None:
     paper_signal = report.get("paperSignal")
     if not isinstance(paper_signal, dict):
@@ -1826,6 +1872,14 @@ def _validate_agent_paper_signal_contract(
     if incremental_ready is True:
         _validate_live_readiness_claim(report)
         _validate_paper_signal_continuation_contract(paper_signal)
+        if (
+            continuation_method == "full_replay_fallback"
+            and not full_replay_fallback_allowed
+        ):
+            raise PromotionNeedsAgentRefactor(
+                "paperSignal.continuation.method=full_replay_fallback is only "
+                "available after attemptPolicy.fullReplayFallbackEligible=true"
+            )
         _validate_paper_signal_design_contract(
             report,
             paper_signal,
@@ -2005,7 +2059,10 @@ def _validate_paper_signal_design_contract(
             "paperSignal.design.cutover.requiresStartupState=true must use "
             "cutover.mode=minimal_cutover_state or full_replay"
         )
-    if not required and mode != "none":
+    if not required and not (
+        mode == "none"
+        or (continuation_method == "full_replay_fallback" and mode == "full_replay")
+    ):
         raise PromotionNeedsAgentRefactor(
             "paperSignal.design.cutover.requiresStartupState=false must use "
             "cutover.mode=none"
@@ -2087,19 +2144,13 @@ def _validate_paper_signal_evidence_contract(
         raise PromotionNeedsAgentRefactor(
             "continuing hosted paper reports must declare paperSignal.evidence"
         )
-    probe_mode = _clean(evidence.get("probeMode") or evidence.get("mode"))
-    if probe_mode not in PROMOTION_PROBE_EVIDENCE_MODES:
-        raise PromotionNeedsAgentRefactor(
-            "paperSignal.evidence.probeMode must be one of "
-            "not_needed, calendar_only, windowed_semantic, or full_path"
-        )
     observations = evidence.get("observations")
     if not isinstance(observations, list) or not any(
         _clean(item) for item in observations
     ):
         raise PromotionNeedsAgentRefactor(
             "paperSignal.evidence.observations must include at least one "
-            "source/probe fact supporting the continuation design"
+            "source or local evidence fact supporting the continuation design"
         )
     if not isinstance(evidence.get("semanticChecks", []), list):
         raise PromotionNeedsAgentRefactor(
@@ -2110,13 +2161,6 @@ def _validate_paper_signal_evidence_contract(
             "paperSignal.evidence.whySufficient must explain why the evidence "
             "supports the chosen continuation method"
         )
-    if probe_mode == "full_path":
-        reason = _clean(evidence.get("whySufficient")).lower()
-        if not any(term in reason for term in ("fallback", "insufficient", "failed")):
-            raise PromotionNeedsAgentRefactor(
-                "paperSignal.evidence.probeMode=full_path must explain why "
-                "calendar_only/windowed_semantic probing was insufficient or failed"
-            )
     if continuation_method == "stateful_continuation":
         checks = " ".join(
             _clean(item).lower() for item in evidence.get("semanticChecks") or []
@@ -2592,6 +2636,34 @@ def _default_behavior_equivalence(
     }
 
 
+def _report_continuation_method(report: dict[str, Any] | None) -> str:
+    if not isinstance(report, dict):
+        return ""
+    paper_signal = report.get("paperSignal")
+    if not isinstance(paper_signal, dict):
+        return ""
+    continuation = _paper_signal_continuation_payload(paper_signal)
+    return _clean(continuation.get("method")) if isinstance(continuation, dict) else ""
+
+
+def _paper_smoke_max_call_elapsed(smoke: dict[str, Any]) -> float:
+    values: list[float] = []
+    for key in ("firstElapsedSeconds", "secondElapsedSeconds"):
+        value = _finite_float(smoke.get(key))
+        if value is not None:
+            values.append(value)
+    tail = smoke.get("tailConsistency")
+    comparisons = tail.get("comparisons") if isinstance(tail, dict) else None
+    if isinstance(comparisons, list):
+        for item in comparisons:
+            if not isinstance(item, dict):
+                continue
+            value = _finite_float(item.get("elapsedSeconds"))
+            if value is not None:
+                values.append(value)
+    return max(values, default=0.0)
+
+
 def _fast_paper_validation(
     *,
     mode: str,
@@ -2606,8 +2678,9 @@ def _fast_paper_validation(
     is_denylisted_source: Callable[[Path], bool],
 ) -> dict[str, Any]:
     full_compute = _paper_signal_uses_full_runtime_compute(source)
+    continuation_method = _report_continuation_method(report)
     design_facts = _paper_signal_design_facts(source)
-    if full_compute:
+    if full_compute and continuation_method != "full_replay_fallback":
         return {
             "status": "failed",
             "method": "static_fast_paper_signal_contract",
@@ -2626,7 +2699,7 @@ def _fast_paper_validation(
         }
     details: dict[str, Any] = {
         "paperSignal": "explicit_get_paper_signal",
-        "fullRuntimeCompute": False,
+        "fullRuntimeCompute": full_compute,
         **design_facts,
     }
     if mode == PROMOTION_MODE_AGENT_REFACTOR and report is not None:
@@ -2668,6 +2741,20 @@ def _fast_paper_validation(
             "reason": _clean(smoke.get("reason")) or "paper signal smoke failed",
             **details,
         }
+    if continuation_method == "full_replay_fallback":
+        max_call_elapsed = _paper_smoke_max_call_elapsed(smoke)
+        if max_call_elapsed > PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS:
+            return {
+                "status": "failed",
+                "method": "full_replay_fallback_performance",
+                "reason": (
+                    "full_replay_fallback exceeded the hosted paper fallback "
+                    f"limit of {PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS:g}s "
+                    "for a single paper signal call"
+                ),
+                "maxCallElapsedSeconds": round(max_call_elapsed, 6),
+                **details,
+            }
     return {
         "status": "passed",
         "method": "artifact_paper_signal_smoke",
