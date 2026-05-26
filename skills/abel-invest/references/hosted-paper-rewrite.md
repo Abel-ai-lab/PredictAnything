@@ -88,6 +88,29 @@ cutover state.
 If the strategy can only continue by replaying the full historical timeline,
 declare that limitation instead of claiming hosted fast-paper readiness.
 
+## Probe Evidence
+
+The request may include `facts.validationOracle.canonicalDecisionTimeline`.
+When present, it is the selected-round canonical decision index derived from
+`trade-log.csv` row order. Use it to align dates, row ordinals, retrain cadence,
+and tail parity. It is validation evidence only; do not package it as a live
+strategy dependency.
+
+Use probes only when source reading and request facts are not enough. Choose the
+probe mode from your own strategy analysis:
+
+- `calendar_only`: inspect dates, canonical decision indexes, lookback
+  boundaries, and retrain/cutover calendars without running the expensive
+  strategy path.
+- `windowed_semantic`: run or instrument the original semantics over a bounded
+  window while preserving canonical indexes and dates.
+- `full_path`: fallback only when lighter probes cannot establish the facts
+  needed for a safe rewrite, or when those probes have already failed.
+
+Probe scripts and probe outputs are temporary evidence. They should not be
+listed in `packagedFiles` or `initialStateFiles` unless the file is genuine
+strategy-owned startup state needed by hosted paper.
+
 ## Report
 
 Write `refactor-report.json` with this shape:
@@ -142,6 +165,14 @@ Write `refactor-report.json` with this shape:
       },
       "dailyStep": {
         "reason": "load data through as_of, compute one absolute target exposure, persist strategy state only if needed"
+      },
+      "probe": {
+        "mode": "not_needed",
+        "whySufficient": "source reading and canonical timeline facts are enough for this rewrite",
+        "canonicalTimelineSource": "facts.validationOracle.canonicalDecisionTimeline",
+        "observations": [
+          "decision index is date-based and no retrain state is required"
+        ]
       }
     },
     "liveReadiness": "how future hosted paper days continue"

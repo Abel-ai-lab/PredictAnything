@@ -102,6 +102,12 @@ def _paper_design(
         "dailyStep": {
             "reason": "test daily step declaration",
         },
+        "probe": {
+            "mode": "not_needed",
+            "whySufficient": "test source reading is sufficient",
+            "canonicalTimelineSource": None,
+            "observations": ["test observation"],
+        },
     }
 
 
@@ -2999,12 +3005,17 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     assert "compiled absolute target exposure" in request["runtimeApiFacts"][
         "paperSignalReturn"
     ]
+    assert request["probeCapability"]["selectionPolicy"].startswith("The agent chooses")
+    assert "windowed_semantic" in request["probeCapability"]["modes"]
     assert "promotion.py" in request["avoidBeforeFirstEdit"][0]
     assert request["reportContract"]["paperSignal"]["incrementalReady"] is not True
     assert "design" in request["reportContract"]["paperSignal"]
     cutover = request["reportContract"]["paperSignal"]["design"]["cutover"]
     assert "minimal_cutover_state" in cutover["mode"]
+    probe = request["reportContract"]["paperSignal"]["design"]["probe"]
+    assert "full_path" in probe["mode"]
     assert "gateContract" in request
+    assert "probeEvidence" in request["gateContract"]
     assert "acceptanceCriteria" not in request
     assert "agentQuestions" not in request
 
@@ -3022,6 +3033,8 @@ def test_trade_log_oracle_facts_withhold_expected_values(tmp_path: Path) -> None
     facts = promotion_helpers._trade_log_oracle_facts(trade_log)
 
     assert facts["tailSample"]
+    assert facts["canonicalDecisionTimeline"]["first"]["decisionIndex"] == 0
+    assert facts["canonicalDecisionTimeline"]["last"]["asOf"] == "2026-05-18"
     assert all("expectedNextPosition" not in item for item in facts["tailSample"])
     assert "withheld" in facts["diagnosticPolicy"]
 

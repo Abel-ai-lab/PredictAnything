@@ -74,6 +74,12 @@ PROMOTION_RECONSTRUCTION_MODES = {
     "minimal_cutover_state",
     "full_replay_required",
 }
+PROMOTION_PROBE_EVIDENCE_MODES = {
+    "not_needed",
+    "calendar_only",
+    "windowed_semantic",
+    "full_path",
+}
 STATE_SELF_CHECK_FILE_SUFFIXES = {
     ".joblib",
     ".npy",
@@ -672,13 +678,18 @@ def _trade_log_oracle_facts(trade_log_path: Path | None) -> dict[str, Any]:
     except OSError:
         return {}
     comparable: list[dict[str, Any]] = []
-    for row in rows:
+    for idx, row in enumerate(rows):
+        decision_time = _date_part(_clean(row.get("decision_time") or row.get("date")))
+        effective_time = _date_part(_clean(row.get("effective_time") or row.get("date")))
         as_of = _date_part(_clean(row.get("date") or row.get("decision_time")))
         expected = _finite_float(row.get("next_position") or row.get("nextPosition"))
         if as_of and expected is not None:
             comparable.append(
                 {
+                    "decisionIndex": idx,
                     "asOf": as_of,
+                    "decisionTime": decision_time or as_of,
+                    "effectiveTime": effective_time or as_of,
                     "expectedNextPosition": expected,
                     "source": trade_log_path.name,
                 }
@@ -697,6 +708,23 @@ def _trade_log_oracle_facts(trade_log_path: Path | None) -> dict[str, Any]:
         "firstComparableDate": comparable[0]["asOf"],
         "lastComparableDate": comparable[-1]["asOf"],
         "tailSample": _redacted_trade_log_oracle_sample(comparable),
+        "canonicalDecisionTimeline": {
+            "source": trade_log_path.name,
+            "indexOrigin": 0,
+            "rowOrder": (
+                "CSV row order after the header is the selected-round canonical "
+                "decision order"
+            ),
+            "rowCount": len(comparable),
+            "first": _redacted_timeline_row(comparable[0]),
+            "last": _redacted_timeline_row(comparable[-1]),
+            "tailSample": _redacted_trade_log_oracle_sample(comparable),
+            "usage": (
+                "Use decisionIndex/date mappings as canonical selected-round "
+                "timeline evidence for calendar anchoring and tail parity. This "
+                "timeline is validation evidence, not a live strategy asset."
+            ),
+        },
         "assetPolicy": (
             "selected-round validation oracle only; do not package this generated "
             "export trade-log.csv as a live strategy asset or startup state"
@@ -714,12 +742,19 @@ def _redacted_trade_log_oracle_sample(
     comparable: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     return [
-        {
-            "asOf": item["asOf"],
-            "source": item.get("source"),
-        }
+        _redacted_timeline_row(item)
         for item in _select_paper_tail_oracle_sample(comparable)
     ]
+
+
+def _redacted_timeline_row(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "decisionIndex": item.get("decisionIndex"),
+        "asOf": item["asOf"],
+        "decisionTime": item.get("decisionTime") or item["asOf"],
+        "effectiveTime": item.get("effectiveTime") or item["asOf"],
+        "source": item.get("source"),
+    }
 
 
 TEMPORAL_CONSTANT_NAME_PARTS = (
@@ -976,6 +1011,13 @@ def _hosted_paper_rewrite_work_order(
             "history, state, calendar, cutover, and dailyStep choices you made."
         ),
         (
+            "If timeline or state semantics are uncertain, choose the lightest "
+            "probe evidence that can answer your question: calendar_only, "
+            "windowed_semantic, or full_path. Full-path probing is a fallback "
+            "only when you can explain why lighter probes are insufficient or "
+            "failed."
+        ),
+        (
             "Rerun the same promote/export/visualize command after the promoted "
             "source and report are updated."
         ),
@@ -1081,6 +1123,48 @@ def _write_hosted_paper_rewrite_request(
                 "workOrder": work_order,
                 "signals": signals,
                 "facts": dependency_scan,
+                "probeCapability": {
+                    "purpose": (
+                        "Use probes as agent-owned evidence tools when reading "
+                        "the source is not enough to determine calendar, cutover, "
+                        "state, or parity semantics."
+                    ),
+                    "selectionPolicy": (
+                        "The agent chooses the suitable probe mode from strategy "
+                        "analysis. Do not treat the modes as a strategy taxonomy. "
+                        "Do not use full_path unless calendar_only/windowed_semantic "
+                        "cannot establish the required facts or already failed."
+                    ),
+                    "canonicalTimeline": (
+                        "facts.validationOracle.canonicalDecisionTimeline, when "
+                        "present, is the selected-round canonical decision index "
+                        "derived from trade-log.csv row order. Use it for ordinal "
+                        "anchoring and tail parity evidence; never package it as "
+                        "a live strategy dependency."
+                    ),
+                    "modes": {
+                        "calendar_only": (
+                            "Inspect dates, row ordinals, lookback boundaries, "
+                            "and retrain/cutover calendars without running the "
+                            "expensive strategy path."
+                        ),
+                        "windowed_semantic": (
+                            "Run or instrument the original semantics over a "
+                            "bounded window while preserving canonical decision "
+                            "indexes and dates."
+                        ),
+                        "full_path": (
+                            "Run the complete original path only as a documented "
+                            "fallback when lighter probes cannot recover the "
+                            "state or timeline facts needed for a safe rewrite."
+                        ),
+                    },
+                    "artifactPolicy": (
+                        "Probe scripts and probe outputs are temporary evidence. "
+                        "Do not list them in packagedFiles or initialStateFiles "
+                        "unless the file is genuine strategy-owned startup state."
+                    ),
+                },
                 "runtimeApiFacts": {
                     "paperSignalSignature": (
                         "def get_paper_signal(self, *, as_of=None) -> dict"
@@ -1197,6 +1281,23 @@ def _write_hosted_paper_rewrite_request(
                                     "and what expensive work is avoided>"
                                 )
                             },
+                            "probe": {
+                                "mode": (
+                                    "<not_needed | calendar_only | "
+                                    "windowed_semantic | full_path>"
+                                ),
+                                "whySufficient": (
+                                    "<why this evidence mode is enough for the "
+                                    "history/state/calendar/cutover design>"
+                                ),
+                                "canonicalTimelineSource": (
+                                    "<facts.validationOracle.canonicalDecisionTimeline "
+                                    "or null>"
+                                ),
+                                "observations": [
+                                    "<facts learned from code reading or probes>"
+                                ],
+                            },
                         },
                         "liveReadiness": (
                             "<future signal source, state transition, idempotence, "
@@ -1219,6 +1320,11 @@ def _write_hosted_paper_rewrite_request(
                         "compare get_paper_signal(as_of) to selected-round compiled trade-log next_position on a small tail sample",
                         "repeat the latest sampled as_of and require idempotence",
                         "record elapsed time, state changes, and warm-start diagnostics",
+                    ],
+                    "probeEvidence": [
+                        "agent chooses probe mode from source analysis, not from strategy-type classification",
+                        "canonical decision indexes come from selected-round trade-log row order when available",
+                        "full_path probe is fallback-only and must be justified in paperSignal.design.probe",
                     ],
                     "diagnosticsPolicy": (
                         "expected values in validation.lastGateFailure are diagnostics "
@@ -1714,6 +1820,31 @@ def _validate_paper_signal_design_contract(
             "paperSignal.design.dailyStep.reason must explain how one future as_of "
             "advances without full replay"
         )
+
+    probe = design.get("probe")
+    if not isinstance(probe, dict):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.probe must describe the evidence mode used "
+            "for the history/state/calendar/cutover design"
+        )
+    probe_mode = _clean(probe.get("mode"))
+    if probe_mode not in PROMOTION_PROBE_EVIDENCE_MODES:
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.probe.mode must be one of "
+            "not_needed, calendar_only, windowed_semantic, or full_path"
+        )
+    if not _clean(probe.get("whySufficient")):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.probe.whySufficient must explain why the "
+            "chosen evidence mode is enough"
+        )
+    if probe_mode == "full_path":
+        reason = _clean(probe.get("whySufficient")).lower()
+        if not any(term in reason for term in ("fallback", "insufficient", "failed")):
+            raise PromotionNeedsAgentRefactor(
+                "paperSignal.design.probe.mode=full_path must explain why "
+                "calendar_only/windowed_semantic probing was insufficient or failed"
+            )
 
 
 def _report_initial_state_entries(report: dict[str, Any]) -> list[Any]:
@@ -2592,13 +2723,14 @@ def _paper_tail_oracle_rows(trade_log_path: Path) -> list[dict[str, Any]]:
     except OSError:
         return []
     comparable: list[dict[str, Any]] = []
-    for row in rows:
+    for idx, row in enumerate(rows):
         as_of = _date_part(_clean(row.get("date") or row.get("decision_time")))
         expected = _finite_float(row.get("next_position") or row.get("nextPosition"))
         if not as_of or expected is None:
             continue
         comparable.append(
             {
+                "decisionIndex": idx,
                 "asOf": as_of,
                 "expectedNextPosition": expected,
                 "source": trade_log_path.name,
