@@ -37,7 +37,6 @@ from abel_invest.narrative_core.promotion import (
     PromotionResult,
     prepare_promotion,
 )
-from abel_invest.narrative_core.promotion_replay import verify_promotion_replay
 from abel_invest.narrative_core.runtime.edge_commands import resolve_default_python_bin
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
 from abel_invest.workspace_core.edge_runtime import build_workspace_runtime_env
@@ -528,8 +527,6 @@ def _export_strategy_artifact_candidate(
         candidate,
         destination=destination,
         selection=selection,
-        python_bin=python_bin,
-        runner=runner,
     )
     if isinstance(promotion_or_result, dict):
         return promotion_or_result
@@ -582,8 +579,6 @@ def _prepare_promotion_for_export(
     *,
     destination: Path,
     selection: StrategySelectionResult,
-    python_bin: str,
-    runner,
 ) -> PromotionResult | dict[str, Any]:
     try:
         return prepare_promotion(
@@ -592,14 +587,7 @@ def _prepare_promotion_for_export(
             strategy_entrypoint=STRATEGY_ARTIFACT_ENTRYPOINT,
             is_denylisted_source=_is_denylisted_strategy_source,
             sha256_file=_sha256_file,
-            verify_promotion=lambda **kwargs: verify_promotion_replay(
-                python_bin=python_bin,
-                runner=runner,
-                run_edge_metric_input_export=_run_edge_metric_input_export,
-                sha256_file=_sha256_file,
-                clean=_clean,
-                **kwargs,
-            ),
+            runtime_env=_runtime_env(candidate.branch),
         )
     except PromotionNeedsAgentRefactor as exc:
         request_path = _promotion_refactor_request_path(destination)

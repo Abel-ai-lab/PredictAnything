@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import ast
+import csv
+from contextlib import contextmanager
 from dataclasses import dataclass
+import hashlib
+import importlib.util
 import json
+import math
+import os
 from pathlib import Path
+import shutil
 import sys
+import tempfile
+import time
 from typing import Any, Callable
 
 from abel_edge.research.promotion_gate import build_promotion_gate_report
@@ -20,11 +29,51 @@ PROMOTION_GATE_FILENAME = "promotion-gate.json"
 PROMOTION_PATCH_FILENAME = "promotion.patch"
 PROMOTION_REFACTOR_REPORT_FILENAME = "refactor-report.json"
 PROMOTION_REFACTOR_REQUEST_FILENAME = "refactor-request.json"
-PROMOTION_DEPENDENCY_SCAN_FILENAME = "dependency-scan.json"
-PROMOTION_PACKAGING_PLAN_FILENAME = "packaging-plan.json"
 PROMOTION_AGENT_REPORT_SCHEMA = "abel-invest.agent-refactor-report/v1"
 PROMOTION_AGENT_REQUEST_SCHEMA = "abel-invest.agent-refactor-request/v1"
 PROMOTION_HOSTED_REWRITE_SCOPE = "hosted_paper_rewrite"
+PROMOTION_PAPER_SMOKE_WARN_SECONDS = 5.0
+PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS = 5.0
+PROMOTION_PAPER_TAIL_COMPARE_COUNT = 3
+PROMOTION_PAPER_TAIL_TOLERANCE = 1e-9
+PROMOTION_LIVE_READINESS_CONFLICT_PHRASES = (
+    "after the packaged log",
+    "can only replay",
+    "cannot produce future",
+    "can't produce future",
+    "edge output",
+    "finite historical",
+    "finite replay",
+    "historical replay",
+    "no future signal",
+    "not continuing",
+    "not hostable",
+    "not safely hostable",
+    "promotion output",
+    "research evidence",
+)
+PROMOTION_INITIAL_STATE_ORACLE_PHRASES = (
+    "expectednextposition",
+    "selected round",
+    "selected-round",
+    "selected_round",
+    "tail_overrides",
+    "tradelogoracle",
+    "validationoracle",
+    "validation oracle",
+)
+PROMOTION_LEGACY_PROMOTED_FILES = (
+    "dependency-scan.json",
+    "packaging-plan.json",
+)
+PROMOTION_LEGACY_DESTINATION_DIRS = (
+    "promotion-replay",
+)
+PROMOTION_RECONSTRUCTION_MODES = {
+    "none",
+    "minimal_cutover_state",
+    "full_replay_required",
+}
 STATE_SELF_CHECK_FILE_SUFFIXES = {
     ".joblib",
     ".npy",
@@ -160,10 +209,11 @@ def prepare_promotion(
     strategy_entrypoint: str,
     is_denylisted_source: Callable[[Path], bool],
     sha256_file: Callable[[Path], str],
-    verify_promotion: Callable[..., dict[str, Any]] | None = None,
+    runtime_env: dict[str, str] | None = None,
 ) -> PromotionResult:
     promoted_dir = destination / "promoted"
     promoted_dir.mkdir(parents=True, exist_ok=True)
+    _cleanup_legacy_promotion_outputs(destination, promoted_dir)
     promoted_source = promoted_dir / "engine.py"
     existing_refactor_report = promoted_dir / PROMOTION_REFACTOR_REPORT_FILENAME
     original_text = candidate.strategy_source_path.read_text(encoding="utf-8")
@@ -172,20 +222,18 @@ def prepare_promotion(
         candidate.branch,
         strategy_source_path=candidate.strategy_source_path,
         is_denylisted_source=is_denylisted_source,
+        candidate=candidate,
+        destination=destination,
     )
-    dependency_scan_path = None
-    packaging_plan_path = None
 
     hosted_rewrite_signals = _hosted_paper_rewrite_signals(dependency_scan)
     if hosted_rewrite_signals and not agent_refactor_ready:
         promoted_source.write_text(original_text, encoding="utf-8")
-        dependency_scan_path = _write_dependency_scan(promoted_dir, dependency_scan)
         request_path = _write_hosted_paper_rewrite_request(
             promoted_dir,
             branch=candidate.branch,
             source_path=promoted_source,
             dependency_scan=dependency_scan,
-            scan_path=dependency_scan_path,
             signals=hosted_rewrite_signals,
         )
         raise PromotionNeedsAgentRefactor(
@@ -222,6 +270,12 @@ def prepare_promotion(
                 is_denylisted_source=is_denylisted_source,
             )
         )
+        _validate_packaged_research_evidence_sources(
+            packaged_files,
+            branch=candidate.branch,
+            destination=destination,
+            report=refactor_report,
+        )
         artifact_refactor_report_path = _write_artifact_refactor_report(
             promoted_dir,
             refactor_report,
@@ -230,6 +284,7 @@ def prepare_promotion(
             refactor_report,
             promoted_text,
             require_paper_signal=True,
+            candidate=candidate,
         )
         mode = PROMOTION_MODE_AGENT_REFACTOR
         strategy_source_path = promoted_source
@@ -237,19 +292,6 @@ def prepare_promotion(
 
     replacements = refactor_replacements
     if mode == PROMOTION_MODE_AGENT_REFACTOR:
-        dependency_scan_path = _write_dependency_scan(
-            promoted_dir,
-            _collect_hosted_paper_dependency_scan(
-                candidate.branch,
-                strategy_source_path=strategy_source_path,
-                is_denylisted_source=is_denylisted_source,
-            ),
-        )
-        packaging_plan_path = _write_packaging_plan(
-            promoted_dir,
-            packaged_files=packaged_files,
-            refactor_report=refactor_report,
-        )
         patch_path = promoted_dir / PROMOTION_PATCH_FILENAME
         patch_path.write_text(
             _simple_patch_summary(
@@ -279,23 +321,18 @@ def prepare_promotion(
         mode=mode,
         replacements=replacements,
     )
-    paper_dry_run = {
-        "status": "passed",
-        "method": "source_round_edge_result",
-    }
-    if verify_promotion is not None:
-        verification = verify_promotion(
-            candidate=candidate,
-            promotion_mode=mode,
-            promoted_source_path=strategy_source_path,
-            replacements=replacements,
-            packaged_files=packaged_files,
-            destination=destination,
-        )
-        if isinstance(verification.get("behavior_equivalence"), dict):
-            behavior_equivalence = verification["behavior_equivalence"]
-        if isinstance(verification.get("paper_dry_run"), dict):
-            paper_dry_run = verification["paper_dry_run"]
+    paper_dry_run = _fast_paper_validation(
+        mode=mode,
+        source=promoted_text,
+        report=refactor_report,
+        candidate=candidate,
+        strategy_source_path=strategy_source_path,
+        packaged_files=packaged_files,
+        destination=destination,
+        strategy_entrypoint=strategy_entrypoint,
+        runtime_env=runtime_env,
+        is_denylisted_source=is_denylisted_source,
+    )
     gate_path = destination / PROMOTION_GATE_FILENAME
     gate_report = build_promotion_gate_report(
         promotion_mode=mode,
@@ -312,8 +349,43 @@ def prepare_promotion(
         encoding="utf-8",
     )
     if gate_report.get("status") != "passed":
+        request_source_path = strategy_source_path
+        if request_source_path.resolve() == candidate.strategy_source_path.resolve():
+            promoted_source.write_text(original_text, encoding="utf-8")
+            request_source_path = promoted_source
+        failure_scan = _collect_hosted_paper_dependency_scan(
+            candidate.branch,
+            strategy_source_path=request_source_path,
+            is_denylisted_source=is_denylisted_source,
+            candidate=candidate,
+            destination=destination,
+        )
+        failure_details = _promotion_gate_failure_request_payload(gate_report)
+        failure_signals = _hosted_paper_rewrite_signals(failure_scan)
+        failure_signals.append(
+            {
+                "kind": "promotion_gate_failed",
+                "value": ",".join(
+                    item.get("name", "")
+                    for item in failure_details.get("failedGates", [])
+                    if item.get("name")
+                )
+                or _clean(gate_report.get("status"))
+                or "unknown",
+                "reason": "latest promotion gate did not pass",
+            }
+        )
+        request_path = _write_hosted_paper_rewrite_request(
+            promoted_dir,
+            branch=candidate.branch,
+            source_path=request_source_path,
+            dependency_scan=failure_scan,
+            signals=failure_signals,
+            validation_failure=failure_details,
+        )
         raise PromotionNeedsAgentRefactor(
-            f"promotion gate did not pass: {gate_report.get('status')}"
+            "promotion gate did not pass: "
+            f"{gate_report.get('status')}; request updated at {request_path}"
         )
 
     extra_source_map = {strategy_entrypoint: strategy_source_path}
@@ -322,10 +394,6 @@ def prepare_promotion(
     extra_source_map[f"edge/{PROMOTION_GATE_FILENAME}"] = gate_path
     if patch_path is not None:
         extra_source_map[f"edge/{PROMOTION_PATCH_FILENAME}"] = patch_path
-    if dependency_scan_path is not None:
-        extra_source_map[f"edge/{PROMOTION_DEPENDENCY_SCAN_FILENAME}"] = dependency_scan_path
-    if packaging_plan_path is not None:
-        extra_source_map[f"edge/{PROMOTION_PACKAGING_PLAN_FILENAME}"] = packaging_plan_path
     if mode == PROMOTION_MODE_AGENT_REFACTOR:
         assert refactor_report_path is not None
         extra_source_map[f"edge/{PROMOTION_REFACTOR_REPORT_FILENAME}"] = refactor_report_path
@@ -357,14 +425,19 @@ def prepare_promotion(
             if refactor_report_path is not None
             else "",
             "gatePath": str(gate_path),
-            "dependencyScanPath": str(dependency_scan_path)
-            if dependency_scan_path is not None
-            else "",
-            "packagingPlanPath": str(packaging_plan_path)
-            if packaging_plan_path is not None
-            else "",
         },
     )
+
+
+def _cleanup_legacy_promotion_outputs(destination: Path, promoted_dir: Path) -> None:
+    for name in PROMOTION_LEGACY_PROMOTED_FILES:
+        path = promoted_dir / name
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+    for name in PROMOTION_LEGACY_DESTINATION_DIRS:
+        path = destination / name
+        if path.is_dir():
+            shutil.rmtree(path)
 
 
 def _collect_hosted_paper_dependency_scan(
@@ -372,6 +445,8 @@ def _collect_hosted_paper_dependency_scan(
     *,
     strategy_source_path: Path,
     is_denylisted_source: Callable[[Path], bool],
+    candidate: Any | None = None,
+    destination: Path | None = None,
 ) -> dict[str, Any]:
     source = strategy_source_path.read_text(encoding="utf-8")
     try:
@@ -407,16 +482,24 @@ def _collect_hosted_paper_dependency_scan(
             }
         )
     return {
-        "schema": "abel-invest.hosted-paper-dependency-scan/v1",
+        "schema": "abel-invest.hosted-paper-facts/v2",
         "sourcePath": _display_source_path(branch, strategy_source_path),
         "paperSignal": {
             "implemented": _source_overrides_get_paper_signal(source),
+            "fullRuntimeCompute": _paper_signal_uses_full_runtime_compute(source),
+            **_paper_signal_design_facts(source),
         },
         "absolutePathLiterals": absolute_literals,
         "fileAccesses": file_accesses,
         "imports": imports,
         "branchFiles": branch_files[:200],
+        "researchEvidenceFiles": _research_evidence_file_facts(branch),
         "stateDependencies": state_dependency_signals,
+        "backtestWindow": _candidate_backtest_window_facts(candidate),
+        "validationOracle": _trade_log_oracle_facts(
+            destination / "trade-log.csv" if destination is not None else None
+        ),
+        "temporalDependencies": _source_temporal_dependency_facts(source, tree),
     }
 
 
@@ -431,6 +514,17 @@ def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
             kind="missing_paper_signal",
             value="get_paper_signal",
             reason="promoted strategy must implement hosted paper fast path",
+        )
+    elif paper_signal.get("fullRuntimeCompute") is True:
+        _append_hosted_rewrite_signal(
+            signals,
+            seen,
+            kind="paper_signal_full_recompute",
+            value="compute_runtime_output",
+            reason=(
+                "get_paper_signal must not wrap full historical strategy compute; "
+                "rewrite it as a live-paper fast path"
+            ),
         )
     for item in scan.get("absolutePathLiterals") or []:
         if not isinstance(item, dict):
@@ -498,42 +592,316 @@ def _append_hosted_rewrite_signal(
     signals.append({"kind": kind, "value": value, "reason": reason})
 
 
-def _write_dependency_scan(promoted_dir: Path, scan: dict[str, Any]) -> Path:
-    path = promoted_dir / PROMOTION_DEPENDENCY_SCAN_FILENAME
-    path.write_text(
-        json.dumps(scan, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    return path
-
-
-def _write_packaging_plan(
-    promoted_dir: Path,
-    *,
-    packaged_files: tuple[PromotionPackagedFile, ...],
-    refactor_report: dict[str, Any] | None,
-) -> Path:
-    path = promoted_dir / PROMOTION_PACKAGING_PLAN_FILENAME
-    payload = {
-        "schema": "abel-invest.promotion-packaging-plan/v1",
-        "source": {
-            "refactorReportSummary": _clean((refactor_report or {}).get("summary")),
-        },
-        "files": [
+def _research_evidence_file_facts(branch: Path) -> list[dict[str, Any]]:
+    facts: list[dict[str, Any]] = []
+    evidence_roots = {"outputs", "promotions", "strategy_artifacts"}
+    for path in sorted(item for item in branch.rglob("*") if item.is_file()):
+        try:
+            relative = path.relative_to(branch)
+        except ValueError:
+            continue
+        if not relative.parts or relative.parts[0] not in evidence_roots:
+            continue
+        if relative.suffix.lower() not in PROMOTION_BRANCH_FILE_SUFFIXES:
+            continue
+        facts.append(
             {
-                "artifactPath": item.artifact_path,
-                "sourceRef": item.source_path.name,
-                "purpose": item.purpose,
-                "role": item.role,
+                "path": relative.as_posix(),
+                "suffix": relative.suffix.lower(),
+                "bytes": path.stat().st_size,
+                "origin": "research_or_promotion_evidence",
             }
-            for item in packaged_files
-        ],
+        )
+        if len(facts) >= 100:
+            break
+    return facts
+
+
+def _candidate_backtest_window_facts(candidate: Any | None) -> dict[str, Any]:
+    if candidate is None:
+        return {}
+    edge_result = getattr(candidate, "edge_result", None)
+    if not isinstance(edge_result, dict):
+        return {}
+    payload: dict[str, Any] = {}
+    effective = edge_result.get("effective_window")
+    if isinstance(effective, dict):
+        payload["effectiveWindow"] = {
+            key: _clean(effective.get(key)) for key in ("start", "end") if effective.get(key)
+        }
+    requested = edge_result.get("requested_window")
+    if isinstance(requested, dict):
+        payload["requestedWindow"] = {
+            key: _clean(requested.get(key)) for key in ("start", "end") if requested.get(key)
+        }
+    for source_key, target_key in (
+        ("total_days", "totalDays"),
+        ("active_days", "activeDays"),
+    ):
+        if source_key in edge_result:
+            payload[target_key] = edge_result.get(source_key)
+    branch_id = _clean(getattr(candidate, "branch_id", ""))
+    round_id = _clean(getattr(candidate, "round_id", ""))
+    if branch_id:
+        payload["branchId"] = branch_id
+    if round_id:
+        payload["roundId"] = round_id
+    return _json_safe(payload)
+
+
+def _candidate_cutover_end(candidate: Any | None) -> str:
+    return _scan_cutover_end({"backtestWindow": _candidate_backtest_window_facts(candidate)})
+
+
+def _scan_cutover_end(scan: dict[str, Any]) -> str:
+    backtest_window = scan.get("backtestWindow")
+    if not isinstance(backtest_window, dict):
+        return ""
+    effective = backtest_window.get("effectiveWindow")
+    if not isinstance(effective, dict):
+        return ""
+    return _date_part(_clean(effective.get("end")))
+
+
+def _trade_log_oracle_facts(trade_log_path: Path | None) -> dict[str, Any]:
+    if trade_log_path is None or not trade_log_path.is_file():
+        return {}
+    try:
+        with trade_log_path.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+    except OSError:
+        return {}
+    comparable: list[dict[str, Any]] = []
+    for row in rows:
+        as_of = _date_part(_clean(row.get("date") or row.get("decision_time")))
+        expected = _finite_float(row.get("next_position") or row.get("nextPosition"))
+        if as_of and expected is not None:
+            comparable.append(
+                {
+                    "asOf": as_of,
+                    "expectedNextPosition": expected,
+                    "source": trade_log_path.name,
+                }
+            )
+    if not comparable:
+        return {
+            "rowCount": len(rows),
+            "assetPolicy": (
+                "selected-round validation oracle only; do not package this "
+                "generated export trade-log.csv as a live strategy asset or startup state"
+            ),
+        }
+    return {
+        "rowCount": len(rows),
+        "comparableRowCount": len(comparable),
+        "firstComparableDate": comparable[0]["asOf"],
+        "lastComparableDate": comparable[-1]["asOf"],
+        "tailSample": _redacted_trade_log_oracle_sample(comparable),
+        "assetPolicy": (
+            "selected-round validation oracle only; do not package this generated "
+            "export trade-log.csv as a live strategy asset or startup state"
+        ),
+        "diagnosticPolicy": (
+            "tail sample dates are shown for debugging; expected next_position "
+            "answers are withheld from the initial request and may appear only "
+            "inside gate-failure comparisons. Do not encode oracle answers in "
+            "strategy assets or initial state."
+        ),
     }
-    path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    return path
+
+
+def _redacted_trade_log_oracle_sample(
+    comparable: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "asOf": item["asOf"],
+            "source": item.get("source"),
+        }
+        for item in _select_paper_tail_oracle_sample(comparable)
+    ]
+
+
+TEMPORAL_CONSTANT_NAME_PARTS = (
+    "bars",
+    "calendar",
+    "horizon",
+    "lag",
+    "lookback",
+    "min",
+    "period",
+    "refit",
+    "retrain",
+    "row",
+    "shift",
+    "train",
+    "window",
+)
+TEMPORAL_KEYWORD_NAMES = {
+    "alpha",
+    "halflife",
+    "lag",
+    "limit",
+    "lookback",
+    "min_periods",
+    "min_rows",
+    "periods",
+    "refit_every",
+    "span",
+    "train_window",
+    "window",
+    "windows",
+}
+TEMPORAL_CALL_SUFFIXES = (
+    ".bfill",
+    ".ewm",
+    ".ffill",
+    ".pct_change",
+    ".rolling",
+    ".shift",
+)
+
+
+def _source_temporal_dependency_facts(source: str, tree: ast.AST | None) -> dict[str, Any]:
+    if tree is None:
+        return {
+            "lookbackHints": [],
+            "calendarHints": [],
+            "parameterHints": [],
+            "constantHints": [],
+        }
+    lookback_hints: list[dict[str, Any]] = []
+    calendar_hints: list[dict[str, Any]] = []
+    parameter_hints: list[dict[str, Any]] = []
+    constant_hints: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int]] = set()
+
+    def append_unique(collection: list[dict[str, Any]], item: dict[str, Any]) -> None:
+        key = (_clean(item.get("kind")), _clean(item.get("expression")), int(item.get("line") or 0))
+        if key in seen:
+            return
+        seen.add(key)
+        collection.append(item)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            value = _literal_or_tuple_display(node.value)
+            if value is not None:
+                for target in node.targets:
+                    if not isinstance(target, ast.Name):
+                        continue
+                    lowered_name = target.id.lower()
+                    if not any(part in lowered_name for part in TEMPORAL_CONSTANT_NAME_PARTS):
+                        continue
+                    append_unique(
+                        constant_hints,
+                        {
+                            "name": target.id,
+                            "value": value,
+                            "line": getattr(node, "lineno", 0),
+                            "kind": "constant",
+                            "expression": target.id,
+                        },
+                    )
+        if isinstance(node, ast.Call):
+            call_name = _call_name(node.func)
+            lowered_call = call_name.lower()
+            if lowered_call in {"range"} or lowered_call.endswith(".range"):
+                append_unique(
+                    calendar_hints,
+                    {
+                        "kind": "rangeLoop",
+                        "expression": _source_segment(source, node),
+                        "line": getattr(node, "lineno", 0),
+                    },
+                )
+            if lowered_call in {"rolling", "pct_change", "shift", "ffill", "bfill", "ewm"} or lowered_call.endswith(
+                TEMPORAL_CALL_SUFFIXES
+            ):
+                append_unique(
+                    lookback_hints,
+                    {
+                        "kind": lowered_call.rsplit(".", 1)[-1],
+                        "expression": _source_segment(source, node),
+                        "line": getattr(node, "lineno", 0),
+                    },
+                )
+            for keyword in node.keywords:
+                if keyword.arg not in TEMPORAL_KEYWORD_NAMES:
+                    continue
+                value = _literal_or_tuple_display(keyword.value) or _source_segment(
+                    source, keyword.value
+                )
+                append_unique(
+                    parameter_hints,
+                    {
+                        "kind": "parameter",
+                        "name": keyword.arg,
+                        "value": value,
+                        "expression": f"{keyword.arg}={value}",
+                        "line": getattr(keyword, "lineno", getattr(node, "lineno", 0)),
+                    },
+                )
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
+            expression = _source_segment(source, node)
+            if expression:
+                append_unique(
+                    calendar_hints,
+                    {
+                        "kind": "moduloOrdinal",
+                        "expression": expression,
+                        "line": getattr(node, "lineno", 0),
+                    },
+                )
+        if isinstance(node, ast.Attribute) and node.attr == "iloc":
+            append_unique(
+                calendar_hints,
+                {
+                    "kind": "positionalIndexing",
+                    "expression": _source_segment(source, node),
+                    "line": getattr(node, "lineno", 0),
+                },
+            )
+
+    return {
+        "lookbackHints": lookback_hints[:40],
+        "calendarHints": calendar_hints[:40],
+        "parameterHints": parameter_hints[:40],
+        "constantHints": constant_hints[:40],
+        "interpretation": (
+            "Facts only. The agent decides the temporal dependency contract; "
+            "calendar hints such as range/modulo/iloc often mean row-index "
+            "chronology must be anchored to the selected backtest window."
+        ),
+    }
+
+
+def _literal_or_tuple_display(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, (str, int, float, bool)):
+        return repr(node.value) if isinstance(node.value, str) else str(node.value)
+    if isinstance(node, (ast.Tuple, ast.List)):
+        values: list[str] = []
+        for item in node.elts:
+            item_value = _literal_or_tuple_display(item)
+            if item_value is None:
+                return None
+            values.append(item_value)
+        opener, closer = ("(", ")") if isinstance(node, ast.Tuple) else ("[", "]")
+        return f"{opener}{', '.join(values)}{closer}"
+    return None
+
+
+def _source_segment(source: str, node: ast.AST) -> str:
+    try:
+        segment = ast.get_source_segment(source, node)
+    except Exception:
+        segment = None
+    if segment:
+        return " ".join(segment.strip().split())
+    try:
+        return ast.unparse(node)
+    except Exception:
+        return ""
 
 
 def _write_artifact_refactor_report(
@@ -575,39 +943,191 @@ def _sanitized_packaged_file_entry(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _hosted_paper_rewrite_work_order(
+    dependency_scan: dict[str, Any],
+    *,
+    signals: list[dict[str, str]],
+    validation_failure: dict[str, Any] | None,
+) -> list[str]:
+    signal_kinds = {
+        _clean(signal.get("kind"))
+        for signal in signals
+        if isinstance(signal, dict) and _clean(signal.get("kind"))
+    }
+    order = [
+        "Edit only sourcePath and leave the original research branch source unchanged.",
+        (
+            "Use this request and references/hosted-paper-rewrite.md as the task "
+            "model. Treat facts as evidence for your own strategy understanding, "
+            "not as a strategy-type classification."
+        ),
+        (
+            "Implement BranchEngine.get_paper_signal(as_of=...) as one hosted "
+            "daily paper step that preserves the research decision semantics and "
+            "returns compiled absolute target next_position for as_of."
+        ),
+        (
+            "Resolve hosted paths with "
+            "from abel_edge.runtime_paths import context_runtime_paths; "
+            "paths = context_runtime_paths(self.context)."
+        ),
+        (
+            "Write refactor-report.json with paperSignal.design explaining the "
+            "history, state, calendar, cutover, and dailyStep choices you made."
+        ),
+        (
+            "Rerun the same promote/export/visualize command after the promoted "
+            "source and report are updated."
+        ),
+    ]
+    if "paper_signal_full_recompute" in signal_kinds:
+        order.insert(
+            2,
+            (
+                "Replace the current paper signal wrapper around "
+                "compute_runtime_output with a live-paper step; full replay is "
+                "not the hosted paper contract."
+            ),
+        )
+    if validation_failure:
+        order.append(
+            "Use validation.lastGateFailure as diagnostics for the next edit; do "
+            "not copy oracle answers into strategy assets or startup state."
+        )
+        if _validation_failure_has_tail_consistency(validation_failure):
+            order.append(
+                "Tail consistency diagnostics compare selected-round compiled "
+                "next_position with get_paper_signal(as_of); a mismatch means the "
+                "paper step or declared strategy state does not yet preserve the "
+                "research decision semantics."
+            )
+    if "developer_local_absolute_path" in signal_kinds or "developer_local_file_access" in signal_kinds:
+        order.append(
+            "Replace developer-local paths with packaged original dependencies or "
+            "runtime/state paths."
+        )
+    if "nonstandard_import" in signal_kinds:
+        order.append(
+            "Confirm non-standard imports are available in the hosted runtime; do not "
+            "install packages from inside strategy code."
+        )
+    return order
+
+
+def _validation_failure_has_tail_consistency(validation_failure: dict[str, Any]) -> bool:
+    for gate in validation_failure.get("failedGates") or []:
+        if not isinstance(gate, dict):
+            continue
+        smoke = gate.get("smoke")
+        if not isinstance(smoke, dict):
+            continue
+        tail = smoke.get("tailConsistency")
+        if isinstance(tail, dict) and tail.get("status") == "failed":
+            return True
+    return False
+
+
 def _write_hosted_paper_rewrite_request(
     promoted_dir: Path,
     *,
     branch: Path,
     source_path: Path,
     dependency_scan: dict[str, Any],
-    scan_path: Path,
     signals: list[dict[str, str]],
+    validation_failure: dict[str, Any] | None = None,
 ) -> Path:
     request_path = promoted_dir / PROMOTION_REFACTOR_REQUEST_FILENAME
+    work_order = _hosted_paper_rewrite_work_order(
+        dependency_scan,
+        signals=signals,
+        validation_failure=validation_failure,
+    )
+    validation_payload: dict[str, Any] = {
+        "smoke": (
+            "Rerun the same promote/export command after writing "
+            "refactor-report.json. Promotion will run an artifact-shaped "
+            "get_paper_signal smoke automatically before export."
+        )
+    }
+    if validation_failure:
+        validation_payload["lastGateFailure"] = validation_failure
+    cutover_end = _scan_cutover_end(dependency_scan)
     request_path.write_text(
         json.dumps(
             {
                 "schema": PROMOTION_AGENT_REQUEST_SCHEMA,
                 "kind": "hosted_paper_rewrite",
-                "sourcePath": str(source_path),
                 "scope": PROMOTION_HOSTED_REWRITE_SCOPE,
-                "dependencyScanPath": str(scan_path),
-                "signals": signals,
-                "facts": dependency_scan,
-                "runtimeContract": {
-                    "baseAssets": "read immutable files through ctx.paths.base_strategy",
-                    "runtimeConfig": "read immutable runtime config through ctx.paths.runtime",
-                    "strategyState": (
-                        "read/write mutable strategy state under "
-                        "ctx.state_dir / 'strategy'"
+                "sourcePath": str(source_path),
+                "branchPath": str(branch),
+                "mission": {
+                    "preserve": (
+                        "Preserve the selected research strategy's decision semantics."
                     ),
-                    "paperCursor": (
-                        "use runtime paper cursor helpers or paper-log.csv semantics; "
-                        "do not use paper-log.csv as private strategy state"
+                    "convert": (
+                        "Convert the promoted copy into a hosted daily paper step "
+                        "that can run for one as_of without full historical replay."
+                    ),
+                    "prove": (
+                        "Use refactor-report.json and the promotion gates to prove "
+                        "path safety, package inputs, parity on sampled selected-round "
+                        "dates, idempotence, and live-paper readiness."
+                    ),
+                    "agentRole": (
+                        "The agent decides the strategy-specific rewrite design from "
+                        "the facts; the request does not classify the strategy type."
                     ),
                 },
-                "requiredReportTemplate": {
+                "workOrder": work_order,
+                "signals": signals,
+                "facts": dependency_scan,
+                "runtimeApiFacts": {
+                    "paperSignalSignature": (
+                        "def get_paper_signal(self, *, as_of=None) -> dict"
+                    ),
+                    "pathHelperImport": (
+                        "from abel_edge.runtime_paths import context_runtime_paths"
+                    ),
+                    "pathHelperUsage": "paths = context_runtime_paths(self.context)",
+                    "baseAssetRoot": "paths.base_strategy",
+                    "runtimeRoot": "paths.runtime",
+                    "strategyStateRoot": "paths.state / 'strategy'",
+                    "paperSignalReturn": (
+                        "return a dict containing a finite numeric next_position; "
+                        "next_position is the compiled absolute target exposure for "
+                        "as_of, matching selected-round trade-log next_position; it "
+                        "is not an order delta or '0 means unchanged' event"
+                    ),
+                    "sameAsOfRule": (
+                        "a repeated call for the same as_of must return the same "
+                        "signal and must not advance strategy state twice"
+                    ),
+                    "cutoverMeaning": (
+                        "startup state, when needed, is strategy-owned cutover state "
+                        "valid through the selected round end and ready for the next "
+                        "hosted paper day"
+                    ),
+                    "selectedRoundCutoverEnd": cutover_end,
+                    "startupStateOutput": (
+                        "if paperSignal.design.cutover.requiresStartupState=true, "
+                        "create the state files during the rewrite and declare them "
+                        "in paths.initialStateFiles"
+                    ),
+                    "researchAuthority": (
+                        "compute_decisions(self, ctx) remains the backtest authority; "
+                        "ctx.paths and ctx.state_dir are valid there"
+                    ),
+                },
+                "avoidBeforeFirstEdit": [
+                    "Do not read Abel-skills promotion.py or strategy_artifacts.py to infer the task.",
+                    "Do not read Abel-edge promotion_gate.py to infer the gate.",
+                    "Do not create generated Markdown notes.",
+                    "Do not launch a separate agent process.",
+                    "Do not use selected-round trade-log.csv as a live strategy asset.",
+                    "Do not use other sessions' promoted artifacts as rewrite templates.",
+                ],
+                "validation": validation_payload,
+                "reportContract": {
                     "schema": PROMOTION_AGENT_REPORT_SCHEMA,
                     "kind": PROMOTION_HOSTED_REWRITE_SCOPE,
                     "summary": "<brief hosted paper rewrite summary>",
@@ -630,25 +1150,81 @@ def _write_hosted_paper_rewrite_request(
                     },
                     "paperSignal": {
                         "implemented": True,
-                        "incrementalReady": True,
-                        "notes": "uses runtime cursor plus strategy-owned state",
+                        "incrementalReady": (
+                            "<true only if the promoted source can continue future "
+                            "daily paper signals; otherwise false>"
+                        ),
+                        "design": {
+                            "history": {
+                                "minBars": "<integer minimum bars needed, or null if state-only>",
+                                "feeds": ["<symbols or feeds used by the paper signal>"],
+                                "reason": "<lookback, lag, rolling, or state-history explanation>",
+                            },
+                            "state": {
+                                "usesPersistentState": "<true if get_paper_signal reads/writes strategy state>",
+                                "stateFiles": ["strategy/<state-file>"],
+                                "reason": "<what survives across paper runs>",
+                            },
+                            "calendar": {
+                                "usesAbsoluteDecisionOrdinal": (
+                                    "<true if row indexes/retrain cadence must be anchored "
+                                    "to the research window>"
+                                ),
+                                "origin": "<selected backtest start date if used, else null>",
+                                "reason": "<why ordinal anchoring is or is not needed>",
+                            },
+                            "cutover": {
+                                "requiresStartupState": (
+                                    "<true if startup state must be built before daily paper>"
+                                ),
+                                "mode": (
+                                    "<none | minimal_cutover_state | "
+                                    "full_replay_required>"
+                                ),
+                                "dataHistoryStart": "<date used to rebuild current state, or null>",
+                                "stateEnd": (
+                                    "<selected round cutover end date the current "
+                                    "state is valid through, or null>"
+                                ),
+                                "reason": (
+                                    "<why this is the minimal cutover state needed, "
+                                    "or why startup state is unnecessary>"
+                                ),
+                            },
+                            "dailyStep": {
+                                "reason": (
+                                    "<how one future as_of advances without full replay "
+                                    "and what expensive work is avoided>"
+                                )
+                            },
+                        },
+                        "liveReadiness": (
+                            "<future signal source, state transition, idempotence, "
+                            "and known limits>"
+                        ),
                     },
                     "limitations": [],
                     "replacements": [],
                 },
-                "instructions": (
-                    "Refactor only the promoted copy. Remove developer-local paths, "
-                    "package required external read-only files through paths.packagedFiles, "
-                    "package required mutable startup state through paths.initialStateFiles, "
-                    "read immutable assets through ctx.paths.base_strategy, write mutable "
-                    "strategy state only under ctx.state_dir / 'strategy', and implement "
-                    "get_paper_signal(as_of=...) when the strategy can produce hosted "
-                    "paper signals. Then write refactor-report.json beside this request "
-                    "and rerun the same publish or promote command. If the candidate "
-                    "cannot safely produce continuing paper signals, report that as a "
-                    "limitation instead of forcing promotion."
-                ),
-                "branchPath": str(branch),
+                "gateContract": {
+                    "static": [
+                        "no developer-local absolute paths in promoted source",
+                        "package entries are valid and not denylisted",
+                        "generated research/promotion evidence is not packaged as live strategy input",
+                        "continuing-ready reports declare paperSignal.design",
+                        "startup state declarations include paths.initialStateFiles",
+                    ],
+                    "paperSmoke": [
+                        "stage strategy/runtime/state like the artifact runner",
+                        "compare get_paper_signal(as_of) to selected-round compiled trade-log next_position on a small tail sample",
+                        "repeat the latest sampled as_of and require idempotence",
+                        "record elapsed time, state changes, and warm-start diagnostics",
+                    ],
+                    "diagnosticsPolicy": (
+                        "expected values in validation.lastGateFailure are diagnostics "
+                        "only; do not encode them in strategy assets or startup state"
+                    ),
+                },
             },
             indent=2,
             sort_keys=True,
@@ -656,6 +1232,47 @@ def _write_hosted_paper_rewrite_request(
         encoding="utf-8",
     )
     return request_path
+
+
+def _promotion_gate_failure_request_payload(gate_report: dict[str, Any]) -> dict[str, Any]:
+    failed_gates: list[dict[str, Any]] = []
+    gates = gate_report.get("gates") if isinstance(gate_report.get("gates"), list) else []
+    for gate in gates:
+        if not isinstance(gate, dict) or gate.get("status") == "passed":
+            continue
+        details = gate.get("details") if isinstance(gate.get("details"), dict) else {}
+        failure: dict[str, Any] = {
+            "name": _clean(gate.get("name")),
+            "status": _clean(gate.get("status")),
+            "method": _clean(gate.get("method")),
+        }
+        reason = _clean(details.get("reason") or gate.get("reason"))
+        if reason:
+            failure["reason"] = reason
+        smoke = details.get("smoke")
+        if isinstance(smoke, dict):
+            compact_smoke: dict[str, Any] = {}
+            for key in (
+                "tailConsistency",
+                "warmStart",
+                "elapsedSeconds",
+                "firstElapsedSeconds",
+                "secondElapsedSeconds",
+                "warnings",
+            ):
+                if key in smoke:
+                    compact_smoke[key] = smoke[key]
+            if compact_smoke:
+                failure["smoke"] = _json_safe(compact_smoke)
+                failure["oraclePolicy"] = (
+                    "expected values in gate failures are diagnostics only; do not "
+                    "encode them in strategy assets or initial state"
+                )
+        failed_gates.append(failure)
+    return {
+        "status": _clean(gate_report.get("status")),
+        "failedGates": failed_gates,
+    }
 
 
 def _report_has_hosted_rewrite_contract(report: dict[str, Any]) -> bool:
@@ -719,7 +1336,149 @@ def _report_packaged_files(
                     role=role,
                 )
             )
+    _validate_packaged_source_roles(packaged)
     return packaged
+
+
+def _validate_packaged_source_roles(packaged: list[PromotionPackagedFile]) -> None:
+    roles_by_source: dict[Path, set[str]] = {}
+    for item in packaged:
+        roles_by_source.setdefault(item.source_path.resolve(), set()).add(item.role)
+    duplicated = [
+        source
+        for source, roles in roles_by_source.items()
+        if "base_asset" in roles and "initial_state" in roles
+    ]
+    if duplicated:
+        sample = ", ".join(str(path) for path in duplicated[:3])
+        raise PromotionNeedsAgentRefactor(
+            "the same source file cannot be packaged as both immutable strategy "
+            f"asset and mutable initial state seed: {sample}"
+        )
+
+
+def _validate_packaged_research_evidence_sources(
+    packaged: tuple[PromotionPackagedFile, ...],
+    *,
+    branch: Path,
+    destination: Path | None = None,
+    report: dict[str, Any],
+) -> None:
+    paper_signal = report.get("paperSignal")
+    incremental_ready = (
+        isinstance(paper_signal, dict) and paper_signal.get("incrementalReady") is True
+    )
+    if not incremental_ready:
+        return
+
+    evidence_assets = [
+        item
+        for item in packaged
+        if item.role == "base_asset"
+        and _is_generated_live_asset_source(
+            item.source_path,
+            branch=branch,
+            destination=destination,
+        )
+    ]
+    if not evidence_assets:
+        _validate_initial_state_not_oracle_answers(packaged)
+        return
+    sample = _packaged_file_sample(evidence_assets)
+    raise PromotionNeedsAgentRefactor(
+        "generated research evidence or export output cannot be packaged as a live "
+        "strategy asset "
+        f"while paperSignal.incrementalReady=true: {sample}. Package the original "
+        "external dependency instead, or report the strategy as finite replay / "
+        "not safely hostable for continuing paper."
+    )
+
+
+def _validate_initial_state_not_oracle_answers(
+    packaged: tuple[PromotionPackagedFile, ...],
+) -> None:
+    contaminated = [
+        item
+        for item in packaged
+        if item.role == "initial_state"
+        and _initial_state_looks_like_oracle_answers(item.source_path)
+    ]
+    if not contaminated:
+        return
+    sample = _packaged_file_sample(contaminated)
+    raise PromotionNeedsAgentRefactor(
+        "validation oracle answers cannot be packaged as mutable startup state "
+        f"while paperSignal.incrementalReady=true: {sample}. Initial state must be "
+        "strategy-owned cutover state such as model/cache/cursor/retrain metadata, "
+        "not selected-round tail expected positions."
+    )
+
+
+def _packaged_file_sample(items: list[PromotionPackagedFile]) -> str:
+    return ", ".join(
+        f"{item.source_path} -> {item.artifact_path}" for item in items[:3]
+    )
+
+
+def _initial_state_looks_like_oracle_answers(source_path: Path) -> bool:
+    try:
+        text = source_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    lowered = text[:1_000_000].lower()
+    return any(phrase in lowered for phrase in PROMOTION_INITIAL_STATE_ORACLE_PHRASES)
+
+
+def _is_generated_live_asset_source(
+    source_path: Path,
+    *,
+    branch: Path,
+    destination: Path | None = None,
+) -> bool:
+    if _is_research_evidence_source(source_path, branch=branch):
+        return True
+    if destination is not None and _is_export_evidence_source(
+        source_path,
+        destination=destination,
+    ):
+        return True
+    resolved = source_path.resolve()
+    text = resolved.as_posix().lower()
+    parts = {part.lower() for part in resolved.parts}
+    if parts & {"promoted", "promotions", "promotion-replay", "strategy_artifacts"}:
+        return True
+    if "tmp" in parts and ("hosted-paper" in text or "promotion" in text):
+        return True
+    if "temp" in parts and ("hosted-paper" in text or "promotion" in text):
+        return True
+    return False
+
+
+def _is_export_evidence_source(source_path: Path, *, destination: Path) -> bool:
+    try:
+        relative = source_path.resolve().relative_to(destination.resolve())
+    except ValueError:
+        return False
+    if not relative.parts:
+        return False
+    return True
+
+
+def _is_research_evidence_source(source_path: Path, *, branch: Path) -> bool:
+    try:
+        relative = source_path.resolve().relative_to(branch.resolve())
+    except ValueError:
+        return False
+    if not relative.parts:
+        return False
+    if relative.parts[0] in {"outputs", "promotions", "strategy_artifacts"}:
+        return True
+    return relative.name.lower() in {
+        "edge-result.json",
+        "edge-validation.md",
+        "promotion-gate.json",
+        "trade-log.csv",
+    }
 
 
 def _normalize_report_packaged_artifact_path(value: Any, *, forced_role: str | None) -> str:
@@ -790,6 +1549,7 @@ def _validate_agent_paper_signal_contract(
     source: str,
     *,
     require_paper_signal: bool,
+    candidate: Any | None = None,
 ) -> None:
     paper_signal = report.get("paperSignal")
     if not isinstance(paper_signal, dict):
@@ -808,10 +1568,251 @@ def _validate_agent_paper_signal_contract(
         raise PromotionNeedsAgentRefactor(
             "hosted paper rewrite must set paperSignal.incrementalReady=true"
         )
+    if incremental_ready is True:
+        _validate_live_readiness_claim(report)
+        _validate_paper_signal_design_contract(
+            report,
+            paper_signal,
+            cutover_end=_candidate_cutover_end(candidate),
+        )
     if implemented is True and not _source_overrides_get_paper_signal(source):
         raise PromotionNeedsAgentRefactor(
             "paperSignal.implemented=true but promoted source does not define get_paper_signal"
         )
+
+
+def _paper_signal_design_payload(paper_signal: dict[str, Any]) -> dict[str, Any] | None:
+    design = paper_signal.get("design")
+    if isinstance(design, dict):
+        return design
+    return None
+
+
+def _validate_paper_signal_design_contract(
+    report: dict[str, Any],
+    paper_signal: dict[str, Any],
+    *,
+    cutover_end: str = "",
+) -> None:
+    design = _paper_signal_design_payload(paper_signal)
+    if not isinstance(design, dict):
+        raise PromotionNeedsAgentRefactor(
+            "continuing hosted paper reports must declare "
+            "paperSignal.design with history/state/calendar/cutover/dailyStep"
+        )
+    history = design.get("history")
+    if not isinstance(history, dict):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.history must describe the bounded "
+            "history needed by get_paper_signal"
+        )
+    min_bars = history.get("minBars")
+    if min_bars is not None:
+        if not isinstance(min_bars, int) or isinstance(min_bars, bool) or min_bars < 0:
+            raise PromotionNeedsAgentRefactor(
+                "paperSignal.design.history.minBars must be a "
+                "non-negative integer or null"
+            )
+    if not _clean(history.get("reason")):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.history.reason must explain the "
+            "lookback/history requirement"
+        )
+
+    state = design.get("state")
+    if not isinstance(state, dict) or not isinstance(
+        state.get("usesPersistentState"), bool
+    ):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.state.usesPersistentState must be true or false"
+        )
+    state_files = state.get("stateFiles")
+    if state.get("usesPersistentState") is True and not (
+        isinstance(state_files, list) and bool(state_files)
+    ):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.state.stateFiles must list the "
+            "strategy-owned state files used by hosted paper"
+        )
+
+    calendar = design.get("calendar")
+    if not isinstance(calendar, dict) or not isinstance(
+        calendar.get("usesAbsoluteDecisionOrdinal"), bool
+    ):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.calendar.usesAbsoluteDecisionOrdinal "
+            "must be true or false"
+        )
+    if calendar.get("usesAbsoluteDecisionOrdinal") is True and not _clean(
+        calendar.get("origin")
+    ):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.calendar.origin is required when "
+            "absolute decision ordinals are used"
+        )
+
+    cutover = design.get("cutover")
+    if not isinstance(cutover, dict) or not isinstance(
+        cutover.get("requiresStartupState"), bool
+    ):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.cutover.requiresStartupState must be true or false"
+        )
+    mode = _clean(cutover.get("mode") or cutover.get("approach"))
+    if not mode:
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.cutover.mode must be one of "
+            "none, minimal_cutover_state, or full_replay_required"
+        )
+    if mode not in PROMOTION_RECONSTRUCTION_MODES:
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.cutover.mode must be one of "
+            "none, minimal_cutover_state, or full_replay_required"
+        )
+    required = cutover.get("requiresStartupState") is True
+    if required and mode == "none":
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.cutover.requiresStartupState=true must use "
+            "cutover.mode=minimal_cutover_state or full_replay_required"
+        )
+    if not required and mode != "none":
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.cutover.requiresStartupState=false must use "
+            "cutover.mode=none"
+        )
+    if mode == "full_replay_required":
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.incrementalReady=true conflicts with "
+            "cutover.mode=full_replay_required; report the limitation "
+            "instead of claiming continuing hosted-paper readiness"
+        )
+    if required:
+        state_end = _date_part(_clean(cutover.get("stateEnd")))
+        if not _clean(cutover.get("dataHistoryStart")) or not state_end:
+            raise PromotionNeedsAgentRefactor(
+                "paperSignal.design.cutover must declare "
+                "dataHistoryStart and stateEnd when startup state is required"
+            )
+        if cutover_end and state_end != cutover_end:
+            raise PromotionNeedsAgentRefactor(
+                "paperSignal.design.cutover.stateEnd must equal "
+                f"the selected round cutover end {cutover_end}; startup state should "
+                "be valid through the selected research result before future paper "
+                "continues"
+            )
+        initial_state_files = _report_initial_state_entries(report)
+        if not initial_state_files:
+            raise PromotionNeedsAgentRefactor(
+                "paperSignal.design.cutover.requiresStartupState=true means promotion must package "
+                "strategy-owned startup state through paths.initialStateFiles, or "
+                "set requiresStartupState=false and explain the bounded on-demand path"
+            )
+
+    daily_step = design.get("dailyStep")
+    if not isinstance(daily_step, dict) or not _clean(daily_step.get("reason")):
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.design.dailyStep.reason must explain how one future as_of "
+            "advances without full replay"
+        )
+
+
+def _report_initial_state_entries(report: dict[str, Any]) -> list[Any]:
+    paths = report.get("paths")
+    if not isinstance(paths, dict):
+        return []
+    entries = paths.get("initialStateFiles")
+    return entries if isinstance(entries, list) else []
+
+
+def _validate_live_readiness_claim(report: dict[str, Any]) -> None:
+    snippets = _live_readiness_text_snippets(report)
+    conflicts: list[str] = []
+    for snippet in snippets:
+        lowered = snippet.lower()
+        if _live_readiness_conflict_phrase(lowered) is not None:
+            conflicts.append(snippet)
+    if not conflicts:
+        return
+    sample = "; ".join(conflicts[:3])
+    raise PromotionNeedsAgentRefactor(
+        "paperSignal.incrementalReady=true conflicts with report text that "
+        f"describes finite replay, research evidence, or not-continuing readiness: {sample}"
+    )
+
+
+def _live_readiness_conflict_phrase(lowered_snippet: str) -> str | None:
+    for phrase in PROMOTION_LIVE_READINESS_CONFLICT_PHRASES:
+        start = lowered_snippet.find(phrase)
+        while start >= 0:
+            if not _conflict_occurrence_is_negated(lowered_snippet, start, phrase):
+                return phrase
+            start = lowered_snippet.find(phrase, start + len(phrase))
+    return None
+
+
+def _conflict_occurrence_is_negated(text: str, start: int, phrase: str) -> bool:
+    if phrase.startswith(("no ", "not ", "cannot ", "can't ")):
+        return False
+    sentence_start = max(
+        text.rfind(".", 0, start),
+        text.rfind(";", 0, start),
+        text.rfind("\n", 0, start),
+    )
+    prefix = text[sentence_start + 1 : start]
+    return any(
+        marker in prefix
+        for marker in (
+            "not a ",
+            "not an ",
+            "not ",
+            "never ",
+            "without ",
+        )
+    )
+
+
+def _live_readiness_text_snippets(report: dict[str, Any]) -> list[str]:
+    snippets: list[str] = []
+    paper_signal = report.get("paperSignal")
+    if isinstance(paper_signal, dict):
+        for key in ("liveReadiness", "notes"):
+            value = _clean(paper_signal.get(key))
+            if value:
+                snippets.append(value)
+    limitations = report.get("limitations")
+    if isinstance(limitations, list):
+        for item in limitations:
+            snippets.extend(_string_leaf_values(item))
+    paths = report.get("paths")
+    if isinstance(paths, dict):
+        for key in ("packagedFiles", "initialStateFiles"):
+            entries = paths.get(key)
+            if not isinstance(entries, list):
+                continue
+            for item in entries:
+                if isinstance(item, dict):
+                    for field in ("purpose", "notes", "reason"):
+                        value = _clean(item.get(field))
+                        if value:
+                            snippets.append(value)
+    return snippets
+
+
+def _string_leaf_values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        cleaned = _clean(value)
+        return [cleaned] if cleaned else []
+    if isinstance(value, dict):
+        snippets: list[str] = []
+        for item in value.values():
+            snippets.extend(_string_leaf_values(item))
+        return snippets
+    if isinstance(value, list):
+        snippets = []
+        for item in value:
+            snippets.extend(_string_leaf_values(item))
+        return snippets
+    return []
 
 
 def _validate_promoted_source_static(source_path: Path) -> None:
@@ -1117,11 +2118,831 @@ def _default_behavior_equivalence(
 ) -> dict[str, Any]:
     return {
         "status": "passed",
-        "method": "agent_hosted_paper_rewrite_scope"
+        "method": "agent_declared_hosted_paper_rewrite"
         if mode == PROMOTION_MODE_AGENT_REFACTOR
         else "source_hash_identity",
         "replacements": replacements,
     }
+
+
+def _fast_paper_validation(
+    *,
+    mode: str,
+    source: str,
+    report: dict[str, Any] | None,
+    candidate: Any,
+    strategy_source_path: Path,
+    packaged_files: tuple[PromotionPackagedFile, ...],
+    destination: Path,
+    strategy_entrypoint: str,
+    runtime_env: dict[str, str] | None,
+    is_denylisted_source: Callable[[Path], bool],
+) -> dict[str, Any]:
+    full_compute = _paper_signal_uses_full_runtime_compute(source)
+    design_facts = _paper_signal_design_facts(source)
+    if full_compute:
+        return {
+            "status": "failed",
+            "method": "static_fast_paper_signal_contract",
+            "reason": (
+                "get_paper_signal calls compute_runtime_output, which reruns "
+                "the historical strategy path instead of using a live-paper fast path"
+            ),
+            **design_facts,
+        }
+    if not _source_overrides_get_paper_signal(source):
+        return {
+            "status": "failed",
+            "method": "static_fast_paper_signal_contract",
+            "reason": "promoted source does not define get_paper_signal",
+            **design_facts,
+        }
+    details: dict[str, Any] = {
+        "paperSignal": "explicit_get_paper_signal",
+        "fullRuntimeCompute": False,
+        **design_facts,
+    }
+    if mode == PROMOTION_MODE_AGENT_REFACTOR and report is not None:
+        paper_signal = report.get("paperSignal")
+        if isinstance(paper_signal, dict):
+            details["incrementalReady"] = paper_signal.get("incrementalReady") is True
+            live_readiness = _clean(
+                paper_signal.get("liveReadiness") or paper_signal.get("notes")
+            )
+            if live_readiness:
+                details["agentLiveReadiness"] = live_readiness
+            design = _paper_signal_design_payload(paper_signal)
+            if isinstance(design, dict):
+                details["agentDesign"] = _json_safe(design)
+
+    smoke = _run_artifact_paper_signal_smoke(
+        candidate,
+        strategy_source_path=strategy_source_path,
+        packaged_files=packaged_files,
+        destination=destination,
+        strategy_entrypoint=strategy_entrypoint,
+        runtime_env=runtime_env,
+        is_denylisted_source=is_denylisted_source,
+        report=report,
+    )
+    details["smoke"] = {
+        key: value for key, value in smoke.items() if key not in {"status", "reason"}
+    }
+    if smoke.get("status") != "passed":
+        return {
+            "status": "failed",
+            "method": "artifact_paper_signal_smoke",
+            "reason": _clean(smoke.get("reason")) or "paper signal smoke failed",
+            **details,
+        }
+    return {
+        "status": "passed",
+        "method": "artifact_paper_signal_smoke",
+        **details,
+    }
+
+
+def _run_artifact_paper_signal_smoke(
+    candidate: Any,
+    *,
+    strategy_source_path: Path,
+    packaged_files: tuple[PromotionPackagedFile, ...],
+    destination: Path,
+    strategy_entrypoint: str,
+    runtime_env: dict[str, str] | None,
+    is_denylisted_source: Callable[[Path], bool],
+    report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    started_at = time.monotonic()
+    oracle_rows = _paper_tail_oracle_rows(destination / "trade-log.csv")
+    if not oracle_rows:
+        return {
+            "status": "failed",
+            "reason": (
+                "paper signal tail consistency oracle is unavailable; "
+                "trade-log.csv must contain date and next_position columns"
+            ),
+        }
+    state_end_covers_tail = _report_state_end_covers_tail(report, oracle_rows)
+    try:
+        with tempfile.TemporaryDirectory(prefix="abel-paper-smoke-") as temp_name:
+            root = Path(temp_name)
+            strategy_dir = root / "strategy"
+            runtime_dir = root / "runtime"
+            state_dir = root / "state"
+            strategy_dir.mkdir(parents=True)
+            runtime_dir.mkdir(parents=True)
+            state_dir.mkdir(parents=True)
+            _stage_paper_smoke_files(
+                candidate,
+                strategy_source_path=strategy_source_path,
+                packaged_files=packaged_files,
+                strategy_dir=strategy_dir,
+                runtime_dir=runtime_dir,
+                state_dir=state_dir,
+                strategy_entrypoint=strategy_entrypoint,
+                is_denylisted_source=is_denylisted_source,
+            )
+            context = _paper_smoke_context(
+                candidate,
+                strategy_dir=strategy_dir,
+                runtime_dir=runtime_dir,
+                state_dir=state_dir,
+                workspace_dir=root,
+            )
+            before_state = _snapshot_tree(state_dir)
+            with _temporary_environ(runtime_env or {}), _temporary_sys_path(
+                [strategy_dir, strategy_dir.parent]
+            ):
+                cls = _load_smoke_strategy_class(strategy_dir / "strategy.py")
+                engine = cls(context)
+                tail_comparisons: list[dict[str, Any]] = []
+                previous_state = before_state
+                latest_result: Any = None
+                latest_position: float | None = None
+                latest_elapsed = 0.0
+                for oracle in oracle_rows:
+                    call_started = time.monotonic()
+                    latest_result = engine.get_paper_signal(as_of=oracle["asOf"])
+                    latest_elapsed = time.monotonic() - call_started
+                    after_call_state = _snapshot_tree(state_dir)
+                    latest_position = _paper_smoke_next_position(latest_result)
+                    expected_position = float(oracle["expectedNextPosition"])
+                    abs_diff = (
+                        abs(latest_position - expected_position)
+                        if latest_position is not None
+                        else None
+                    )
+                    comparison = {
+                        "asOf": oracle["asOf"],
+                        "expectedNextPosition": expected_position,
+                        "actualNextPosition": latest_position,
+                        "absDiff": abs_diff,
+                        "elapsedSeconds": round(latest_elapsed, 6),
+                        "stateChanged": after_call_state != previous_state,
+                    }
+                    tail_comparisons.append(comparison)
+                    if state_end_covers_tail and after_call_state != previous_state:
+                        return {
+                            "status": "failed",
+                            "reason": (
+                                "get_paper_signal mutated strategy state for a "
+                                "historical tail date already covered by "
+                                "paperSignal.design.cutover.stateEnd; initial state must be "
+                                "cutover state, not a replay cursor that advances "
+                                "through validation oracle dates"
+                            ),
+                            "tailConsistency": _tail_consistency_payload(
+                                oracle_rows,
+                                tail_comparisons,
+                                status="failed",
+                            ),
+                            "result": _json_safe(latest_result),
+                        }
+                    if latest_position is None:
+                        return {
+                            "status": "failed",
+                            "reason": (
+                                "get_paper_signal did not return a finite "
+                                "next_position for a tail consistency date"
+                            ),
+                            "tailConsistency": _tail_consistency_payload(
+                                oracle_rows,
+                                tail_comparisons,
+                                status="failed",
+                            ),
+                            "result": _json_safe(latest_result),
+                        }
+                    if abs_diff is None or abs_diff > PROMOTION_PAPER_TAIL_TOLERANCE:
+                        return {
+                            "status": "failed",
+                            "reason": (
+                                "get_paper_signal next_position diverged from "
+                                "the selected round trade-log tail"
+                            ),
+                            "tailConsistency": _tail_consistency_payload(
+                                oracle_rows,
+                                tail_comparisons,
+                                status="failed",
+                            ),
+                            "result": _json_safe(latest_result),
+                        }
+                    previous_state = after_call_state
+                after_first_state = previous_state
+                as_of = tail_comparisons[-1]["asOf"]
+                second_started = time.monotonic()
+                second = engine.get_paper_signal(as_of=as_of)
+                second_elapsed = time.monotonic() - second_started
+                after_second_state = _snapshot_tree(state_dir)
+
+            second_position = _paper_smoke_next_position(second)
+            warm_start = _warm_start_payload(
+                tail_comparisons,
+                repeated_elapsed=second_elapsed,
+                repeated_state_changed=after_second_state != after_first_state,
+            )
+            if (
+                second_position is None
+                or latest_position is None
+                or abs(second_position - latest_position) > PROMOTION_PAPER_TAIL_TOLERANCE
+            ):
+                return {
+                    "status": "failed",
+                    "reason": "get_paper_signal was not idempotent for the same as_of",
+                    "asOf": as_of,
+                    "firstNextPosition": latest_position,
+                    "secondNextPosition": second_position,
+                    "firstResult": _json_safe(latest_result),
+                    "secondResult": _json_safe(second),
+                    "tailConsistency": _tail_consistency_payload(
+                        oracle_rows,
+                        tail_comparisons,
+                        status="passed",
+                    ),
+                    "warmStart": warm_start,
+                }
+            if after_second_state != after_first_state:
+                return {
+                    "status": "failed",
+                    "reason": "strategy state changed on a repeated same-as_of smoke call",
+                    "asOf": as_of,
+                    "stateChangedFirstCall": after_first_state != before_state,
+                    "stateChangedSecondCall": True,
+                    "tailConsistency": _tail_consistency_payload(
+                        oracle_rows,
+                        tail_comparisons,
+                        status="passed",
+                    ),
+                    "warmStart": warm_start,
+                }
+
+            elapsed = time.monotonic() - started_at
+            warnings = []
+            max_tail_elapsed = max(
+                (float(item["elapsedSeconds"]) for item in tail_comparisons),
+                default=0.0,
+            )
+            if max(max_tail_elapsed, second_elapsed) > PROMOTION_PAPER_SMOKE_WARN_SECONDS:
+                warnings.append(
+                    "paper signal smoke is slow; agent should confirm this is acceptable "
+                    "for hosted daily paper or persist strategy state"
+                )
+            return {
+                "status": "passed",
+                "asOf": as_of,
+                "nextPosition": latest_position,
+                "firstElapsedSeconds": round(latest_elapsed, 6),
+                "secondElapsedSeconds": round(second_elapsed, 6),
+                "elapsedSeconds": round(elapsed, 6),
+                "stateChangedFirstCall": after_first_state != before_state,
+                "stateChangedSecondCall": False,
+                "sameResult": _json_safe(latest_result) == _json_safe(second),
+                "tailConsistency": _tail_consistency_payload(
+                    oracle_rows,
+                    tail_comparisons,
+                    status="passed",
+                ),
+                "warmStart": warm_start,
+                "warnings": warnings,
+                "result": _json_safe(latest_result),
+            }
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "reason": f"{exc.__class__.__name__}: {exc}",
+            "elapsedSeconds": round(time.monotonic() - started_at, 6),
+        }
+
+
+def _stage_paper_smoke_files(
+    candidate: Any,
+    *,
+    strategy_source_path: Path,
+    packaged_files: tuple[PromotionPackagedFile, ...],
+    strategy_dir: Path,
+    runtime_dir: Path,
+    state_dir: Path,
+    strategy_entrypoint: str,
+    is_denylisted_source: Callable[[Path], bool],
+) -> None:
+    staged_packaged_sources: set[Path] = {
+        item.source_path.resolve()
+        for item in packaged_files
+        if _is_branch_relative(item.source_path, candidate.branch)
+    }
+    for source_path in sorted(path for path in candidate.branch.rglob("*") if path.is_file()):
+        if source_path.resolve() == candidate.strategy_source_path.resolve():
+            continue
+        if source_path.resolve() in staged_packaged_sources:
+            continue
+        relative = source_path.relative_to(candidate.branch)
+        if is_denylisted_source(relative):
+            continue
+        destination = strategy_dir / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination)
+
+    shutil.copy2(strategy_source_path, strategy_dir / Path(strategy_entrypoint).name)
+    _copy_if_exists(candidate.branch / "branch.yaml", runtime_dir / "strategy.yaml")
+    _copy_if_exists(candidate.branch / "inputs" / "dependencies.json", runtime_dir / "dependencies.json")
+    _copy_if_exists(candidate.branch / "inputs" / "data_manifest.json", runtime_dir / "data_manifest.json")
+
+    for item in packaged_files:
+        if item.role == "base_asset":
+            relative = Path(item.artifact_path.removeprefix("strategy/"))
+            target = strategy_dir / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item.source_path, target)
+        elif item.role == "initial_state":
+            relative = Path(item.artifact_path.removeprefix("runtime/initial-state/"))
+            runtime_target = runtime_dir / "initial-state" / relative
+            runtime_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item.source_path, runtime_target)
+            state_target = state_dir / relative
+            state_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item.source_path, state_target)
+
+
+def _paper_smoke_context(
+    candidate: Any,
+    *,
+    strategy_dir: Path,
+    runtime_dir: Path,
+    state_dir: Path,
+    workspace_dir: Path,
+) -> dict[str, Any]:
+    dependencies = _load_json_object_if_exists(runtime_dir / "dependencies.json")
+    runtime_profile = _load_json_object_if_exists(candidate.branch / "inputs" / "runtime_profile.json")
+    requirements = dependencies.get("data_requirements")
+    if not isinstance(requirements, dict):
+        requirements = {}
+    target_asset = _clean(dependencies.get("target") or candidate.ticker).upper()
+    target_node = _clean(dependencies.get("target_node")) or f"{target_asset}.price"
+    timeframe = _clean(requirements.get("timeframe")) or "1d"
+    fields = [
+        str(field)
+        for field in (requirements.get("fields") if isinstance(requirements.get("fields"), list) else ["close"])
+    ]
+    selected_inputs = _selected_input_symbols(dependencies.get("selected_inputs"))
+    feeds = {
+        "primary": _abel_bars_feed(
+            name="primary",
+            symbol=target_asset,
+            timeframe=timeframe,
+            fields=fields,
+        )
+    }
+    for symbol in selected_inputs:
+        feeds[symbol] = _abel_bars_feed(
+            name=symbol,
+            symbol=symbol,
+            timeframe=timeframe,
+            fields=fields,
+        )
+    requested_start = _clean(dependencies.get("requested_start"))
+    return {
+        "id": _clean(candidate.branch_id) or "paper_smoke_strategy",
+        "asset": target_asset,
+        "ticker": target_asset,
+        "branch_spec": {
+            "target": target_asset,
+            "target_asset": target_asset,
+            "target_node": target_node,
+            "selected_inputs": selected_inputs,
+            "data_requirements": requirements,
+            "requested_start": requested_start,
+        },
+        "dependencies": dependencies,
+        "_research": {
+            "requested_window": {
+                "start": requested_start,
+                "end": _clean((candidate.edge_result.get("effective_window") or {}).get("end"))
+                if isinstance(candidate.edge_result.get("effective_window"), dict)
+                else None,
+            }
+        },
+        "_data_contract": {"profile": "daily"},
+        "_runtime_paths": {
+            "base_strategy": str(strategy_dir),
+            "runtime": str(runtime_dir),
+            "state": str(state_dir),
+            "workspace_dir": str(workspace_dir),
+            "package_dir": str(workspace_dir),
+            "base_dir": str(workspace_dir),
+            "strategy_dir": str(strategy_dir),
+            "runtime_dir": str(runtime_dir),
+            "state_dir": str(state_dir),
+            "output_dir": str(workspace_dir / "output"),
+            "tmp_dir": str(workspace_dir / "tmp"),
+        },
+        "_runtime_profile": {
+            "profile": "daily",
+            "target": target_asset,
+            "target_asset": target_asset,
+            "target_node": target_node,
+            "decision_event": _clean(runtime_profile.get("decision_event")) or "bar_close",
+            "execution_delay_bars": int(runtime_profile.get("execution_delay_bars") or 1),
+            "return_basis": _clean(runtime_profile.get("return_basis")) or "close_to_close",
+        },
+        "_feeds": feeds,
+    }
+
+
+def _abel_bars_feed(
+    *,
+    name: str,
+    symbol: str,
+    timeframe: str,
+    fields: list[str],
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "kind": "bars",
+        "adapter": "abel",
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "profile": "daily",
+        "fields": fields,
+    }
+
+
+def _selected_input_symbols(value: Any) -> list[str]:
+    symbols: list[str] = []
+    if not isinstance(value, list):
+        return symbols
+    for item in value:
+        if isinstance(item, dict):
+            raw = item.get("symbol") or item.get("ticker") or item.get("node_id")
+        else:
+            raw = item
+        text = _clean(raw)
+        if text.endswith(".price"):
+            text = text.removesuffix(".price")
+        if text and text not in symbols:
+            symbols.append(text)
+    return symbols
+
+
+def _paper_tail_oracle_rows(trade_log_path: Path) -> list[dict[str, Any]]:
+    if not trade_log_path.is_file():
+        return []
+    try:
+        with trade_log_path.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+    except OSError:
+        return []
+    comparable: list[dict[str, Any]] = []
+    for row in rows:
+        as_of = _date_part(_clean(row.get("date") or row.get("decision_time")))
+        expected = _finite_float(row.get("next_position") or row.get("nextPosition"))
+        if not as_of or expected is None:
+            continue
+        comparable.append(
+            {
+                "asOf": as_of,
+                "expectedNextPosition": expected,
+                "source": trade_log_path.name,
+            }
+        )
+    return _select_paper_tail_oracle_sample(comparable)
+
+
+def _select_paper_tail_oracle_sample(
+    comparable: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if len(comparable) <= PROMOTION_PAPER_TAIL_COMPARE_COUNT:
+        return comparable
+    latest_idx = len(comparable) - 1
+    change_idx = None
+    for idx in range(latest_idx, 0, -1):
+        current = comparable[idx]["expectedNextPosition"]
+        previous = comparable[idx - 1]["expectedNextPosition"]
+        if current != previous:
+            change_idx = idx
+            break
+    if change_idx is None:
+        return comparable[-PROMOTION_PAPER_TAIL_COMPARE_COUNT:]
+
+    selected = {latest_idx, change_idx}
+    if change_idx > 0:
+        selected.add(change_idx - 1)
+    idx = latest_idx
+    while len(selected) < PROMOTION_PAPER_TAIL_COMPARE_COUNT and idx >= 0:
+        selected.add(idx)
+        idx -= 1
+    return [comparable[idx] for idx in sorted(selected)]
+
+
+def _tail_consistency_payload(
+    oracle_rows: list[dict[str, Any]],
+    comparisons: list[dict[str, Any]],
+    *,
+    status: str,
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "method": "trade_log_tail_next_position",
+        "sampleSize": len(oracle_rows),
+        "tolerance": PROMOTION_PAPER_TAIL_TOLERANCE,
+        "comparisons": _json_safe(comparisons),
+    }
+
+
+def _report_state_end_covers_tail(
+    report: dict[str, Any] | None,
+    oracle_rows: list[dict[str, Any]],
+) -> bool:
+    if not report or not oracle_rows:
+        return False
+    paper_signal = report.get("paperSignal")
+    if not isinstance(paper_signal, dict):
+        return False
+    design = _paper_signal_design_payload(paper_signal)
+    if not isinstance(design, dict):
+        return False
+    cutover = design.get("cutover")
+    if not isinstance(cutover, dict):
+        return False
+    if cutover.get("requiresStartupState") is not True:
+        return False
+    state_end = _date_part(_clean(cutover.get("stateEnd")))
+    latest_oracle = _date_part(_clean(oracle_rows[-1].get("asOf")))
+    return bool(state_end and latest_oracle and state_end >= latest_oracle)
+
+
+def _warm_start_payload(
+    comparisons: list[dict[str, Any]],
+    *,
+    repeated_elapsed: float,
+    repeated_state_changed: bool,
+) -> dict[str, Any]:
+    elapsed = [float(item.get("elapsedSeconds") or 0.0) for item in comparisons]
+    slow_count = sum(
+        1 for value in elapsed if value > PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS
+    )
+    max_elapsed = max(elapsed, default=0.0)
+    return {
+        "method": "tail_distinct_dates_plus_repeated_latest",
+        "sampleSize": len(comparisons),
+        "distinctDateElapsedSeconds": [round(value, 6) for value in elapsed],
+        "maxDistinctDateElapsedSeconds": round(max_elapsed, 6),
+        "slowDistinctCallCount": slow_count,
+        "slowThresholdSeconds": PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS,
+        "distinctDateStateChangedCount": sum(
+            1 for item in comparisons if item.get("stateChanged") is True
+        ),
+        "repeatedSameAsOfElapsedSeconds": round(repeated_elapsed, 6),
+        "repeatedSameAsOfStateChanged": repeated_state_changed,
+    }
+
+
+def _date_part(value: str) -> str:
+    if not value:
+        return ""
+    if "T" in value:
+        return value.split("T", 1)[0]
+    return value.split(" ", 1)[0]
+
+
+def _load_smoke_strategy_class(path: Path):
+    module_name = f"abel_paper_smoke_{hashlib.sha256(str(path).encode()).hexdigest()[:12]}"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot import promoted strategy source: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    engine_cls = getattr(module, "BranchEngine", None)
+    if engine_cls is None:
+        raise RuntimeError("promoted strategy source does not define BranchEngine")
+    return engine_cls
+
+
+def _paper_smoke_next_position(result: Any) -> float | None:
+    if not isinstance(result, dict):
+        return None
+    value = result.get("next_position")
+    if value is None:
+        value = result.get("nextPosition")
+    return _finite_float(value)
+
+
+def _finite_float(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def _snapshot_tree(root: Path) -> dict[str, str]:
+    if not root.exists():
+        return {}
+    snapshot: dict[str, str] = {}
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        snapshot[path.relative_to(root).as_posix()] = _sha256_bytes(path.read_bytes())
+    return snapshot
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _copy_if_exists(source: Path, target: Path) -> None:
+    if not source.is_file():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+
+
+def _is_branch_relative(source_path: Path, branch: Path) -> bool:
+    try:
+        source_path.resolve().relative_to(branch.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _load_json_object_if_exists(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+@contextmanager
+def _temporary_environ(env: dict[str, str]):
+    original: dict[str, str | None] = {}
+    for key, value in env.items():
+        original[key] = os.environ.get(key)
+        os.environ[key] = value
+    try:
+        yield
+    finally:
+        for key, value in original.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+@contextmanager
+def _temporary_sys_path(paths: list[Path]):
+    previous = list(sys.path)
+    for path in reversed([str(item) for item in paths]):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    try:
+        yield
+    finally:
+        sys.path[:] = previous
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (str, int, bool)) or value is None:
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if hasattr(value, "item"):
+        try:
+            return _json_safe(value.item())
+        except Exception:
+            pass
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    return str(value)
+
+
+def _paper_signal_design_facts(source: str) -> dict[str, Any]:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return {
+            "trainingCalls": [],
+            "sourceTrainingCalls": [],
+            "usesStateDir": False,
+            "writesState": False,
+        }
+    function = _find_function(tree, "get_paper_signal")
+    if function is None:
+        return {
+            "trainingCalls": [],
+            "sourceTrainingCalls": _training_call_facts(tree),
+            "usesStateDir": False,
+            "writesState": False,
+        }
+    return {
+        "trainingCalls": _training_call_facts(function),
+        "sourceTrainingCalls": _training_call_facts(tree),
+        "usesStateDir": _function_uses_state_dir(function),
+        "writesState": _function_writes_state_like_files(function, tree),
+    }
+
+
+def _find_function(tree: ast.AST, name: str) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+            return node
+    return None
+
+
+def _training_call_facts(function: ast.AST) -> list[str]:
+    calls: list[str] = []
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = _call_name(node.func)
+        if callee == "fit" or callee.endswith(".fit") or "train" in callee.lower():
+            if callee not in calls:
+                calls.append(callee)
+    return calls[:20]
+
+
+def _function_uses_state_dir(function: ast.AST) -> bool:
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call):
+            callee = _call_name(node.func)
+            if callee == "context_runtime_paths" or callee.endswith(".context_runtime_paths"):
+                return True
+        if isinstance(node, ast.Attribute) and node.attr == "state_dir":
+            return True
+        if isinstance(node, ast.Attribute) and node.attr == "state":
+            return True
+        if isinstance(node, ast.Constant) and node.value == "_runtime_paths":
+            return True
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if "state_dir" in node.value or "/state/" in node.value:
+                return True
+    return False
+
+
+def _function_writes_state_like_files(
+    function: ast.AST,
+    tree: ast.AST | None = None,
+    *,
+    _visited: set[str] | None = None,
+) -> bool:
+    helper_functions: dict[str, ast.AST] = {}
+    if tree is not None:
+        helper_functions = {
+            node.name: node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+    visited = _visited or set()
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = _call_name(node.func)
+        if callee in PROMOTION_FILE_WRITE_FUNCTIONS or callee.endswith(
+            (".write_text", ".write_bytes")
+        ):
+            return True
+        lowered = callee.lower()
+        if ("write" in lowered or "save" in lowered or "dump" in lowered) and (
+            "state" in lowered
+            or "checkpoint" in lowered
+            or "model" in lowered
+            or "scaler" in lowered
+        ):
+            return True
+        helper_name = callee.rsplit(".", 1)[-1]
+        helper = helper_functions.get(helper_name)
+        if helper is not None and helper_name not in visited:
+            visited.add(helper_name)
+            if _function_writes_state_like_files(helper, tree, _visited=visited):
+                return True
+    return False
+
+
+def _paper_signal_uses_full_runtime_compute(source: str) -> bool:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name != "get_paper_signal":
+            continue
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            callee = _call_name(child.func)
+            if callee == "compute_runtime_output" or callee.endswith(
+                ".compute_runtime_output"
+            ):
+                return True
+    return False
 
 
 def _simple_patch_summary(

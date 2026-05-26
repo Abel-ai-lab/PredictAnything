@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 from argparse import Namespace
@@ -66,6 +67,43 @@ def _candidate_result_payload() -> dict:
             "temporal_visibility": {"issue_kinds": [], "has_error": False},
         },
     }
+
+
+def _paper_design(
+    *,
+    min_bars: int | None = 1,
+    uses_state: bool = False,
+    uses_ordinal: bool = False,
+    cutover_state_required: bool = False,
+) -> dict:
+    return {
+        "history": {
+            "minBars": min_bars,
+            "feeds": ["TSLA"],
+            "reason": "test strategy needs a bounded paper history declaration",
+        },
+        "state": {
+            "usesPersistentState": uses_state,
+            "stateFiles": ["strategy/paper_state.json"] if uses_state else [],
+            "reason": "test state declaration",
+        },
+        "calendar": {
+            "usesAbsoluteDecisionOrdinal": uses_ordinal,
+            "origin": "2020-01-01" if uses_ordinal else None,
+            "reason": "test calendar declaration",
+        },
+        "cutover": {
+            "requiresStartupState": cutover_state_required,
+            "mode": "minimal_cutover_state" if cutover_state_required else "none",
+            "dataHistoryStart": "2020-01-01" if cutover_state_required else None,
+            "stateEnd": "2020-12-31" if cutover_state_required else None,
+            "reason": "test cutover declaration",
+        },
+        "dailyStep": {
+            "reason": "test daily step declaration",
+        },
+    }
+
 
 def _write_strategy_result_row(
     session: Path,
@@ -182,9 +220,9 @@ def _write_strategy_artifact_inputs(
     trade_log_path = branch / "outputs" / "round-006-trade-log.csv"
     trade_log_path.parent.mkdir(parents=True, exist_ok=True)
     trade_log_path.write_text(
-        "date,asset_return,pnl,position,cum_return,source\n"
-        "2020-01-01,0,0,0,0,backtest\n"
-        "2020-01-02,0.01,0.01,1,0.01,backtest\n",
+        "date,asset_return,pnl,position,cum_return,source,next_position\n"
+        "2020-01-01,0,0,0,0,backtest,0\n"
+        "2020-01-02,0.01,0.01,1,0.01,backtest,1\n",
         encoding="utf-8",
     )
     return trade_log_path
@@ -227,8 +265,8 @@ def _fake_artifact_export_runner(command, cwd=None, capture_output=None, text=No
     if "-c" in command:
         trade_log_path = Path(command[-1])
         trade_log_path.write_text(
-            "date,asset_return,pnl,position,cum_return,source\n"
-            "2020-01-01,0,0,0,0,backfill\n",
+            "date,asset_return,pnl,position,cum_return,source,next_position\n"
+            "2020-01-02,0,0,1,0,backfill,1\n",
             encoding="utf-8",
         )
         return subprocess.CompletedProcess(
@@ -1302,8 +1340,8 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -1404,8 +1442,8 @@ def test_export_selected_strategy_artifact_nulls_inapplicable_metrics(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -1490,8 +1528,8 @@ def test_promote_branch_strategy_uses_explicit_branch_round(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -1606,8 +1644,8 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -1675,7 +1713,14 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
                         }
                     ],
                 },
-                "paperSignal": {"implemented": True, "incrementalReady": True},
+                "paperSignal": {
+                    "implemented": True,
+                    "incrementalReady": True,
+                    "design": _paper_design(
+                        uses_state=True,
+                        cutover_state_required=True,
+                    ),
+                },
                 "limitations": [],
                 "replacements": [
                     {
@@ -1687,6 +1732,11 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
         ),
         encoding="utf-8",
     )
+    (promoted_dir / "dependency-scan.json").write_text("{}", encoding="utf-8")
+    (promoted_dir / "packaging-plan.json").write_text("{}", encoding="utf-8")
+    legacy_replay_dir = output_dir / "promotion-replay"
+    legacy_replay_dir.mkdir()
+    (legacy_replay_dir / "edge-result.json").write_text("{}", encoding="utf-8")
 
     result = ni.export_selected_strategy_artifact(
         session,
@@ -1926,6 +1976,7 @@ def test_export_selected_strategy_artifact_agent_packages_external_base_asset(
                 "paperSignal": {
                     "implemented": True,
                     "incrementalReady": True,
+                    "design": _paper_design(),
                     "notes": "simple one-row paper signal for hosted smoke coverage",
                 },
                 "limitations": [],
@@ -1942,6 +1993,11 @@ def test_export_selected_strategy_artifact_agent_packages_external_base_asset(
         ),
         encoding="utf-8",
     )
+    (promoted_dir / "dependency-scan.json").write_text("{}", encoding="utf-8")
+    (promoted_dir / "packaging-plan.json").write_text("{}", encoding="utf-8")
+    legacy_replay_dir = output_dir / "promotion-replay"
+    legacy_replay_dir.mkdir()
+    (legacy_replay_dir / "edge-result.json").write_text("{}", encoding="utf-8")
 
     result = ni.export_selected_strategy_artifact(
         session,
@@ -1955,9 +2011,18 @@ def test_export_selected_strategy_artifact_agent_packages_external_base_asset(
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
     file_paths = [item["path"] for item in manifest["files"]]
     assert "strategy/assets/trade_log_dual_resonance.csv" in file_paths
-    assert "edge/dependency-scan.json" in file_paths
-    assert "edge/packaging-plan.json" in file_paths
     assert "edge/refactor-report.json" in file_paths
+    assert "edge/dependency-scan.json" not in file_paths
+    assert "edge/packaging-plan.json" not in file_paths
+    assert not (promoted_dir / "dependency-scan.json").exists()
+    assert not (promoted_dir / "packaging-plan.json").exists()
+    assert not legacy_replay_dir.exists()
+    gate = json.loads((output_dir / "promotion-gate.json").read_text(encoding="utf-8"))
+    paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
+    assert paper_gate["method"] == "artifact_paper_signal_smoke"
+    assert paper_gate["details"]["smoke"]["nextPosition"] == 1.0
+    assert paper_gate["details"]["smoke"]["tailConsistency"]["status"] == "passed"
+    assert paper_gate["details"]["smoke"]["tailConsistency"]["sampleSize"] == 1
     promoted_source = (output_dir / "promoted" / "engine.py").read_text(encoding="utf-8")
     assert str(external_asset) not in promoted_source
     artifact_report = json.loads(
@@ -2073,6 +2138,7 @@ def test_export_selected_strategy_artifact_agent_adds_stateful_paper_signal(
                 "paperSignal": {
                     "implemented": True,
                     "incrementalReady": True,
+                    "design": _paper_design(uses_state=True),
                     "notes": "uses runtime state path and returns scalar audit fields",
                 },
                 "limitations": [],
@@ -2093,9 +2159,14 @@ def test_export_selected_strategy_artifact_agent_adds_stateful_paper_signal(
     assert result["promotionMode"] == "agent_refactor"
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
     file_paths = [item["path"] for item in manifest["files"]]
-    assert "edge/dependency-scan.json" in file_paths
-    assert "edge/packaging-plan.json" in file_paths
     assert "edge/refactor-report.json" in file_paths
+    assert "edge/dependency-scan.json" not in file_paths
+    assert "edge/packaging-plan.json" not in file_paths
+    gate = json.loads((output_dir / "promotion-gate.json").read_text(encoding="utf-8"))
+    paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
+    assert paper_gate["method"] == "artifact_paper_signal_smoke"
+    assert paper_gate["details"]["usesStateDir"] is True
+    assert paper_gate["details"]["smoke"]["tailConsistency"]["status"] == "passed"
 
 
 def test_export_selected_strategy_artifact_ignores_legacy_state_intent(
@@ -2172,8 +2243,8 @@ def test_export_selected_strategy_artifact_normalizes_relative_python_bin(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2209,11 +2280,11 @@ def test_export_selected_strategy_artifact_normalizes_relative_python_bin(
     assert commands_seen[0][0] == str((Path.cwd() / ".venv/bin/python").absolute())
 
 
-def test_export_selected_strategy_artifact_returns_gate_evidence_on_replay_failure(
+def test_export_selected_strategy_artifact_rejects_full_compute_paper_signal(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
-    branch = ni.init_branch_dir(session, "replay_failure")
+    branch = ni.init_branch_dir(session, "full_compute_paper_signal")
     _write_strategy_artifact_inputs(branch)
     (branch / "model").mkdir()
     (branch / "model" / "latest.joblib").write_text("state\n", encoding="utf-8")
@@ -2240,17 +2311,12 @@ def test_export_selected_strategy_artifact_returns_gate_evidence_on_replay_failu
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
         if "evaluate" in command:
-            return subprocess.CompletedProcess(
-                command,
-                1,
-                stdout="",
-                stderr="synthetic promoted replay failure",
-            )
+            raise AssertionError("promotion must not full-replay the strategy")
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2278,7 +2344,8 @@ def test_export_selected_strategy_artifact_returns_gate_evidence_on_replay_failu
         "        model_path = ctx.state_dir / \"strategy/model/latest.joblib\"\n"
         "        return ctx.decisions(1)\n"
         "    def get_paper_signal(self, *, as_of=None):\n"
-        "        return {'next_position': 1.0, 'date': str(as_of)}\n",
+        "        compiled = self.compute_runtime_output(end=as_of)\n"
+        "        return {'next_position': float(compiled.next_position[-1])}\n",
         encoding="utf-8",
     )
     (promoted_dir / "refactor-report.json").write_text(
@@ -2298,7 +2365,14 @@ def test_export_selected_strategy_artifact_returns_gate_evidence_on_replay_failu
                         }
                     ],
                 },
-                "paperSignal": {"implemented": True, "incrementalReady": True},
+                "paperSignal": {
+                    "implemented": True,
+                    "incrementalReady": True,
+                    "design": _paper_design(
+                        uses_state=True,
+                        cutover_state_required=True,
+                    ),
+                },
                 "limitations": [],
                 "replacements": [],
             }
@@ -2318,11 +2392,881 @@ def test_export_selected_strategy_artifact_returns_gate_evidence_on_replay_failu
     gate_path = Path(result["promotionReport"]["gatePath"])
     gate = json.loads(gate_path.read_text(encoding="utf-8"))
     assert gate["status"] == "failed"
-    behavior_gate = next(
-        item for item in gate["gates"] if item["name"] == "behavior_equivalence"
+    paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
+    assert paper_gate["status"] == "failed"
+    assert paper_gate["method"] == "static_fast_paper_signal_contract"
+    assert "compute_runtime_output" in paper_gate["details"]["reason"]
+
+
+def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "tail_signal_mismatch")
+    _write_strategy_artifact_inputs(branch)
+    (branch / "engine.py").write_text(
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        return ctx.decisions(0)\n",
+        encoding="utf-8",
     )
-    assert behavior_gate["status"] == "failed"
-    assert "promoted replay failed" in behavior_gate["details"]["reason"]
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+    output_dir = tmp_path / "exported-artifact"
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-12-31,0,0,0,0,backfill,0\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            raise AssertionError("tail mismatch must block artifact export")
+        raise AssertionError(f"unexpected command: {command}")
+
+    first_result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+    promoted_dir = Path(first_result["promotionReport"]["requestPath"]).parent
+    (promoted_dir / "engine.py").write_text(
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        return ctx.decisions(0)\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        return {'next_position': 1.0, 'date': str(as_of)}\n",
+        encoding="utf-8",
+    )
+    (promoted_dir / "refactor-report.json").write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.agent-refactor-report/v1",
+                "kind": "hosted_paper_rewrite",
+                "summary": "Agent added a paper signal that drifts from oracle.",
+                "scope": "hosted_paper_rewrite",
+                "paths": {"packagedFiles": []},
+                "paperSignal": {
+                    "implemented": True,
+                    "incrementalReady": True,
+                    "design": _paper_design(),
+                    "notes": "intentionally mismatched for gate coverage",
+                },
+                "limitations": [],
+                "replacements": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert result["artifactExported"] is False
+    assert result["promotionMode"] == "needs_agent_refactor"
+    gate = json.loads(Path(result["promotionReport"]["gatePath"]).read_text(encoding="utf-8"))
+    paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
+    assert paper_gate["status"] == "failed"
+    assert paper_gate["method"] == "artifact_paper_signal_smoke"
+    assert "diverged" in paper_gate["details"]["reason"]
+    comparison = paper_gate["details"]["smoke"]["tailConsistency"]["comparisons"][0]
+    assert comparison["expectedNextPosition"] == 0.0
+    assert comparison["actualNextPosition"] == 1.0
+    request = json.loads(Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8"))
+    assert request["signals"][-1]["kind"] == "promotion_gate_failed"
+    assert request["validation"]["lastGateFailure"]["failedGates"][0]["name"] == "paper_dry_run"
+    assert (
+        request["validation"]["lastGateFailure"]["failedGates"][0]["smoke"][
+            "tailConsistency"
+        ]["status"]
+        == "failed"
+    )
+    assert "Tail consistency diagnostics" in "\n".join(request["workOrder"])
+    assert "compiled next_position" in "\n".join(request["workOrder"])
+
+
+def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        promotion_helpers,
+        "PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS",
+        0.0,
+    )
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "training_without_warm_start")
+    _write_strategy_artifact_inputs(branch)
+    (branch / "engine.py").write_text(
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        model = type('Model', (), {'fit': lambda self: None})()\n"
+        "        model.fit()\n"
+        "        return ctx.decisions(1)\n",
+        encoding="utf-8",
+    )
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.967,
+        lo_adj=1.056,
+        max_dd=-0.1278,
+    )
+    _write_metric_input(branch, round_id="round-006")
+    output_dir = tmp_path / "exported-artifact"
+
+    def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
+        if "-c" in command:
+            trade_log_path = Path(command[-1])
+            trade_log_path.write_text(
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-12-29,0,0,1,0,backfill,1\n"
+                "2020-12-30,0,0,1,0,backfill,1\n"
+                "2020-12-31,0,0,1,0,backfill,1\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"tradeLogPath": str(trade_log_path)}),
+                stderr="",
+            )
+        if "export-artifact" in command:
+            artifact_path = Path(command[command.index("--output-zip") + 1])
+            artifact_path.write_bytes(b"artifact zip")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "artifactSha256": "abc123",
+                        "artifactBytes": artifact_path.stat().st_size,
+                        "fileCount": 12,
+                    }
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    first_result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+    promoted_dir = Path(first_result["promotionReport"]["requestPath"]).parent
+    (promoted_dir / "engine.py").write_text(
+        "import time\n"
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        model = type('Model', (), {'fit': lambda self: None})()\n"
+        "        model.fit()\n"
+        "        return ctx.decisions(1)\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        state_root = self.context['_runtime_paths']['state']\n"
+        "        time.sleep(0.001)\n"
+        "        return {'next_position': 1.0, 'date': str(as_of), 'state_root': state_root}\n",
+        encoding="utf-8",
+    )
+    (promoted_dir / "refactor-report.json").write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.agent-refactor-report/v1",
+                "kind": "hosted_paper_rewrite",
+                "summary": "Agent added a matching but cold-start paper signal.",
+                "scope": "hosted_paper_rewrite",
+                "paths": {"packagedFiles": []},
+                "paperSignal": {
+                    "implemented": True,
+                    "incrementalReady": True,
+                    "design": _paper_design(),
+                    "notes": "tail output matches but no reusable warm-start state",
+                },
+                "limitations": [],
+                "replacements": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=output_dir,
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+
+    assert result["artifactExported"] is True
+    assert result["promotionMode"] == "agent_refactor"
+    gate = json.loads((output_dir / "promotion-gate.json").read_text(encoding="utf-8"))
+    paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
+    assert paper_gate["status"] == "passed"
+    warm_start = paper_gate["details"]["smoke"]["warmStart"]
+    assert warm_start["slowDistinctCallCount"] >= 2
+    assert warm_start["sampleSize"] == 3
+
+
+def test_refactor_report_rejects_same_source_as_asset_and_initial_state(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    branch.mkdir()
+    source = branch / "trade-log.csv"
+    source.write_text("date,next_position\n2020-01-01,1\n", encoding="utf-8")
+    report = {
+        "paths": {
+            "packagedFiles": [
+                {
+                    "artifactPath": "strategy/assets/trade-log.csv",
+                    "sourcePath": "trade-log.csv",
+                    "purpose": "read-only replay input",
+                }
+            ],
+            "initialStateFiles": [
+                {
+                    "artifactPath": "runtime/initial-state/strategy/trade-log.csv",
+                    "sourcePath": "trade-log.csv",
+                    "purpose": "incorrect duplicate state seed",
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="both immutable strategy asset and mutable initial state seed",
+    ):
+        promotion_helpers._report_packaged_files(
+            report,
+            branch=branch,
+            is_denylisted_source=lambda path: False,
+        )
+
+
+def test_refactor_report_rejects_research_evidence_as_live_asset(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    branch.mkdir()
+    evidence = branch / "promotions" / "round-001" / "trade-log.csv"
+    evidence.parent.mkdir(parents=True)
+    evidence.write_text("date,next_position\n2020-01-01,1\n", encoding="utf-8")
+    report = {
+        "paperSignal": {"implemented": True, "incrementalReady": True},
+    }
+    packaged = (
+        promotion_helpers.PromotionPackagedFile(
+            artifact_path="strategy/assets/trade-log.csv",
+            source_path=evidence,
+            purpose="selected round trade log",
+            role="base_asset",
+        ),
+    )
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="generated research evidence",
+    ):
+        promotion_helpers._validate_packaged_research_evidence_sources(
+            packaged,
+            branch=branch,
+            report=report,
+        )
+
+
+def test_refactor_report_rejects_temp_generated_asset_as_live_asset(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    branch.mkdir()
+    generated = tmp_path / "tmp" / "hosted-paper" / "next_positions.csv"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("date,next_position\n2020-01-01,1\n", encoding="utf-8")
+    report = {
+        "paperSignal": {"implemented": True, "incrementalReady": True},
+    }
+    packaged = (
+        promotion_helpers.PromotionPackagedFile(
+            artifact_path="strategy/assets/next_positions.csv",
+            source_path=generated,
+            purpose="derived selected-round lookup",
+            role="base_asset",
+        ),
+    )
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="generated research evidence",
+    ):
+        promotion_helpers._validate_packaged_research_evidence_sources(
+            packaged,
+            branch=branch,
+            report=report,
+        )
+
+
+def test_refactor_report_rejects_export_trade_log_as_live_asset(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    branch.mkdir()
+    destination = tmp_path / "paper-ready-artifact"
+    destination.mkdir()
+    generated = destination / "trade-log.csv"
+    generated.write_text("date,next_position\n2020-01-01,1\n", encoding="utf-8")
+    report = {
+        "paperSignal": {"implemented": True, "incrementalReady": True},
+    }
+    packaged = (
+        promotion_helpers.PromotionPackagedFile(
+            artifact_path="strategy/assets/trade-log.csv",
+            source_path=generated,
+            purpose="dated paper replay source",
+            role="base_asset",
+        ),
+    )
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="generated research evidence or export output",
+    ):
+        promotion_helpers._validate_packaged_research_evidence_sources(
+            packaged,
+            branch=branch,
+            destination=destination,
+            report=report,
+        )
+
+
+def test_refactor_report_allows_external_trade_log_named_asset(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    branch.mkdir()
+    destination = tmp_path / "paper-ready-artifact"
+    destination.mkdir()
+    external = tmp_path / "trading-internal" / "data" / "trade-log.csv"
+    external.parent.mkdir(parents=True)
+    external.write_text("date,next_position\n2020-01-01,1\n", encoding="utf-8")
+    report = {
+        "paperSignal": {"implemented": True, "incrementalReady": True},
+    }
+    packaged = (
+        promotion_helpers.PromotionPackagedFile(
+            artifact_path="strategy/assets/trade-log.csv",
+            source_path=external,
+            purpose="original external signal dependency",
+            role="base_asset",
+        ),
+    )
+
+    promotion_helpers._validate_packaged_research_evidence_sources(
+        packaged,
+        branch=branch,
+        destination=destination,
+        report=report,
+    )
+
+
+def test_refactor_report_rejects_oracle_answers_as_initial_state(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    branch.mkdir()
+    state = branch / "runtime" / "initial-state" / "strategy" / "paper-seed.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(
+        json.dumps(
+            {
+                "schema": "paper-seed/v1",
+                "seed_source": "selected_round_tail_override",
+                "tail_overrides": {"2026-05-18": 0.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = {
+        "paperSignal": {"implemented": True, "incrementalReady": True},
+    }
+    packaged = (
+        promotion_helpers.PromotionPackagedFile(
+            artifact_path="runtime/initial-state/strategy/paper-seed.json",
+            source_path=state,
+            purpose="startup cursor seed",
+            role="initial_state",
+        ),
+    )
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="validation oracle answers",
+    ):
+        promotion_helpers._validate_packaged_research_evidence_sources(
+            packaged,
+            branch=branch,
+            report=report,
+        )
+
+
+def test_refactor_report_allows_strategy_owned_initial_state(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    branch.mkdir()
+    state = branch / "runtime" / "initial-state" / "strategy" / "paper-state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(
+        json.dumps(
+            {
+                "schema": "paper-state/v1",
+                "calendar_origin": "2023-03-08",
+                "last_model_refit_ordinal": 800,
+                "state_end": "2026-05-18",
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = {
+        "paperSignal": {"implemented": True, "incrementalReady": True},
+    }
+    packaged = (
+        promotion_helpers.PromotionPackagedFile(
+            artifact_path="runtime/initial-state/strategy/paper-state.json",
+            source_path=state,
+            purpose="strategy-owned cutover metadata",
+            role="initial_state",
+        ),
+    )
+
+    promotion_helpers._validate_packaged_research_evidence_sources(
+        packaged,
+        branch=branch,
+        report=report,
+    )
+
+
+def test_refactor_report_rejects_incremental_ready_contradiction() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    report = {
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "liveReadiness": "finite replay after the packaged log returns neutral",
+        },
+        "limitations": [],
+    }
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="incrementalReady=true conflicts",
+    ):
+        promotion_helpers._validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+        )
+
+
+def test_refactor_report_allows_negated_replay_language() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    report = {
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "design": _paper_design(uses_state=True),
+            "liveReadiness": (
+                "get_paper_signal reads live feeds and persisted state for future "
+                "paper days; this is not a replay of research evidence."
+            ),
+        },
+        "limitations": [],
+    }
+
+    promotion_helpers._validate_agent_paper_signal_contract(
+        report,
+        source,
+        require_paper_signal=True,
+    )
+
+
+def test_refactor_report_requires_paper_signal_design_contract() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    report = {
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "liveReadiness": "continuing paper signal from bounded live history",
+        },
+        "limitations": [],
+    }
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="paperSignal.design",
+    ):
+        promotion_helpers._validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+        )
+
+
+def test_hosted_paper_request_is_actionable_for_training_like_source(
+    tmp_path: Path,
+) -> None:
+    branch = tmp_path / "branch"
+    promoted_dir = branch / "promoted"
+    promoted_dir.mkdir(parents=True)
+    source = promoted_dir / "engine.py"
+    source.write_text("# promoted\n", encoding="utf-8")
+    scan = {
+        "paperSignal": {
+            "implemented": False,
+            "sourceTrainingCalls": ["model.fit"],
+        },
+        "backtestWindow": {
+            "effectiveWindow": {"start": "2020-01-01", "end": "2020-12-31"}
+        },
+    }
+
+    request_path = promotion_helpers._write_hosted_paper_rewrite_request(
+        promoted_dir,
+        branch=branch,
+        source_path=source,
+        dependency_scan=scan,
+        signals=[
+            {
+                "kind": "missing_paper_signal",
+                "value": "get_paper_signal",
+                "reason": "missing",
+            }
+        ],
+    )
+
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    work_order = "\n".join(request["workOrder"])
+    assert "context_runtime_paths" in work_order
+    assert "strategy-type classification" in work_order
+    assert request["mission"]["agentRole"].startswith("The agent decides")
+    assert request["facts"]["paperSignal"]["sourceTrainingCalls"] == ["model.fit"]
+    assert request["runtimeApiFacts"]["paperSignalSignature"].startswith(
+        "def get_paper_signal"
+    )
+    assert "cutoverMeaning" in request["runtimeApiFacts"]
+    assert request["runtimeApiFacts"]["selectedRoundCutoverEnd"] == "2020-12-31"
+    assert "compiled absolute target exposure" in request["runtimeApiFacts"][
+        "paperSignalReturn"
+    ]
+    assert "promotion.py" in request["avoidBeforeFirstEdit"][0]
+    assert request["reportContract"]["paperSignal"]["incrementalReady"] is not True
+    assert "design" in request["reportContract"]["paperSignal"]
+    cutover = request["reportContract"]["paperSignal"]["design"]["cutover"]
+    assert "minimal_cutover_state" in cutover["mode"]
+    assert "gateContract" in request
+    assert "acceptanceCriteria" not in request
+    assert "agentQuestions" not in request
+
+
+def test_trade_log_oracle_facts_withhold_expected_values(tmp_path: Path) -> None:
+    trade_log = tmp_path / "trade-log.csv"
+    trade_log.write_text(
+        "date,next_position\n"
+        "2026-05-14,0\n"
+        "2026-05-15,0.35\n"
+        "2026-05-18,0\n",
+        encoding="utf-8",
+    )
+
+    facts = promotion_helpers._trade_log_oracle_facts(trade_log)
+
+    assert facts["tailSample"]
+    assert all("expectedNextPosition" not in item for item in facts["tailSample"])
+    assert "withheld" in facts["diagnosticPolicy"]
+
+
+def test_refactor_report_rejects_cutover_state_without_initial_state() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    report = {
+        "paths": {"packagedFiles": [], "initialStateFiles": []},
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "design": _paper_design(
+                uses_state=True,
+                cutover_state_required=True,
+            ),
+            "liveReadiness": "continuing paper signal from startup state",
+        },
+        "limitations": [],
+    }
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="paths.initialStateFiles",
+    ):
+        promotion_helpers._validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+        )
+
+
+def test_refactor_report_rejects_cutover_state_before_selected_round_end() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    design = _paper_design(
+        uses_state=True,
+        cutover_state_required=True,
+    )
+    design["cutover"]["stateEnd"] = "2020-01-02"
+    report = {
+        "paths": {
+            "initialStateFiles": [
+                {
+                    "artifactPath": "runtime/initial-state/strategy/paper-state.json",
+                    "sourcePath": "paper-state.json",
+                }
+            ]
+        },
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "design": design,
+            "liveReadiness": "continuing paper signal from startup state",
+        },
+        "limitations": [],
+    }
+    candidate = Namespace(edge_result={"effective_window": {"end": "2020-12-31"}})
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="selected round cutover end 2020-12-31",
+    ):
+        promotion_helpers._validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+            candidate=candidate,
+        )
+
+
+def test_refactor_report_rejects_full_replay_cutover_mode() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    design = _paper_design(
+        uses_state=True,
+        cutover_state_required=True,
+    )
+    design["cutover"]["mode"] = "full_replay_required"
+    report = {
+        "paths": {
+            "initialStateFiles": [
+                {
+                    "artifactPath": "runtime/initial-state/strategy/paper-state.json",
+                    "sourcePath": "paper-state.json",
+                }
+            ]
+        },
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "design": design,
+            "liveReadiness": "continuing paper signal from startup state",
+        },
+        "limitations": [],
+    }
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="full_replay_required",
+    ):
+        promotion_helpers._validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+        )
+
+
+def test_paper_smoke_rejects_mutating_tail_dates_covered_by_cutover_state(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "mutating_tail_state")
+    _write_strategy_artifact_inputs(branch)
+    promoted_dir = branch / "promoted"
+    promoted_dir.mkdir()
+    promoted_source = promoted_dir / "engine.py"
+    promoted_source.write_text(
+        "from pathlib import Path\n"
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        path = Path(self.context['_runtime_paths']['state']) / 'strategy/cursor.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(str(as_of), encoding='utf-8')\n"
+        "        return {'next_position': 1.0, 'date': str(as_of)}\n",
+        encoding="utf-8",
+    )
+    destination = tmp_path / "artifact"
+    destination.mkdir()
+    (destination / "trade-log.csv").write_text(
+        "date,next_position\n2020-01-02,1\n",
+        encoding="utf-8",
+    )
+    candidate = Namespace(
+        branch=branch,
+        strategy_source_path=branch / "engine.py",
+        branch_id="mutating_tail_state",
+        ticker="TSLA",
+        edge_result={"effective_window": {"end": "2020-01-02"}},
+    )
+    report = {
+        "paperSignal": {
+            "design": _paper_design(
+                uses_state=True,
+                cutover_state_required=True,
+            )
+        }
+    }
+    report["paperSignal"]["design"]["cutover"][
+        "stateEnd"
+    ] = "2020-01-02"
+
+    smoke = promotion_helpers._run_artifact_paper_signal_smoke(
+        candidate,
+        strategy_source_path=promoted_source,
+        packaged_files=(),
+        destination=destination,
+        strategy_entrypoint="strategy.py",
+        runtime_env={},
+        is_denylisted_source=lambda path: False,
+        report=report,
+    )
+
+    assert smoke["status"] == "failed"
+    assert "historical tail date already covered" in smoke["reason"]
+
+
+def test_paper_signal_design_facts_detects_runtime_path_helper_state() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "from abel_edge.runtime_paths import context_runtime_paths\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        paths = context_runtime_paths(self.context)\n"
+        "        state_root = paths.state / 'strategy'\n"
+        "        return {'next_position': 1.0, 'state': str(state_root)}\n"
+    )
+
+    facts = promotion_helpers._paper_signal_design_facts(source)
+
+    assert facts["usesStateDir"] is True
+
+
+def test_paper_signal_design_facts_detects_helper_state_writes() -> None:
+    source = (
+        "import pickle\n"
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "from abel_edge.runtime_paths import context_runtime_paths\n"
+        "def _save_paper_state(path, state):\n"
+        "    with path.open('wb') as fh:\n"
+        "        pickle.dump(state, fh)\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        paths = context_runtime_paths(self.context)\n"
+        "        state_path = paths.state / 'strategy' / 'paper_state.pkl'\n"
+        "        _save_paper_state(state_path, {'as_of': str(as_of)})\n"
+        "        return {'next_position': 1.0}\n"
+    )
+
+    facts = promotion_helpers._paper_signal_design_facts(source)
+
+    assert facts["usesStateDir"] is True
+    assert facts["writesState"] is True
+
+
+def test_temporal_dependency_facts_surface_lookback_and_calendar_hints() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "TRAIN_WINDOW = 360\n"
+        "REFIT_EVERY = 20\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        close = ctx.target.series('close')\n"
+        "        features = close.pct_change(60).shift(1).rolling(window=20).mean()\n"
+        "        for row_idx in range(180, len(close) - 1):\n"
+        "            if row_idx % REFIT_EVERY == 0:\n"
+        "                train_x = features.iloc[row_idx - TRAIN_WINDOW:row_idx]\n"
+        "        return ctx.decisions(0)\n"
+    )
+    tree = ast.parse(source)
+
+    facts = promotion_helpers._source_temporal_dependency_facts(source, tree)
+
+    lookbacks = " ".join(item["expression"] for item in facts["lookbackHints"])
+    calendar = " ".join(item["expression"] for item in facts["calendarHints"])
+    constants = {item["name"]: item["value"] for item in facts["constantHints"]}
+    assert "pct_change(60)" in lookbacks
+    assert "rolling(window=20)" in lookbacks
+    assert "row_idx % REFIT_EVERY" in calendar
+    assert "range(180, len(close) - 1)" in calendar
+    assert constants["TRAIN_WINDOW"] == "360"
+    assert constants["REFIT_EVERY"] == "20"
 
 
 def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_stateful_branch(
@@ -2408,8 +3352,8 @@ def test_export_selected_strategy_artifact_uses_local_runtime_state_source(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2471,7 +3415,14 @@ def test_export_selected_strategy_artifact_uses_local_runtime_state_source(
                         }
                     ],
                 },
-                "paperSignal": {"implemented": True, "incrementalReady": True},
+                "paperSignal": {
+                    "implemented": True,
+                    "incrementalReady": True,
+                    "design": _paper_design(
+                        uses_state=True,
+                        cutover_state_required=True,
+                    ),
+                },
                 "limitations": [],
                 "replacements": [],
             }
@@ -2530,8 +3481,8 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2605,7 +3556,14 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
                         },
                     ],
                 },
-                "paperSignal": {"implemented": True, "incrementalReady": True},
+                "paperSignal": {
+                    "implemented": True,
+                    "incrementalReady": True,
+                    "design": _paper_design(
+                        uses_state=True,
+                        cutover_state_required=True,
+                    ),
+                },
                 "limitations": [],
                 "replacements": [
                     {
@@ -2717,8 +3675,8 @@ def test_export_selected_strategy_artifact_regenerates_missing_metric_input(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2856,8 +3814,8 @@ def test_upload_strategy_artifact_for_session_returns_upload_summary(
         if "-c" in command:
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
-                "date,asset_return,pnl,position,cum_return,source\n"
-                "2020-01-01,0,0,0,0,backfill\n",
+                "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(

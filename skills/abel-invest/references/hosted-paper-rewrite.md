@@ -2,164 +2,173 @@
 
 Use this reference when promotion or visualization returns
 `needs_agent_refactor` with `kind=hosted_paper_rewrite`, or when the user asks
-you to make a selected strategy paper-ready for hosted daily execution.
+you to make a selected Abel Invest strategy paper-ready for hosted daily
+execution.
 
-The rewrite goal is:
+## Goal
+
+Rewrite the promoted copy so it preserves the selected research strategy's
+decision semantics while running as one hosted daily paper step.
+
+Think in this timeline:
 
 ```text
-Preserve the research strategy's decision semantics while making the promoted
-copy runnable as a hosted daily paper strategy.
+research backtest timeline -> selected round cutover -> future hosted paper days
 ```
 
-The system owns paths, packaging, paper cursor semantics, and verification. The
-agent owns the strategy-specific rewrite: how to compute the next signal, how to
-persist strategy-owned state, and when a candidate is not safely hostable.
+The system provides facts and gates. You decide the strategy-specific rewrite.
+Do not force the source into a fixed category such as ML, indicator, replay, or
+hybrid. Read the strategy and explain the design you choose.
 
-## Rewrite Loop
+## Loop
 
-1. Read the emitted `refactor-request.json`.
-2. Read the promoted source named by `sourcePath`; edit only that promoted copy.
-3. Inspect `dependencyScanPath`, request `signals`, the original branch source,
-   nearby branch-local assets, and `.abel-runtime/state/**` when present.
-4. Rewrite the promoted source for the runtime contract below.
+1. Read `refactor-request.json`.
+2. Edit only the promoted source named by `sourcePath`.
+3. Use request `facts` as evidence: feeds, selected window, lookback hints,
+   training calls, ordinal hints, branch files, and validation sample dates.
+4. Implement `BranchEngine.get_paper_signal(as_of=...)`.
 5. Write `refactor-report.json` beside the request.
 6. Rerun the same `visualize-session`, `export-strategy-artifact`, or
-   `promote-strategy` command that produced the request.
-7. If promotion asks again, use the new request/gate facts as the next edit
-   target. Do not start a separate agent process.
+   `promote-strategy` command.
+7. If the gate returns another request, treat `validation.lastGateFailure` as
+   diagnostics for the next edit.
 
-Do not edit the original research branch during promotion. Promotion packages
-the promoted copy plus files declared in the report.
+Do not edit the original branch. Do not start by reading Abel-skills promotion
+internals or Edge promotion-gate internals; the request is the workbench. Inspect
+internals only after a refreshed request cannot explain a failure.
 
-## Runtime Contract
+## Runtime Paths
 
-Allowed path surfaces:
+Inside `get_paper_signal`, use the hosted path helper:
 
 ```python
-ctx.paths.base_strategy          # read-only files packaged under strategy/**
-ctx.paths.runtime                # read-only runtime config under runtime/**
-ctx.state_dir / "strategy" / ... # strategy-owned mutable paper state
+from abel_edge.runtime_paths import context_runtime_paths
+
+paths = context_runtime_paths(self.context)
+paths.base_strategy             # read-only files packaged under strategy/**
+paths.runtime                   # read-only runtime config under runtime/**
+paths.state / "strategy" / ...  # strategy-owned mutable paper state
 ```
 
 Rules:
 
-- Remove developer-local absolute paths such as `/home/...` or `/Users/...`.
-- Read immutable external data through `ctx.paths.base_strategy`.
-- Write mutable model/cache/checkpoint/retrain files only under
-  `ctx.state_dir / "strategy"`.
-- Do not write under `ctx.paths.base_strategy` or `ctx.paths.runtime`.
-- Treat `paper-log.csv` as runtime-owned paper ledger and cursor evidence, not
-  as a private strategy-state store.
-- Preserve `compute_decisions(self, ctx)` as the backtest authority unless the
-  request explicitly says the source is not semantically usable.
-- Implement `get_paper_signal(self, *, as_of=None)` for hosted paper. Simple
-  technical strategies should still provide this path, usually by recomputing a
-  bounded lookback window. Stateful strategies should load/update state under
-  `ctx.state_dir / "strategy"`.
+- remove developer-local absolute paths such as `/home/...` or `/Users/...`;
+- read immutable packaged assets through `paths.base_strategy`;
+- write mutable strategy state only under `paths.state / "strategy"`;
+- preserve `compute_decisions(ctx)` as the research/backtest authority unless
+  the source is semantically unusable;
+- do not implement `get_paper_signal` as a wrapper around full
+  `compute_runtime_output(...)` or a full historical replay.
 
-`get_paper_signal` should return scalar audit-friendly values, including
-`next_position`. Include a date/as-of field when useful. It must not require
-future data beyond `as_of`, and rerunning the same `as_of` should be idempotent.
+`get_paper_signal` returns a dict with finite numeric `next_position`.
+`next_position` is the compiled absolute target exposure for `as_of`, matching
+the selected round trade-log meaning. It is not an order delta, order size, or
+only-on-change event.
 
-## Packaging Report
+## Design Questions
 
-Write `refactor-report.json` with this minimal shape:
+Answer these before coding:
+
+- What market data is available on the next hosted paper day?
+- What history is needed to compute one signal?
+- What strategy-owned state, if any, must survive across paper runs?
+- Does row order, `iloc`, `range`, modulo, retraining cadence, or signal holding
+  require a calendar origin anchored to the research window?
+- If startup state is needed, what state must exist at selected-round cutover so
+  the next hosted paper day can continue?
+- How does a repeated same-`as_of` call stay idempotent?
+- What expensive work is avoided during daily hosted paper?
+
+Simple bounded-history strategies often need no startup state. Walking-forward
+or retraining strategies often need a real cutover state such as model, scaler,
+feature window, retrain cursor, calendar ordinal, or latest strategy-owned
+checkpoint. A same-day cache is useful for idempotence, but it is not by itself
+cutover state.
+
+If the strategy can only continue by replaying the full historical timeline,
+declare that limitation instead of claiming hosted fast-paper readiness.
+
+## Report
+
+Write `refactor-report.json` with this shape:
 
 ```json
 {
   "schema": "abel-invest.agent-refactor-report/v1",
   "kind": "hosted_paper_rewrite",
   "scope": "hosted_paper_rewrite",
-  "summary": "brief hosted paper rewrite summary",
+  "summary": "brief rewrite summary",
   "paths": {
     "packagedFiles": [
       {
         "sourcePath": "branch/or/absolute/source.csv",
         "artifactPath": "strategy/assets/source.csv",
-        "purpose": "read-only data required by the promoted strategy"
+        "purpose": "read-only strategy asset"
       }
     ],
     "initialStateFiles": [
       {
-        "sourcePath": "model/latest.joblib",
-        "artifactPath": "runtime/initial-state/strategy/model/latest.joblib",
-        "purpose": "startup model seed for hosted paper"
+        "sourcePath": "state/paper-state.json",
+        "artifactPath": "runtime/initial-state/strategy/paper-state.json",
+        "purpose": "startup strategy state seed"
       }
     ]
   },
   "paperSignal": {
     "implemented": true,
     "incrementalReady": true,
-    "notes": "uses runtime cursor plus strategy-owned state"
+    "design": {
+      "history": {
+        "minBars": 120,
+        "feeds": ["AAPL"],
+        "reason": "history required for one paper signal"
+      },
+      "state": {
+        "usesPersistentState": false,
+        "stateFiles": [],
+        "reason": "no strategy-owned state is needed"
+      },
+      "calendar": {
+        "usesAbsoluteDecisionOrdinal": false,
+        "origin": null,
+        "reason": "logic is date/lookback based"
+      },
+      "cutover": {
+        "requiresStartupState": false,
+        "mode": "none",
+        "dataHistoryStart": null,
+        "stateEnd": null,
+        "reason": "first paper day can compute from bounded history"
+      },
+      "dailyStep": {
+        "reason": "load data through as_of, compute one absolute target exposure, persist strategy state only if needed"
+      }
+    },
+    "liveReadiness": "how future hosted paper days continue"
   },
   "limitations": [],
-  "replacements": [
-    {
-      "path": "old local path or dependency",
-      "replacement": "new runtime path or state helper",
-      "reason": "why this rewrite was needed"
-    }
-  ]
+  "replacements": []
 }
 ```
 
-`packagedFiles` are copied into the artifact under `strategy/**` and must be
-treated as immutable. `initialStateFiles` are copied under
-`runtime/initial-state/**`; the hosted runner hydrates them into
-`ctx.state_dir/**` only when there is no newer persisted state snapshot.
+`packagedFiles` are immutable files copied under `strategy/**`.
+`initialStateFiles` are mutable startup seeds copied under
+`runtime/initial-state/**` and hydrated into state by the hosted runner.
+Do not list the same source file in both lists.
 
-Do not use `state_intent.json`, `stateIntent`, `auto_adapter`, `stateRoot`, or
-`stateFiles` as active promotion protocol fields. They belong to the replaced
-lightweight promotion path.
+Generated research or promotion evidence is not a live strategy dependency.
+Files under `outputs/**`, `promotions/**`, `edge/**`, and the current export
+destination, including generated `trade-log.csv`, are validation evidence.
+Gate failure expected values are diagnostics only; never encode them in assets
+or initial state.
 
-## Common Rewrite Patterns
+Use `paperSignal.design.cutover.mode` as follows:
 
-External CSV or replay file:
+- `none`: no startup state is needed.
+- `minimal_cutover_state`: startup state is built once and is valid through the
+  selected round end.
+- `full_replay_required`: the strategy cannot be made continuing-ready for the
+  current hosted fast-paper contract.
 
-- Declare it in `paths.packagedFiles` under `strategy/assets/...`.
-- Read it with `ctx.paths.base_strategy / "assets" / "<file>"`.
-- If the file only supports finite historical replay and cannot produce future
-  paper signals, record that limitation instead of forcing promotion.
-
-Walk-forward model:
-
-- Store checkpoints, scalers, feature windows, and retrain metadata under
-  `ctx.state_dir / "strategy" / ...`.
-- Use `paths.initialStateFiles` only for startup seeds that must exist before
-  the first hosted paper run.
-- Persist enough metadata to know the last training window and last processed
-  `as_of`.
-- Make same-day reruns idempotent.
-
-Simple indicator strategy:
-
-- Add `get_paper_signal` even when no persisted state is needed.
-- Recompute only the bounded lookback needed for the next signal.
-- Keep full-history `compute_decisions` for validation/backtest behavior.
-
-Non-standard imports:
-
-- Confirm whether the hosted runtime already provides the package.
-- Do not hide dependency installation inside strategy code.
-- If a dependency is essential but not available in hosted paper, record a
-  limitation and leave promotion blocked.
-
-## Failure Triage
-
-If rerun still returns `needs_agent_refactor`, inspect the new request and gate
-evidence first.
-
-Common failures:
-
-- `missing_paper_signal`: promoted source does not define `get_paper_signal`.
-- `developer_local_absolute_path`: a local absolute path remains in source.
-- `developer_local_file_access`: a file read still targets a local path instead
-  of a packaged artifact/runtime path.
-- missing packaged source file: `sourcePath` in the report does not exist.
-- invalid artifact path: report paths must be relative and start with
-  `strategy/**` or `runtime/initial-state/**`.
-- replay mismatch: hosted-paper behavior changed materially from full-history
-  validation, or same-`as_of` reruns are not idempotent.
-
-When a safe hosted paper rewrite is not possible, say so in `limitations` and
-stop promotion instead of weakening the strategy or hiding the issue.
+Set `paperSignal.incrementalReady=true` only when future hosted paper days can
+continue beyond the selected research result.
