@@ -123,6 +123,7 @@ def _paper_evidence(probe_mode: str = "not_needed") -> dict:
         "probeMode": probe_mode,
         "canonicalTimelineSource": None,
         "observations": ["test source reading observation"],
+        "agentOverrides": [],
         "semanticChecks": ["test cutover state semantic check"],
         "whySufficient": "test evidence supports the continuation method",
     }
@@ -3065,6 +3066,8 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     assert request["mission"]["agentRole"].startswith("The agent decides")
     assert "notGateRepair" in request["mission"]
     assert request["facts"]["paperSignal"]["sourceTrainingCalls"] == ["model.fit"]
+    assert request["facts"]["sourceScan"]["coverage"] == "best_effort_static_ast"
+    assert request["facts"]["sourceScan"]["unprovenAbsences"]
     assert request["runtimeApiFacts"]["paperSignalSignature"].startswith(
         "def get_paper_signal"
     )
@@ -3088,6 +3091,75 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     assert "probeEvidence" in request["gateContract"]
     assert "acceptanceCriteria" not in request
     assert "agentQuestions" not in request
+
+
+def test_training_scan_reports_observed_calls_without_false_trainy_match() -> None:
+    source = (
+        "class BranchEngine:\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        train_y = self.history['target']\n"
+        "        if train_y.notna().any():\n"
+        "            self.model.fit(self.features, train_y)\n"
+        "        return {'next_position': 1.0}\n"
+    )
+
+    facts = promotion_helpers._paper_signal_design_facts(source)
+
+    assert facts["trainingCalls"] == ["self.model.fit"]
+    assert "train_y.notna" not in facts["sourceTrainingCalls"]
+
+
+def test_refactor_report_rejects_stateless_recompute_with_fit_in_signal_path() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        self.model.fit(self.features, self.target)\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    report = {
+        "paperSignal": _paper_signal(method="stateless_recompute"),
+        "limitations": [],
+    }
+
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="stateless_recompute conflicts with observed fit/update calls",
+    ):
+        promotion_helpers._validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+        )
+
+
+def test_refactor_report_allows_agent_override_for_unused_fit_observation() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        self.model.fit(self.features, self.target)\n"
+        "        return {'next_position': 1.0}\n"
+    )
+    report = {
+        "paperSignal": _paper_signal(method="stateless_recompute"),
+        "limitations": [],
+    }
+    report["paperSignal"]["evidence"]["agentOverrides"] = [
+        {
+            "scanObservation": "source contains self.model.fit in get_paper_signal",
+            "agentFinding": (
+                "the fit result is unused in the returned exposure and does not affect "
+                "the paper signal"
+            ),
+        }
+    ]
+
+    promotion_helpers._validate_agent_paper_signal_contract(
+        report,
+        source,
+        require_paper_signal=True,
+    )
 
 
 def test_trade_log_oracle_facts_withhold_expected_values(tmp_path: Path) -> None:

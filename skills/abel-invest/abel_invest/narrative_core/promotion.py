@@ -496,6 +496,11 @@ def _collect_hosted_paper_dependency_scan(
     return {
         "schema": "abel-invest.hosted-paper-facts/v2",
         "sourcePath": _display_source_path(branch, strategy_source_path),
+        "sourceScan": _source_scan_observations(
+            source,
+            tree,
+            file_accesses=file_accesses,
+        ),
         "paperSignal": {
             "implemented": _source_overrides_get_paper_signal(source),
             "fullRuntimeCompute": _paper_signal_uses_full_runtime_compute(source),
@@ -795,9 +800,16 @@ TEMPORAL_KEYWORD_NAMES = {
 }
 TEMPORAL_CALL_SUFFIXES = (
     ".bfill",
+    ".cummax",
+    ".cummin",
+    ".cumprod",
+    ".cumsum",
     ".ewm",
+    ".expanding",
     ".ffill",
     ".pct_change",
+    ".quantile",
+    ".rank",
     ".rolling",
     ".shift",
 )
@@ -856,9 +868,21 @@ def _source_temporal_dependency_facts(source: str, tree: ast.AST | None) -> dict
                         "line": getattr(node, "lineno", 0),
                     },
                 )
-            if lowered_call in {"rolling", "pct_change", "shift", "ffill", "bfill", "ewm"} or lowered_call.endswith(
-                TEMPORAL_CALL_SUFFIXES
-            ):
+            if lowered_call in {
+                "bfill",
+                "cummax",
+                "cummin",
+                "cumprod",
+                "cumsum",
+                "ewm",
+                "expanding",
+                "ffill",
+                "pct_change",
+                "quantile",
+                "rank",
+                "rolling",
+                "shift",
+            } or lowered_call.endswith(TEMPORAL_CALL_SUFFIXES):
                 append_unique(
                     lookback_hints,
                     {
@@ -913,6 +937,38 @@ def _source_temporal_dependency_facts(source: str, tree: ast.AST | None) -> dict
             "Facts only. The agent decides the temporal dependency contract; "
             "calendar hints such as range/modulo/iloc often mean row-index "
             "chronology must be anchored to the selected backtest window."
+        ),
+    }
+
+
+def _source_scan_observations(
+    source: str,
+    tree: ast.AST | None,
+    *,
+    file_accesses: list[dict[str, Any]],
+) -> dict[str, Any]:
+    temporal = _source_temporal_dependency_facts(source, tree)
+    observed_fit_calls = _training_call_facts(tree) if tree is not None else []
+    observed_state_writes = [
+        item
+        for item in file_accesses
+        if isinstance(item, dict) and item.get("access") == "write"
+    ]
+    return {
+        "coverage": "best_effort_static_ast",
+        "positiveFindings": {
+            "observedFitCalls": observed_fit_calls,
+            "observedStateWriteCalls": observed_state_writes,
+            "observedLookbackOps": temporal.get("lookbackHints", []),
+            "observedCalendarOps": temporal.get("calendarHints", []),
+        },
+        "unprovenAbsences": [
+            "No observed fit/train call does not prove absence.",
+            "No observed state write does not prove statelessness.",
+            "Static scan does not replace source reading by the agent.",
+        ],
+        "agentDuty": (
+            "Inspect source and report semantic dependencies the static scan missed."
         ),
     }
 
@@ -1109,6 +1165,18 @@ def _write_hosted_paper_rewrite_request(
     if validation_failure:
         validation_payload["lastGateFailure"] = validation_failure
     cutover_end = _scan_cutover_end(dependency_scan)
+    facts = dict(dependency_scan)
+    if "sourceScan" not in facts:
+        source_text = source_path.read_text(encoding="utf-8", errors="replace")
+        try:
+            tree = ast.parse(source_text)
+        except SyntaxError:
+            tree = None
+        facts["sourceScan"] = _source_scan_observations(
+            source_text,
+            tree,
+            file_accesses=facts.get("fileAccesses", []),
+        )
     request_path.write_text(
         json.dumps(
             {
@@ -1143,7 +1211,7 @@ def _write_hosted_paper_rewrite_request(
                 },
                 "workOrder": work_order,
                 "signals": signals,
-                "facts": dependency_scan,
+                "facts": facts,
                 "probeCapability": {
                     "purpose": (
                         "Use probes as agent-owned evidence tools when reading "
@@ -1768,6 +1836,12 @@ def _validate_agent_paper_signal_contract(
             paper_signal,
             continuation_method=continuation_method,
         )
+        _validate_continuation_method_admissibility(
+            report,
+            source,
+            paper_signal,
+            continuation_method=continuation_method,
+        )
     if implemented is True and not _source_overrides_get_paper_signal(source):
         raise PromotionNeedsAgentRefactor(
             "paperSignal.implemented=true but promoted source does not define get_paper_signal"
@@ -2052,6 +2126,61 @@ def _validate_paper_signal_evidence_contract(
                 "paperSignal.continuation.method=stateful_continuation requires "
                 "paperSignal.evidence.semanticChecks to support cutover state validity"
             )
+
+
+def _validate_continuation_method_admissibility(
+    report: dict[str, Any],
+    source: str,
+    paper_signal: dict[str, Any],
+    *,
+    continuation_method: str,
+) -> None:
+    source_facts = _paper_signal_design_facts(source)
+    observed_fit_calls = source_facts.get("trainingCalls") or []
+    if (
+        continuation_method == "stateless_recompute"
+        and observed_fit_calls
+        and not _report_has_agent_override_for_fit(report, paper_signal)
+    ):
+        joined = ", ".join(_clean(item) for item in observed_fit_calls if _clean(item))
+        raise PromotionNeedsAgentRefactor(
+            "paperSignal.continuation.method=stateless_recompute conflicts with "
+            f"observed fit/update calls in the source signal path: {joined}. "
+            "Use stateful_continuation, or add a documented agentOverrides "
+            "entry proving the fitted object does not affect the paper signal."
+        )
+
+
+def _report_has_agent_override_for_fit(
+    report: dict[str, Any],
+    paper_signal: dict[str, Any],
+) -> bool:
+    evidence = _paper_signal_evidence_payload(paper_signal)
+    if not isinstance(evidence, dict):
+        return False
+    overrides = evidence.get("agentOverrides")
+    if not isinstance(overrides, list):
+        return False
+    for item in overrides:
+        if isinstance(item, dict):
+            text = " ".join(
+                _clean(item.get(key))
+                for key in ("scanObservation", "agentFinding", "evidence", "reason")
+            ).lower()
+        else:
+            text = _clean(item).lower()
+        if "fit" in text and any(
+            term in text
+            for term in (
+                "does not affect",
+                "not used",
+                "unused",
+                "not part of",
+                "not participate",
+            )
+        ):
+            return True
+    return False
 
 
 def _report_initial_state_entries(report: dict[str, Any]) -> list[Any]:
@@ -3201,13 +3330,28 @@ def _find_function(tree: ast.AST, name: str) -> ast.FunctionDef | ast.AsyncFunct
     return None
 
 
-def _training_call_facts(function: ast.AST) -> list[str]:
+TRAINING_CALL_LEAF_NAMES = {
+    "calibrate",
+    "fit",
+    "fit_transform",
+    "partial_fit",
+    "refit",
+    "retrain",
+    "train",
+    "update_model",
+}
+
+
+def _training_call_facts(function: ast.AST | None) -> list[str]:
+    if function is None:
+        return []
     calls: list[str] = []
     for node in ast.walk(function):
         if not isinstance(node, ast.Call):
             continue
         callee = _call_name(node.func)
-        if callee == "fit" or callee.endswith(".fit") or "train" in callee.lower():
+        leaf = callee.rsplit(".", 1)[-1].lower()
+        if leaf in TRAINING_CALL_LEAF_NAMES:
             if callee not in calls:
                 calls.append(callee)
     return calls[:20]
