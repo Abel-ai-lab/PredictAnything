@@ -111,9 +111,10 @@ that `get_paper_signal` consumes. It may return JSON-serializable state or a
 manifest of files written under the staged state directory when fitted objects
 need file serialization.
 
-The harness calls the hook for validation cutover and production cutover. Do not
-hand-write separate validation state. Do not encode expected positions or gate
-answers in state.
+The gate calls the hook for validation cutover before the hidden holdout tail.
+Use the same hook and state schema to create the production startup files listed
+in `paths.initialStateFiles`. Do not hand-write separate validation state. Do
+not encode expected positions or gate answers in state.
 
 ## Report
 
