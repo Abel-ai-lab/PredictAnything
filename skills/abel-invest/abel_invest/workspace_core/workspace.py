@@ -448,8 +448,10 @@ ask the user first. If the user agrees or explicitly asks to publish the session
 view, `visualize-session --session <session>` builds the view from the session
 folder and attaches the selected hostable validation strategy artifact when one
 is available. If the command emits a hosted paper `refactor-request.json`, edit
-only the promoted copy named there, write `refactor-report.json`, and rerun the
-same command. Do not start a separate agent process. Use
+only the promoted copy named there when the strategy needs stateful
+continuation; stateless strategies usually only need a paper history boundary
+declared in `refactor-report.json`. Rerun the same command afterward. Do not
+start a separate agent process. Use
 `--without-strategy-artifact` only for narrative-only views.
 This workspace is for alpha-managed strategy search, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a

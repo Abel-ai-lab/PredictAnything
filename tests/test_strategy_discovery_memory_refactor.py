@@ -1474,6 +1474,8 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
     )
     assert manifest["source"]["selectionScope"] == "session"
     assert manifest["promotion"]["mode"] == "agent_refactor"
+    assert manifest["runtime"]["paperExecutionProfile"]["history"]["boundary"] == "fixed_lookback"
+    assert manifest["runtime"]["paperExecutionProfile"]["history"]["lookbackBars"] == 1
 
 
 def test_export_selected_strategy_artifact_nulls_inapplicable_metrics(
@@ -3093,6 +3095,37 @@ def test_refactor_report_requires_evidence_contract() -> None:
             source,
             require_paper_signal=True,
         )
+
+
+def test_refactor_report_allows_stateless_without_get_paper_signal() -> None:
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        close = ctx.target.series('close')\n"
+        "        return ctx.decisions((close > close.shift(1)).fillna(0.0))\n"
+    )
+    report = {
+        "paperSignal": _paper_signal(method="stateless_recompute"),
+        "limitations": [],
+    }
+
+    promotion_helpers._validate_agent_paper_signal_contract(
+        report,
+        source,
+        require_paper_signal=True,
+    )
+
+    profile = promotion_helpers._report_paper_execution_profile(report)
+    assert profile == {
+        "schema": "abel.paper-execution-profile/v1",
+        "history": {
+            "boundary": "fixed_lookback",
+            "lookbackBars": 1,
+            "feeds": ["TSLA"],
+            "reason": "test strategy needs a bounded paper history declaration",
+        },
+    }
 
 
 def test_hosted_paper_request_is_actionable_for_training_like_source(

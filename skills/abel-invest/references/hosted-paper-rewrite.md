@@ -6,8 +6,7 @@ Invest strategy paper-ready for hosted daily execution.
 
 ## Goal
 
-Rewrite the promoted copy into a live-paper continuation of the selected
-research strategy:
+Promote the selected research strategy into a live-paper continuation:
 
 ```text
 research backtest semantics -> selected round cutover -> future daily paper calls
@@ -15,7 +14,8 @@ research backtest semantics -> selected round cutover -> future daily paper call
 
 Your task is not to repair the promotion gate. The gate is a verifier. First
 understand how the strategy naturally continues after the selected round
-cutover, then implement that continuation and provide evidence.
+cutover, then declare the paper history boundary, rewrite only when stateful
+continuation needs code, and provide evidence.
 
 Harness facts are observations, not complete semantic truth. Empty observed
 lists such as no observed fit calls or no observed state writes are not proof of
@@ -30,8 +30,11 @@ absence. Read the source and report semantic dependencies the scan missed.
    `stateful_continuation`, `full_replay_fallback`, or `not_hostable`.
 3. Use request facts as evidence: feeds, selected window, source observations,
    calendar anchors, imports, branch files, and validation date/index anchors.
-4. Edit only the promoted source named by `sourcePath`.
-5. Implement `BranchEngine.get_paper_signal(as_of=...)`.
+4. For `stateless_recompute`, leave the promoted source unchanged unless a real
+   source bug or immutable asset path fix is needed.
+5. For `stateful_continuation` or `full_replay_fallback`, edit only the
+   promoted source named by `sourcePath` and implement
+   `BranchEngine.get_paper_signal(as_of=...)`.
 6. For `stateful_continuation`, also implement
    `BranchEngine.build_paper_initial_state(cutover_as_of=...)`.
 7. Write `refactor-report.json` beside the request.
@@ -69,18 +72,19 @@ Rules:
 - do not use selected-round `trade-log.csv`, gate answers, or promotion outputs
   as live strategy inputs.
 
-`get_paper_signal` returns a dict with finite numeric `next_position`.
-`next_position` is the compiled absolute target exposure for `as_of`, matching
-the selected round trade-log meaning. It is not an order delta, order size, or
-only-on-change event.
+When implemented, `get_paper_signal` returns a dict with finite numeric
+`next_position`. `next_position` is the compiled absolute target exposure for
+`as_of`, matching the selected round trade-log meaning. It is not an order
+delta, order size, or only-on-change event.
 
 ## Continuation Methods
 
 Choose one runtime shape:
 
-- `stateless_recompute`: each paper call computes the current signal from legal
+- `stateless_recompute`: paper execution computes the current signal from legal
   market data, immutable assets, source parameters, and an explicit history
-  boundary. It writes no strategy state.
+  boundary. It writes no strategy state and normally does not need a
+  `get_paper_signal` wrapper.
 - `stateful_continuation`: the strategy can build strategy-owned cutover state,
   advance it through paper dates, and persist the advanced state. The promotion
   gate packages the final startup state after successful tail replay.
@@ -102,9 +106,12 @@ marker is not enough.
 If the request sets `requirements.statefulContinuationRequired=true`, implement
 `stateful_continuation`. Do not choose `stateless_recompute` for that promotion.
 
-For expanding, ranking, cumulative, or ordinal logic, declare the calendar or
-history origin. Fixed-window indicators may use a recent lookback; origin-based
-statistics usually cannot.
+Every method must declare the paper history boundary. The gate packages that
+boundary into the artifact manifest as `runtime.paperExecutionProfile`, and
+Edge uses it to limit paper-time feed reads. For expanding, ranking,
+cumulative, or ordinal logic, declare the calendar or history origin.
+Fixed-window indicators may use a recent lookback; origin-based statistics
+usually cannot.
 
 ## Stateful Bootstrap
 
@@ -142,7 +149,7 @@ Write `refactor-report.json` with this shape:
   "schema": "abel-invest.agent-refactor-report/v1",
   "kind": "hosted_paper_rewrite",
   "scope": "hosted_paper_rewrite",
-  "summary": "brief rewrite summary",
+  "summary": "brief promotion summary",
   "paths": {
     "packagedFiles": [],
     "initialStateFiles": []
@@ -158,7 +165,7 @@ Write `refactor-report.json` with this shape:
     "design": {
       "history": {
         "boundary": "fixed_lookback",
-        "minBars": 120,
+        "lookbackBars": 120,
         "origin": null,
         "feeds": ["AAPL"],
         "reason": "history required for one paper signal"

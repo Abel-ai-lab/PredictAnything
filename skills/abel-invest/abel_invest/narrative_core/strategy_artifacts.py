@@ -453,6 +453,8 @@ def build_strategy_artifact_manifest(
         ],
         "backtest": backtest_payload,
     }
+    if promotion is not None and promotion.paper_execution_profile:
+        manifest["runtime"]["paperExecutionProfile"] = promotion.paper_execution_profile
     manifest["promotion"] = promotion_payload
     return manifest
 
