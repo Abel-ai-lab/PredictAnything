@@ -267,6 +267,21 @@ def _write_strategy_artifact_inputs(
 
     inputs_dir = ni.dependencies_path(branch).parent
     inputs_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir = inputs_dir / "market-cache"
+    cache_results = []
+    for idx, symbol in enumerate([target, *selected_inputs], start=1):
+        feed_path = cache_dir / f"{symbol}.csv"
+        _write_prepared_market_feed(feed_path, symbol=symbol, offset=idx)
+        cache_results.append(
+            {
+                "symbol": symbol,
+                "ok": True,
+                "row_count": 4,
+                "available_range": {"start": "2020-01-01", "end": "2020-01-04"},
+                "data_path": str(feed_path),
+            }
+        )
+
     dependencies = {
         "version": 1,
         "branch_id": branch.name,
@@ -276,6 +291,12 @@ def _write_strategy_artifact_inputs(
         "selected_graph_nodes": [f"{ticker}.price" for ticker in selected_inputs],
         "requested_start": "2020-01-01",
         "data_requirements": {"timeframe": "1d"},
+        "cache": {
+            "adapter": "test-cache",
+            "timeframe": "1d",
+            "profile": "daily",
+            "results": cache_results,
+        },
     }
     ni.dependencies_path(branch).write_text(json.dumps(dependencies), encoding="utf-8")
     ni.runtime_profile_path(branch).write_text(
@@ -310,6 +331,18 @@ def _write_strategy_artifact_inputs(
         encoding="utf-8",
     )
     return trade_log_path
+
+
+def _write_prepared_market_feed(path: Path, *, symbol: str, offset: int = 1) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["timestamp,symbol,open,high,low,close,volume"]
+    for idx in range(4):
+        close = 100 + offset + idx
+        day = idx + 1
+        lines.append(
+            f"2020-01-{day:02d}T00:00:00Z,{symbol},{close},{close},{close},{close},1000"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _write_metric_input(branch: Path, *, round_id: str) -> Path:
@@ -1427,7 +1460,8 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
-                "2020-01-02,0,0,1,0,backfill,1\n",
+                    "2020-01-01,0,0,0,0,backfill,0\n"
+                    "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -1534,7 +1568,8 @@ def test_export_selected_strategy_artifact_nulls_inapplicable_metrics(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
-                "2020-01-02,0,0,1,0,backfill,1\n",
+                    "2020-01-01,0,0,0,0,backfill,0\n"
+                    "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -1621,6 +1656,7 @@ def test_promote_branch_strategy_uses_explicit_branch_round(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-01,0,0,0,0,backfill,0\n"
                 "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
@@ -2354,6 +2390,7 @@ def test_export_selected_strategy_artifact_normalizes_relative_python_bin(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-01,0,0,0,0,backfill,0\n"
                 "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
@@ -2426,6 +2463,7 @@ def test_export_selected_strategy_artifact_rejects_full_compute_paper_signal(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-01,0,0,0,0,backfill,0\n"
                 "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
@@ -2536,7 +2574,8 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
-                "2020-12-31,0,0,0,0,backfill,0\n",
+                "2020-01-01,0,0,0,0,backfill,0\n"
+                "2020-01-02,0,0,0,0,backfill,0\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2609,7 +2648,7 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
     ]
     assert request_tail["status"] == "failed"
     assert "comparisons" not in request_tail
-    assert request_tail["failedSampleDates"][0]["asOf"] == "2020-12-31"
+    assert request_tail["failedSampleDates"][0]["asOf"] == "2020-01-02"
     assert "expectedNextPosition" not in json.dumps(request_tail)
     assert "actualNextPosition" not in json.dumps(request_tail)
 
@@ -2654,9 +2693,9 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
-                "2020-12-29,0,0,1,0,backfill,1\n"
-                "2020-12-30,0,0,1,0,backfill,1\n"
-                "2020-12-31,0,0,1,0,backfill,1\n",
+                "2020-01-01,0,0,1,0,backfill,1\n"
+                "2020-01-02,0,0,1,0,backfill,1\n"
+                "2020-01-03,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -4096,6 +4135,7 @@ def test_export_selected_strategy_artifact_regenerates_missing_metric_input(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-01,0,0,0,0,backfill,0\n"
                 "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
@@ -4236,6 +4276,7 @@ def test_upload_strategy_artifact_for_session_returns_upload_summary(
             trade_log_path = Path(command[-1])
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
+                "2020-01-01,0,0,0,0,backfill,0\n"
                 "2020-01-02,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )

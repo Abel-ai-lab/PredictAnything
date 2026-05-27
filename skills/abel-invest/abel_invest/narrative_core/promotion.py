@@ -2740,12 +2740,12 @@ def _run_edge_paper_run_one_smoke(
                 strategy_dir=strategy_dir,
                 runtime_dir=runtime_dir,
                 state_dir=state_dir,
-                trade_log_path=destination / "trade-log.csv",
                 workspace_dir=root,
             )
             context["engine"] = "strategy.strategy"
             context["trade_log"] = str(root / "trade-log.csv")
             context["paper_log"] = str(state_dir / "paper-log.csv")
+            validation_context = context.get("_promotion_validation")
             profile = _report_paper_execution_profile(report)
             if profile:
                 context["runtime"] = {"paperExecutionProfile": profile}
@@ -2812,6 +2812,7 @@ def _run_edge_paper_run_one_smoke(
                             comparisons,
                             status="failed",
                         ),
+                        "validationContext": _json_safe(validation_context),
                         "result": _json_safe(first),
                     }
                 before_second = after_first
@@ -2826,6 +2827,7 @@ def _run_edge_paper_run_one_smoke(
                     "asOf": oracle_rows[-1]["asOf"],
                     "firstResult": _json_safe(first),
                     "secondResult": _json_safe(second),
+                    "validationContext": _json_safe(validation_context),
                     "tailConsistency": _tail_consistency_payload(
                         oracle_rows,
                         comparisons,
@@ -2870,6 +2872,7 @@ def _run_edge_paper_run_one_smoke(
                 ),
                 "validationBootstrap": bootstrap,
                 "generatedInitialStateFiles": generated_initial_state_files,
+                "validationContext": _json_safe(validation_context),
                 "warmStart": _warm_start_payload(
                     comparisons,
                     repeated_elapsed=second_elapsed,
@@ -2898,40 +2901,13 @@ def _seed_paper_smoke_log(
     trade_log_path.parent.mkdir(parents=True, exist_ok=True)
     paper_log_path.parent.mkdir(parents=True, exist_ok=True)
     if not cutover_as_of:
-        first_as_of = _clean(oracle_rows[0].get("asOf")) if oracle_rows else ""
-        if not first_as_of:
-            return {
-                "status": "failed",
-                "reason": "paper_run_one smoke needs at least one tail holdout row",
-            }
-        seed_date = (
-            pd.to_datetime(first_as_of, utc=True) - pd.Timedelta(days=1)
-        ).date().isoformat()
-        columns = list(frame.columns) or [
-            "date",
-            "asset_return",
-            "pnl",
-            "position",
-            "cum_return",
-            "source",
-            "next_position",
-        ]
-        seed_values = {column: 0 for column in columns}
-        seed_values["date"] = seed_date
-        if "decision_time" in seed_values:
-            seed_values["decision_time"] = seed_date
-        if "effective_time" in seed_values:
-            seed_values["effective_time"] = seed_date
-        if "source" in seed_values:
-            seed_values["source"] = "validation_cutover_seed"
-        if "position" in seed_values:
-            seed_values["position"] = 0
-        if "next_position" in seed_values:
-            seed_values["next_position"] = 0
-        seed = pd.DataFrame([seed_values], columns=columns)
-        seed.to_csv(trade_log_path, index=False)
-        seed.to_csv(paper_log_path, index=False)
-        return {"status": "passed", "cutoverAsOf": seed_date, "synthetic": True}
+        return {
+            "status": "failed",
+            "reason": (
+                "paper_run_one smoke requires a real selected-round cutover row "
+                "before the holdout tail; refusing to synthesize a paper ledger seed"
+            ),
+        }
     dates = pd.to_datetime(frame["date"], utc=True, format="mixed")
     cutover = pd.to_datetime(cutover_as_of, utc=True)
     seed = frame[dates <= cutover].tail(1).copy()
@@ -3278,7 +3254,6 @@ def _paper_smoke_context(
     strategy_dir: Path,
     runtime_dir: Path,
     state_dir: Path,
-    trade_log_path: Path,
     workspace_dir: Path,
 ) -> dict[str, Any]:
     dependencies = _load_json_object_if_exists(runtime_dir / "dependencies.json")
@@ -3294,8 +3269,8 @@ def _paper_smoke_context(
         for field in (requirements.get("fields") if isinstance(requirements.get("fields"), list) else ["close"])
     ]
     selected_inputs = _selected_input_symbols(dependencies.get("selected_inputs"))
-    feed_paths = _write_paper_smoke_price_feeds(
-        trade_log_path,
+    staged_feeds = _stage_paper_smoke_market_feeds(
+        dependencies,
         data_dir=workspace_dir / "data",
         target_asset=target_asset,
         selected_inputs=selected_inputs,
@@ -3306,7 +3281,7 @@ def _paper_smoke_context(
             symbol=target_asset,
             timeframe=timeframe,
             fields=fields,
-            path=feed_paths[target_asset],
+            path=staged_feeds[target_asset]["path"],
         )
     }
     for symbol in selected_inputs:
@@ -3315,7 +3290,7 @@ def _paper_smoke_context(
             symbol=symbol,
             timeframe=timeframe,
             fields=fields,
-            path=feed_paths[symbol],
+            path=staged_feeds[symbol]["path"],
         )
     requested_start = _clean(dependencies.get("requested_start"))
     return {
@@ -3363,6 +3338,16 @@ def _paper_smoke_context(
             "return_basis": _clean(runtime_profile.get("return_basis")) or "close_to_close",
         },
         "_feeds": feeds,
+        "_promotion_validation": {
+            "feedMode": "prepared_cache",
+            "feedSources": {
+                symbol: {
+                    "path": str(payload["path"]),
+                    "sourcePath": str(payload["sourcePath"]),
+                }
+                for symbol, payload in staged_feeds.items()
+            },
+        },
     }
 
 
@@ -3386,66 +3371,84 @@ def _csv_bars_feed(
     }
 
 
-def _write_paper_smoke_price_feeds(
-    trade_log_path: Path,
+def _stage_paper_smoke_market_feeds(
+    dependencies: dict[str, Any],
     *,
     data_dir: Path,
     target_asset: str,
     selected_inputs: list[str],
-) -> dict[str, Path]:
-    frame = read_trade_log(trade_log_path)
-    date_source = "date" if "date" in frame.columns else "decision_time"
-    if date_source not in frame.columns:
-        raise ValueError("paper_run_one smoke needs trade-log.csv date values for local CSV feeds")
-    dates = pd.to_datetime(frame[date_source], utc=True, format="mixed")
-    if dates.isna().any():
-        raise ValueError("paper_run_one smoke trade-log.csv contains invalid date values")
-    if "close" in frame.columns:
-        close = pd.to_numeric(frame["close"], errors="coerce")
-    else:
-        if "asset_return" in frame.columns:
-            returns = pd.to_numeric(frame["asset_return"], errors="coerce").fillna(0.0)
-        else:
-            returns = pd.Series([0.0] * len(frame), index=frame.index)
-        prices: list[float] = []
-        current = 100.0
-        for value in returns:
-            current *= 1.0 + float(value)
-            prices.append(current)
-        close = pd.Series(prices, index=frame.index)
-    if close.isna().any():
-        raise ValueError("paper_run_one smoke trade-log.csv close values are not numeric")
-
-    base = (
-        pd.DataFrame(
-            {
-                "timestamp": dates.dt.strftime("%Y-%m-%d"),
-                "close": close.astype(float),
-            }
+) -> dict[str, dict[str, Path]]:
+    cache = dependencies.get("cache")
+    results = cache.get("results") if isinstance(cache, dict) else None
+    if not isinstance(results, list):
+        raise ValueError(
+            "paper_run_one smoke requires prepared market cache results in "
+            "inputs/dependencies.json; refusing to synthesize feeds from trade-log.csv"
         )
-        .drop_duplicates(subset=["timestamp"], keep="last")
-        .sort_values("timestamp")
-    )
-    if base.empty:
-        raise ValueError("paper_run_one smoke local CSV feed would be empty")
-    if len(base) == 1:
-        first = pd.to_datetime(base.iloc[0]["timestamp"], utc=True)
-        seed = base.iloc[[0]].copy()
-        seed.loc[:, "timestamp"] = (
-            first - pd.Timedelta(days=1)
-        ).strftime("%Y-%m-%d")
-        base = pd.concat([seed, base], ignore_index=True)
+
+    sources: dict[str, Path] = {}
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        if item.get("ok") is False:
+            continue
+        symbol = _clean(item.get("symbol") or item.get("ticker"))
+        data_path = _clean(item.get("data_path") or item.get("path"))
+        if not symbol or not data_path:
+            continue
+        source = Path(data_path)
+        if source.is_file():
+            sources[_market_symbol_key(symbol)] = source
+
+    required_symbols = list(dict.fromkeys([target_asset, *selected_inputs]))
+    missing = [
+        symbol
+        for symbol in required_symbols
+        if _market_symbol_key(symbol) not in sources
+    ]
+    if missing:
+        raise ValueError(
+            "paper_run_one smoke missing prepared market data for "
+            f"{', '.join(missing)}; validation must use real cache/dependencies feeds"
+        )
 
     data_dir.mkdir(parents=True, exist_ok=True)
-    symbols = [target_asset, *selected_inputs]
-    paths: dict[str, Path] = {}
-    for symbol in dict.fromkeys(symbols):
+    staged: dict[str, dict[str, Path]] = {}
+    for symbol in required_symbols:
+        source = sources[_market_symbol_key(symbol)]
+        _validate_market_feed_csv(source, symbol=symbol)
         path = data_dir / f"{_safe_feed_filename(symbol)}.csv"
-        rows = base.copy()
-        rows["symbol"] = symbol
-        rows[["timestamp", "symbol", "close"]].to_csv(path, index=False)
-        paths[symbol] = path
-    return paths
+        shutil.copy2(source, path)
+        staged[symbol] = {"path": path, "sourcePath": source}
+    return staged
+
+
+def _market_symbol_key(symbol: str) -> str:
+    value = _clean(symbol)
+    if value.endswith(".price"):
+        value = value.removesuffix(".price")
+    return value.upper()
+
+
+def _validate_market_feed_csv(path: Path, *, symbol: str) -> None:
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            fields = set(reader.fieldnames or [])
+            has_row = next(reader, None) is not None
+    except OSError as exc:
+        raise ValueError(
+            f"paper_run_one smoke cannot read prepared feed for {symbol}: {exc}"
+        ) from exc
+    required = {"timestamp", "close"}
+    missing = sorted(required - fields)
+    if missing:
+        raise ValueError(
+            f"paper_run_one smoke prepared feed for {symbol} is missing columns: "
+            f"{', '.join(missing)}"
+        )
+    if not has_row:
+        raise ValueError(f"paper_run_one smoke prepared feed for {symbol} is empty")
 
 
 def _safe_feed_filename(symbol: str) -> str:

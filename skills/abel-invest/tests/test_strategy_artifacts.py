@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,7 @@ from abel_invest.narrative_core.contracts.constants import EVENTS_HEADER, RESULT
 from abel_invest.narrative_core.io import write_tsv_rows
 from abel_invest.narrative_core.promotion import (
     PromotionHostedPaperRewriteRequired,
+    _paper_smoke_context,
     _paper_tail_position_change_count,
     _paper_tail_selection_reason,
     _select_paper_tail_oracle_sample,
@@ -336,6 +338,103 @@ def test_tail_oracle_sample_expands_to_recent_position_change():
         _paper_tail_selection_reason(comparable, selected)
         == "expanded_to_recent_position_change"
     )
+
+
+def _write_market_feed(path, symbol: str, closes: list[float]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["timestamp,symbol,open,high,low,close,volume"]
+    for idx, close in enumerate(closes, start=1):
+        lines.append(
+            f"2024-01-{idx:02d}T00:00:00Z,{symbol},{close},{close},{close},{close},1000"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_paper_smoke_context_uses_prepared_cache_feeds(tmp_path):
+    branch = tmp_path / "branch"
+    runtime = tmp_path / "runtime"
+    strategy = tmp_path / "strategy"
+    state = tmp_path / "state"
+    source_aapl = tmp_path / "cache" / "AAPL.csv"
+    source_msft = tmp_path / "cache" / "MSFT.csv"
+    _write_market_feed(source_aapl, "AAPL", [10.0, 11.0])
+    _write_market_feed(source_msft, "MSFT", [20.0, 21.0])
+    (branch / "inputs").mkdir(parents=True)
+    runtime.mkdir(parents=True)
+    (runtime / "dependencies.json").write_text(
+        json.dumps(
+            {
+                "target": "AAPL",
+                "target_node": "AAPL.price",
+                "selected_inputs": ["MSFT"],
+                "data_requirements": {"timeframe": "1d", "fields": ["close"]},
+                "requested_start": "2024-01-01",
+                "cache": {
+                    "results": [
+                        {"symbol": "AAPL", "ok": True, "data_path": str(source_aapl)},
+                        {"symbol": "MSFT", "ok": True, "data_path": str(source_msft)},
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    context = _paper_smoke_context(
+        SimpleNamespace(
+            branch=branch,
+            branch_id="candidate",
+            ticker="AAPL",
+            edge_result={"effective_window": {"end": "2024-01-02"}},
+        ),
+        strategy_dir=strategy,
+        runtime_dir=runtime,
+        state_dir=state,
+        workspace_dir=tmp_path / "workspace",
+    )
+
+    primary = context["_feeds"]["primary"]["path"]
+    msft = context["_feeds"]["MSFT"]["path"]
+    primary_text = Path(primary).read_text(encoding="utf-8")
+    msft_text = Path(msft).read_text(encoding="utf-8")
+    assert "11.0" in primary_text
+    assert "21.0" in msft_text
+    assert "11.0" not in msft_text
+    assert context["_promotion_validation"]["feedMode"] == "prepared_cache"
+
+
+def test_paper_smoke_context_rejects_missing_prepared_feed(tmp_path):
+    branch = tmp_path / "branch"
+    runtime = tmp_path / "runtime"
+    (branch / "inputs").mkdir(parents=True)
+    runtime.mkdir(parents=True)
+    (runtime / "dependencies.json").write_text(
+        json.dumps(
+            {
+                "target": "AAPL",
+                "selected_inputs": ["MSFT"],
+                "cache": {
+                    "results": [
+                        {
+                            "symbol": "AAPL",
+                            "ok": True,
+                            "data_path": str(tmp_path / "missing-aapl.csv"),
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing prepared market data"):
+        _paper_smoke_context(
+            SimpleNamespace(branch=branch, branch_id="candidate", ticker="AAPL", edge_result={}),
+            strategy_dir=tmp_path / "strategy",
+            runtime_dir=runtime,
+            state_dir=tmp_path / "state",
+            workspace_dir=tmp_path / "workspace",
+        )
 
 
 def test_ml_training_source_rejects_stateless_recompute_report():

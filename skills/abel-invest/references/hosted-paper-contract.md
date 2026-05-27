@@ -140,8 +140,9 @@ continuation calendar says a refit is due, and persist the updated state. Do
 not cold-start the whole training path on every paper call.
 
 The gate calls the bootstrap hook for the validation cutover, then uses Edge
-`paper_run_one(...)` for holdout tail replay. If parity and idempotence pass,
-the strategy-owned state produced by that replay is packaged as
+`paper_run_one(...)` for holdout tail replay with prepared market data from the
+selected branch dependencies/cache. If parity and idempotence pass, the
+strategy-owned state produced by that replay is packaged as
 `runtime/initial-state/**`. Do not hand-build final startup files for normal
 stateful continuation, and do not encode expected positions or gate answers in
 state.
