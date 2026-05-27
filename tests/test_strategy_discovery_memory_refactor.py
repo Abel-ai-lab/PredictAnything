@@ -143,6 +143,39 @@ def _paper_signal(
     }
 
 
+def _seed_promoted_stateless_paper_artifact(
+    destination: Path,
+    *,
+    next_position: float = 1.0,
+) -> None:
+    promoted_dir = destination / "promoted"
+    promoted_dir.mkdir(parents=True, exist_ok=True)
+    (promoted_dir / "engine.py").write_text(
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def compute_decisions(self, ctx):\n"
+        f"        return ctx.decisions({next_position!r})\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        f"        return {{'next_position': {next_position!r}, 'date': str(as_of)}}\n",
+        encoding="utf-8",
+    )
+    (promoted_dir / "refactor-report.json").write_text(
+        json.dumps(
+            {
+                "schema": "abel-invest.agent-refactor-report/v1",
+                "kind": "hosted_paper_rewrite",
+                "summary": "Test fixture already has hosted paper fast path.",
+                "scope": "hosted_paper_rewrite",
+                "paths": {"packagedFiles": [], "initialStateFiles": []},
+                "paperSignal": _paper_signal(),
+                "limitations": [],
+                "replacements": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def _write_strategy_result_row(
     session: Path,
     branch: Path,
@@ -1373,6 +1406,7 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
     )
     _write_metric_input(branch, round_id="round-006")
     output_dir = tmp_path / "exported-artifact"
+    _seed_promoted_stateless_paper_artifact(output_dir)
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
         if "-c" in command:
@@ -1431,13 +1465,15 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
         "runtime/dependencies.json",
         "runtime/data_manifest.json",
         "edge/promotion-gate.json",
+        "edge/promotion.patch",
+        "edge/refactor-report.json",
     ]
     assert (
         manifest["source"]["selectionMode"]
         == "auto_best_validation_by_pass_rate"
     )
     assert manifest["source"]["selectionScope"] == "session"
-    assert manifest["promotion"]["mode"] == "zero_change"
+    assert manifest["promotion"]["mode"] == "agent_refactor"
 
 
 def test_export_selected_strategy_artifact_nulls_inapplicable_metrics(
@@ -1474,6 +1510,7 @@ def test_export_selected_strategy_artifact_nulls_inapplicable_metrics(
     result_path.write_text(json.dumps(edge_result), encoding="utf-8")
     _write_metric_input(branch, round_id="round-006")
     output_dir = tmp_path / "exported-artifact"
+    _seed_promoted_stateless_paper_artifact(output_dir)
     captured: dict[str, object] = {}
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
@@ -1561,6 +1598,7 @@ def test_promote_branch_strategy_uses_explicit_branch_round(
     )
     _write_metric_input(branch, round_id="round-006")
     output_dir = tmp_path / "promoted-artifact"
+    _seed_promoted_stateless_paper_artifact(output_dir)
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
         if "-c" in command:
@@ -1727,16 +1765,25 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
     assert any(signal["kind"] == "state_like_file" for signal in request["signals"])
     promoted_dir = request_path.parent
     (promoted_dir / "engine.py").write_text(
+        "import json\n"
         "from abel_edge.engine.base import StrategyEngine\n"
+        "from abel_edge.runtime_paths import context_runtime_paths\n"
         "class BranchEngine(StrategyEngine):\n"
+        "    def _state_path(self):\n"
+        "        return context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
         "    def compute_decisions(self, ctx):\n"
         "        model_path = ctx.state_dir / \"strategy/model/latest.joblib\"\n"
         "        return ctx.decisions(1)\n"
         "    def build_paper_initial_state(self, *, cutover_as_of=None):\n"
+        "        path = self._state_path()\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'cutover_as_of': str(cutover_as_of)}), encoding='utf-8')\n"
         "        return {'cutover_as_of': str(cutover_as_of)}\n"
         "    def get_paper_signal(self, *, as_of=None):\n"
-        "        model_path = self.context['_runtime_paths']['state']\n"
-        "        return {'next_position': 1.0, 'state_root': model_path, 'date': str(as_of)}\n",
+        "        path = context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'last_as_of': str(as_of)}), encoding='utf-8')\n"
+        "        return {'next_position': 1.0, 'state_root': str(path.parent), 'date': str(as_of)}\n",
         encoding="utf-8",
     )
     (promoted_dir / "refactor-report.json").write_text(
@@ -2425,13 +2472,8 @@ def test_export_selected_strategy_artifact_rejects_full_compute_paper_signal(
 
     assert result["artifactExported"] is False
     assert result["skipReason"] == "needs_agent_refactor"
-    gate_path = Path(result["promotionReport"]["gatePath"])
-    gate = json.loads(gate_path.read_text(encoding="utf-8"))
-    assert gate["status"] == "failed"
-    paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
-    assert paper_gate["status"] == "failed"
-    assert paper_gate["method"] == "static_fast_paper_signal_contract"
-    assert "compute_runtime_output" in paper_gate["details"]["reason"]
+    assert "gatePath" not in result["promotionReport"]
+    assert "stateful_continuation requires" in result["promotionReport"]["reason"]
 
 
 def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
@@ -2539,8 +2581,6 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
     assert request_tail["failedSampleDates"][0]["asOf"] == "2020-12-31"
     assert "expectedNextPosition" not in json.dumps(request_tail)
     assert "actualNextPosition" not in json.dumps(request_tail)
-    assert "Tail consistency diagnostics" in "\n".join(request["workOrder"])
-    assert "continuation design" in "\n".join(request["workOrder"])
 
 
 def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
@@ -2555,6 +2595,8 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
     branch = ni.init_branch_dir(session, "training_without_warm_start")
     _write_strategy_artifact_inputs(branch)
+    (branch / "model").mkdir()
+    (branch / "model" / "latest.joblib").write_text("state\n", encoding="utf-8")
     (branch / "engine.py").write_text(
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -2617,17 +2659,26 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
     )
     promoted_dir = Path(first_result["promotionReport"]["requestPath"]).parent
     (promoted_dir / "engine.py").write_text(
+        "import json\n"
         "import time\n"
         "from abel_edge.engine.base import StrategyEngine\n"
+        "from abel_edge.runtime_paths import context_runtime_paths\n"
         "class BranchEngine(StrategyEngine):\n"
         "    def compute_decisions(self, ctx):\n"
         "        model = type('Model', (), {'fit': lambda self: None})()\n"
         "        model.fit()\n"
         "        return ctx.decisions(1)\n"
+        "    def build_paper_initial_state(self, *, cutover_as_of=None):\n"
+        "        path = context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'cutover_as_of': str(cutover_as_of)}), encoding='utf-8')\n"
+        "        return {'cutover_as_of': str(cutover_as_of)}\n"
         "    def get_paper_signal(self, *, as_of=None):\n"
-        "        state_root = self.context['_runtime_paths']['state']\n"
+        "        path = context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
         "        time.sleep(0.001)\n"
-        "        return {'next_position': 1.0, 'date': str(as_of), 'state_root': state_root}\n",
+        "        path.write_text(json.dumps({'last_as_of': str(as_of)}), encoding='utf-8')\n"
+        "        return {'next_position': 1.0, 'date': str(as_of), 'state_root': str(path.parent)}\n",
         encoding="utf-8",
     )
     (promoted_dir / "refactor-report.json").write_text(
@@ -2637,8 +2688,22 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
                 "kind": "hosted_paper_rewrite",
                 "summary": "Agent added a matching but cold-start paper signal.",
                 "scope": "hosted_paper_rewrite",
-                "paths": {"packagedFiles": []},
+                "paths": {
+                    "packagedFiles": [],
+                    "initialStateFiles": [
+                        {
+                            "artifactPath": "runtime/initial-state/strategy/model/latest.joblib",
+                            "sourcePath": "model/latest.joblib",
+                            "purpose": "latest fitted model checkpoint seed",
+                        }
+                    ],
+                },
                 "paperSignal": _paper_signal(
+                    method="stateful_continuation",
+                    design=_paper_design(
+                        uses_state=True,
+                        cutover_state_required=True,
+                    ),
                     live_readiness="tail output matches but no reusable warm-start state",
                 ),
                 "limitations": [],
@@ -2662,7 +2727,7 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
     assert paper_gate["status"] == "passed"
     warm_start = paper_gate["details"]["smoke"]["warmStart"]
     assert warm_start["slowDistinctCallCount"] >= 2
-    assert warm_start["sampleSize"] == 3
+    assert warm_start["sampleSize"] == 2
 
 
 def test_refactor_report_rejects_same_source_as_asset_and_initial_state(
@@ -3038,6 +3103,9 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     source = promoted_dir / "engine.py"
     source.write_text("# promoted\n", encoding="utf-8")
     scan = {
+        "sourceScan": {
+            "positiveFindings": {"observedFitCalls": ["model.fit"]},
+        },
         "paperSignal": {
             "implemented": False,
             "sourceTrainingCalls": ["model.fit"],
@@ -3062,39 +3130,20 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     )
 
     request = json.loads(request_path.read_text(encoding="utf-8"))
-    work_order = "\n".join(request["workOrder"])
-    assert "context_runtime_paths" in work_order
-    assert "strategy-type classification" in work_order
-    assert "not to repair the promotion gate" in work_order
-    assert request["mission"]["agentRole"].startswith("The agent decides")
-    assert "notGateRepair" in request["mission"]
+    assert "workOrder" not in request
+    assert "mission" not in request
+    assert "runtimeApiFacts" not in request
+    assert "reportContract" not in request
+    assert "gateContract" not in request
+    assert request["requirements"]["statefulContinuationRequired"] is True
+    assert request["requirements"]["continuationMethod"] == "stateful_continuation"
+    assert request["requirements"]["observedTrainingCalls"] == ["model.fit"]
+    assert request["rewriteGuide"]["relativePath"] == "references/hosted-paper-rewrite.md"
     assert request["facts"]["paperSignal"]["sourceTrainingCalls"] == ["model.fit"]
-    assert request["facts"]["sourceScan"]["coverage"] == "best_effort_static_ast"
-    assert request["facts"]["sourceScan"]["unprovenAbsences"]
-    assert request["runtimeApiFacts"]["paperSignalSignature"].startswith(
-        "def get_paper_signal"
-    )
-    assert "cutoverMeaning" in request["runtimeApiFacts"]
-    assert request["runtimeApiFacts"]["selectedRoundCutoverEnd"] == "2020-12-31"
-    assert "compiled absolute target exposure" in request["runtimeApiFacts"][
-        "paperSignalReturn"
+    assert request["facts"]["sourceScan"]["positiveFindings"]["observedFitCalls"] == [
+        "model.fit"
     ]
-    assert request["attemptPolicy"]["fullReplayFallbackEligible"] is False
     assert request["validation"]["attemptPolicy"]["liveRewriteFailures"] == 0
-    assert request["evidenceGuidance"]["purpose"].startswith(
-        "Use source reading and any small local probes"
-    )
-    assert "promotion.py" in request["avoidBeforeFirstEdit"][0]
-    assert request["reportContract"]["paperSignal"]["incrementalReady"] is not True
-    assert "continuation" in request["reportContract"]["paperSignal"]
-    assert "design" in request["reportContract"]["paperSignal"]
-    assert "evidence" in request["reportContract"]["paperSignal"]
-    cutover = request["reportContract"]["paperSignal"]["design"]["cutover"]
-    assert "minimal_cutover_state" in cutover["mode"]
-    evidence = request["reportContract"]["paperSignal"]["evidence"]
-    assert "agentOverrides" in evidence
-    assert "gateContract" in request
-    assert "semanticEvidence" in request["gateContract"]
     assert "acceptanceCriteria" not in request
     assert "agentQuestions" not in request
 
@@ -3200,7 +3249,7 @@ def test_refactor_report_rejects_stateless_recompute_with_fit_in_signal_path() -
 
     with pytest.raises(
         promotion_helpers.PromotionNeedsAgentRefactor,
-        match="stateless_recompute conflicts with observed fit/update calls",
+        match="stateless_recompute conflicts with observed ML training",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
             report,
@@ -3209,7 +3258,7 @@ def test_refactor_report_rejects_stateless_recompute_with_fit_in_signal_path() -
         )
 
 
-def test_refactor_report_allows_agent_override_for_unused_fit_observation() -> None:
+def test_refactor_report_rejects_stateless_override_for_fit_observation() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3231,11 +3280,15 @@ def test_refactor_report_allows_agent_override_for_unused_fit_observation() -> N
         }
     ]
 
-    promotion_helpers._validate_agent_paper_signal_contract(
-        report,
-        source,
-        require_paper_signal=True,
-    )
+    with pytest.raises(
+        promotion_helpers.PromotionNeedsAgentRefactor,
+        match="stateful_continuation",
+    ):
+        promotion_helpers._validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+        )
 
 
 def test_trade_log_oracle_facts_withhold_expected_values(tmp_path: Path) -> None:
@@ -3659,14 +3712,22 @@ def test_export_selected_strategy_artifact_uses_local_runtime_state_source(
     assert first_result["artifactExported"] is False
     promoted_dir = Path(first_result["promotionReport"]["requestPath"]).parent
     (promoted_dir / "engine.py").write_text(
+        "import json\n"
         "from abel_edge.engine.base import StrategyEngine\n"
+        "from abel_edge.runtime_paths import context_runtime_paths\n"
         "class BranchEngine(StrategyEngine):\n"
         "    def compute_decisions(self, ctx):\n"
         "        model_path = ctx.state_dir / \"strategy/model/latest.joblib\"\n"
         "        return ctx.decisions(1)\n"
         "    def build_paper_initial_state(self, *, cutover_as_of=None):\n"
+        "        path = context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'cutover_as_of': str(cutover_as_of)}), encoding='utf-8')\n"
         "        return {'cutover_as_of': str(cutover_as_of)}\n"
         "    def get_paper_signal(self, *, as_of=None):\n"
+        "        path = context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'last_as_of': str(as_of)}), encoding='utf-8')\n"
         "        return {'next_position': 1.0, 'date': str(as_of)}\n",
         encoding="utf-8",
     )
@@ -3799,14 +3860,24 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
     promoted_engine = promoted_dir / "engine.py"
     promoted_engine.write_text(
         "from abel_edge.engine.base import StrategyEngine\n"
+        "import json\n"
+        "from abel_edge.runtime_paths import context_runtime_paths\n"
         "class BranchEngine(StrategyEngine):\n"
+        "    def _state_path(self):\n"
+        "        return context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
         "    def compute_decisions(self, ctx):\n"
         "        model_path = ctx.state_dir / \"strategy/model/latest.joblib\"\n"
         "        scaler_path = ctx.state_dir / \"strategy/model/feature_scaler.json\"\n"
         "        return ctx.decisions(1)\n"
         "    def build_paper_initial_state(self, *, cutover_as_of=None):\n"
+        "        path = self._state_path()\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'cutover_as_of': str(cutover_as_of)}), encoding='utf-8')\n"
         "        return {'cutover_as_of': str(cutover_as_of)}\n"
         "    def get_paper_signal(self, *, as_of=None):\n"
+        "        path = context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'last_as_of': str(as_of)}), encoding='utf-8')\n"
         "        return {'next_position': 1.0, 'date': str(as_of)}\n",
         encoding="utf-8",
     )
@@ -3926,6 +3997,7 @@ def test_export_selected_strategy_artifact_regenerates_missing_metric_input(
         max_dd=-0.1278,
     )
     output_dir = tmp_path / "exported-artifact"
+    _seed_promoted_stateless_paper_artifact(output_dir)
     commands_seen = []
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
@@ -4084,6 +4156,7 @@ def test_upload_strategy_artifact_for_session_returns_upload_summary(
         max_dd=-0.1278,
     )
     _write_metric_input(branch, round_id="round-006")
+    _seed_promoted_stateless_paper_artifact(tmp_path / "exported-artifact")
 
     def fake_runner(command, cwd=None, capture_output=None, text=None, env=None):
         if "-c" in command:

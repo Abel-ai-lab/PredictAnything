@@ -9,6 +9,9 @@ from abel_invest.narrative_core.contracts.constants import EVENTS_HEADER, RESULT
 from abel_invest.narrative_core.io import write_tsv_rows
 from abel_invest.narrative_core.promotion import (
     PromotionNeedsAgentRefactor,
+    _paper_tail_position_change_count,
+    _paper_tail_selection_reason,
+    _select_paper_tail_oracle_sample,
     _validate_agent_paper_signal_contract,
     _write_hosted_paper_rewrite_request,
 )
@@ -292,6 +295,47 @@ def test_rewrite_request_is_slim_and_marks_training_stateful(tmp_path):
     assert "reportContract" not in payload
     assert "gateContract" not in payload
     assert "runtimeApiFacts" not in payload
+
+
+def test_tail_oracle_sample_uses_dynamic_holdout_window():
+    comparable = [
+        {
+            "decisionIndex": idx,
+            "asOf": f"2024-01-{idx + 1:02d}",
+            "expectedNextPosition": float(idx % 2),
+        }
+        for idx in range(40)
+    ]
+
+    selected = _select_paper_tail_oracle_sample(comparable)
+
+    assert len(selected) == 20
+    assert selected[0]["decisionIndex"] == 20
+    assert _paper_tail_selection_reason(comparable, selected) == "target_tail_window"
+
+
+def test_tail_oracle_sample_expands_to_recent_position_change():
+    comparable = [
+        {
+            "decisionIndex": idx,
+            "asOf": f"2024-03-{idx + 1:02d}",
+            "expectedNextPosition": 0.0 if idx < 75 else 1.0,
+        }
+        for idx in range(100)
+    ]
+
+    selected = _select_paper_tail_oracle_sample(comparable)
+
+    assert len(selected) == 25
+    assert selected[0]["decisionIndex"] == 75
+    assert _paper_tail_position_change_count(
+        selected,
+        prior=comparable[74],
+    ) == 1
+    assert (
+        _paper_tail_selection_reason(comparable, selected)
+        == "expanded_to_recent_position_change"
+    )
 
 
 def test_ml_training_source_rejects_stateless_recompute_report():

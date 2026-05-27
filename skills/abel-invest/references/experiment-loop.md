@@ -247,9 +247,9 @@ promotion gates are separate; a missing strategy artifact should not block
 session visualization.
 
 Use `visualize-session --without-strategy-artifact` only when the user explicitly
-asks for a session view without strategy artifact upload. If the command reports
-`needs_agent_refactor`, read `references/hosted-paper-rewrite.md` and handle the
-emitted `refactor-request.json` in the current skill loop. Edit only the
+asks for a session view without strategy artifact upload. If the command emits a
+hosted paper `refactor-request.json`, read `references/hosted-paper-rewrite.md`
+and handle it in the current skill loop. Edit only the
 promoted copy, write `refactor-report.json`, and rerun the same command. Do not
 start a separate agent process. The agent should not hand-assemble the payload
 or choose a router URL.

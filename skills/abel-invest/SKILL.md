@@ -72,7 +72,7 @@ Always start by resolving workspace state before strategy work.
 - Writing `engine.py`, handling semantic/runtime failures, or checking
   temporal legality:
   read `references/constraints.md`.
-- Handling `needs_agent_refactor`, `hosted_paper_rewrite`, promoted strategy
+- Handling hosted paper rewrite requests, promoted strategy
   source edits, `refactor-report.json`, packaged strategy assets, or hosted
   paper state:
   read `references/hosted-paper-rewrite.md`.
@@ -236,8 +236,8 @@ Visualization and promotion:
   hosted-paper promotion gates are separate.
 - Use `visualize-session --without-strategy-artifact` only when the user
   explicitly asks for a session view without strategy artifact upload.
-- If visualization reports `needs_agent_refactor`, handle the emitted
-  `refactor-request.json` in this same skill loop. Read
+- If visualization or artifact export emits a hosted paper
+  `refactor-request.json`, handle it in this same skill loop. Read
   `references/hosted-paper-rewrite.md`, edit only the promoted copy, write the
   requested `refactor-report.json`, and rerun the same command.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`

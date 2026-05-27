@@ -38,7 +38,8 @@ PROMOTION_PAPER_SMOKE_WARN_SECONDS = 5.0
 PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS = 5.0
 PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS = 150.0
 PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK = 3
-PROMOTION_PAPER_TAIL_COMPARE_COUNT = 3
+PROMOTION_PAPER_TAIL_TARGET_COUNT = 20
+PROMOTION_PAPER_TAIL_MAX_COUNT = 60
 PROMOTION_PAPER_TAIL_TOLERANCE = 1e-9
 PROMOTION_LIVE_READINESS_CONFLICT_PHRASES = (
     "after the packaged log",
@@ -263,18 +264,20 @@ def prepare_promotion(
     )
 
     hosted_rewrite_signals = _hosted_paper_rewrite_signals(dependency_scan)
-    if hosted_rewrite_signals and not agent_refactor_ready:
+    if not agent_refactor_ready:
+        rewrite_signals = _initial_hosted_paper_rewrite_signals(
+            hosted_rewrite_signals
+        )
         promoted_source.write_text(original_text, encoding="utf-8")
         request_path = _write_hosted_paper_rewrite_request(
             promoted_dir,
             branch=candidate.branch,
             source_path=promoted_source,
             dependency_scan=dependency_scan,
-            signals=hosted_rewrite_signals,
+            signals=rewrite_signals,
         )
         raise PromotionNeedsAgentRefactor(
-            "hosted paper rewrite required before promotion; "
-            f"{len(hosted_rewrite_signals)} hosted-paper risk signal(s) found; "
+            "hosted paper rewrite required before first artifact export; "
             f"request written to {request_path}"
         )
 
@@ -627,6 +630,23 @@ def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
             reason=_clean(item.get("reason"))
             or "state-like dependency must be classified by hosted rewrite",
         )
+    return signals
+
+
+def _initial_hosted_paper_rewrite_signals(
+    scan_signals: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    signals: list[dict[str, str]] = [
+        {
+            "kind": "hosted_paper_contract_required",
+            "value": "first_export",
+            "reason": (
+                "research strategy source must be rewritten into an explicit "
+                "hosted live-paper contract before first artifact export"
+            ),
+        }
+    ]
+    signals.extend(scan_signals)
     return signals
 
 
@@ -3076,6 +3096,9 @@ def _paper_tail_oracle_rows(trade_log_path: Path) -> list[dict[str, Any]]:
         return []
     holdout_start_index = _nonnegative_int(selected[0].get("decisionIndex"))
     cutover = comparable[holdout_start_index - 1] if holdout_start_index > 0 else None
+    prior = _paper_tail_prior_row(comparable, selected)
+    position_change_count = _paper_tail_position_change_count(selected, prior=prior)
+    selection_reason = _paper_tail_selection_reason(comparable, selected)
     for item in selected:
         item["validationRole"] = "holdout"
         item["holdoutStartDecisionIndex"] = holdout_start_index
@@ -3083,13 +3106,92 @@ def _paper_tail_oracle_rows(trade_log_path: Path) -> list[dict[str, Any]]:
         item["validationCutoverDecisionIndex"] = (
             cutover.get("decisionIndex") if cutover else None
         )
+        item["positionChangeCount"] = position_change_count
+        item["selectionReason"] = selection_reason
     return selected
 
 
 def _select_paper_tail_oracle_sample(
     comparable: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    return comparable[-PROMOTION_PAPER_TAIL_COMPARE_COUNT:]
+    if not comparable:
+        return []
+    available = len(comparable) - 1 if len(comparable) > 1 else len(comparable)
+    if available <= 0:
+        return comparable[-1:]
+
+    target_count = min(PROMOTION_PAPER_TAIL_TARGET_COUNT, available)
+    max_count = min(PROMOTION_PAPER_TAIL_MAX_COUNT, available)
+    selected = comparable[-target_count:]
+    prior = _paper_tail_prior_row(comparable, selected)
+    if _paper_tail_position_change_count(selected, prior=prior) > 0:
+        return selected
+
+    for count in range(target_count + 1, max_count + 1):
+        expanded = comparable[-count:]
+        prior = _paper_tail_prior_row(comparable, expanded)
+        if _paper_tail_position_change_count(expanded, prior=prior) > 0:
+            return expanded
+        selected = expanded
+    return selected
+
+
+def _paper_tail_prior_row(
+    comparable: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not selected:
+        return None
+    start_index = _nonnegative_int(selected[0].get("decisionIndex"))
+    if start_index is None or start_index <= 0:
+        return None
+    for item in reversed(comparable):
+        if item.get("decisionIndex") == start_index - 1:
+            return item
+    return None
+
+
+def _paper_tail_position_change_count(
+    selected: list[dict[str, Any]],
+    *,
+    prior: dict[str, Any] | None = None,
+) -> int:
+    previous = (
+        _finite_float(prior.get("expectedNextPosition"))
+        if isinstance(prior, dict)
+        else None
+    )
+    count = 0
+    for item in selected:
+        current = _finite_float(item.get("expectedNextPosition"))
+        if current is None:
+            continue
+        if (
+            previous is not None
+            and abs(current - previous) > PROMOTION_PAPER_TAIL_TOLERANCE
+        ):
+            count += 1
+        previous = current
+    return count
+
+
+def _paper_tail_selection_reason(
+    comparable: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+) -> str:
+    if not selected:
+        return "none"
+    available = len(comparable) - 1 if len(comparable) > 1 else len(comparable)
+    target_count = min(PROMOTION_PAPER_TAIL_TARGET_COUNT, available)
+    if len(selected) < target_count:
+        return "all_available_with_cutover"
+    if len(selected) == target_count:
+        return "target_tail_window"
+    prior = _paper_tail_prior_row(comparable, selected)
+    changes = _paper_tail_position_change_count(selected, prior=prior)
+    if changes > 0:
+        return "expanded_to_recent_position_change"
+    return "expanded_to_max_without_position_change"
 
 
 def _tail_consistency_payload(
@@ -3103,6 +3205,17 @@ def _tail_consistency_payload(
         "method": "trade_log_holdout_next_position",
         "sampleSize": len(oracle_rows),
         "tolerance": PROMOTION_PAPER_TAIL_TOLERANCE,
+        "windowStartAsOf": oracle_rows[0].get("asOf") if oracle_rows else None,
+        "windowEndAsOf": oracle_rows[-1].get("asOf") if oracle_rows else None,
+        "holdoutStartDecisionIndex": oracle_rows[0].get("holdoutStartDecisionIndex")
+        if oracle_rows
+        else None,
+        "positionChangeCount": oracle_rows[0].get("positionChangeCount")
+        if oracle_rows
+        else None,
+        "selectionReason": oracle_rows[0].get("selectionReason")
+        if oracle_rows
+        else None,
         "validationCutoverAsOf": oracle_rows[0].get("validationCutoverAsOf")
         if oracle_rows
         else None,

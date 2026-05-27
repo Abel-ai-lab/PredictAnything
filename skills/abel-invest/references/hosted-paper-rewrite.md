@@ -1,9 +1,8 @@
 # Hosted Paper Rewrite
 
-Use this reference when promotion or visualization returns
-`needs_agent_refactor` with `kind=hosted_paper_rewrite`, or when the user asks
-you to make a selected Abel Invest strategy paper-ready for hosted daily
-execution.
+Use this reference when promotion or visualization emits a hosted paper
+`refactor-request.json`, or when the user asks you to make a selected Abel
+Invest strategy paper-ready for hosted daily execution.
 
 ## Goal
 
