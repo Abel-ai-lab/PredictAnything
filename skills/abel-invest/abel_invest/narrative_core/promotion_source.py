@@ -2,15 +2,36 @@
 
 These helpers intentionally expose best-effort AST observations. They should
 not be treated as complete semantic proof that a strategy is stateless or
-stateful; the rewrite agent still owns source understanding.
+stateful; the promotion agent still owns source understanding.
 """
 
 from __future__ import annotations
 
 import ast
+import sys
 from typing import Any
 
 
+PROMOTION_ALLOWED_RUNTIME_IMPORTS = {
+    "abel_edge",
+    "numpy",
+    "pandas",
+}
+PROMOTION_FILE_READ_FUNCTIONS = {
+    "open",
+    "pd.read_csv",
+    "pd.read_json",
+    "pd.read_parquet",
+    "pd.read_pickle",
+    "pandas.read_csv",
+    "pandas.read_json",
+    "pandas.read_parquet",
+    "pandas.read_pickle",
+    "np.load",
+    "numpy.load",
+    "joblib.load",
+    "pickle.load",
+}
 PROMOTION_FILE_WRITE_FUNCTIONS = {
     "Path.write_text",
     "Path.write_bytes",
@@ -30,6 +51,51 @@ TRAINING_CALL_LEAF_NAMES = {
     "train",
     "update_model",
 }
+TEMPORAL_CONSTANT_NAME_PARTS = (
+    "bars",
+    "calendar",
+    "horizon",
+    "lag",
+    "lookback",
+    "min",
+    "period",
+    "refit",
+    "retrain",
+    "row",
+    "shift",
+    "train",
+    "window",
+)
+TEMPORAL_KEYWORD_NAMES = {
+    "alpha",
+    "halflife",
+    "lag",
+    "limit",
+    "lookback",
+    "min_periods",
+    "min_rows",
+    "periods",
+    "refit_every",
+    "span",
+    "train_window",
+    "window",
+    "windows",
+}
+TEMPORAL_CALL_SUFFIXES = (
+    ".bfill",
+    ".cummax",
+    ".cummin",
+    ".cumprod",
+    ".cumsum",
+    ".ewm",
+    ".expanding",
+    ".ffill",
+    ".pct_change",
+    ".quantile",
+    ".rank",
+    ".rolling",
+    ".shift",
+)
 
 
 def source_overrides_get_paper_signal(source: str) -> bool:
@@ -89,6 +155,210 @@ def paper_signal_uses_full_runtime_compute(source: str) -> bool:
             ):
                 return True
     return False
+
+
+def source_import_facts(tree: ast.AST | None) -> list[dict[str, str]]:
+    if tree is None:
+        return []
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                module = _top_level_module(alias.name)
+                if module:
+                    modules.add(module)
+        elif isinstance(node, ast.ImportFrom):
+            module = _top_level_module(node.module or "")
+            if module:
+                modules.add(module)
+    return [
+        {"module": module, "classification": _import_classification(module)}
+        for module in sorted(modules)
+    ]
+
+
+def source_file_access_facts(tree: ast.AST | None) -> list[dict[str, Any]]:
+    if tree is None:
+        return []
+    constants = _string_constants(tree)
+    facts: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = call_name(node.func)
+        access = _file_access_kind(name)
+        if access is None:
+            continue
+        path_value = ""
+        if node.args:
+            path_value = _string_expr_value(node.args[0], constants)
+        facts.append(
+            {
+                "function": name,
+                "access": access,
+                "path": path_value,
+                "line": getattr(node, "lineno", 0),
+            }
+        )
+    return facts
+
+
+def source_temporal_dependency_facts(source: str, tree: ast.AST | None) -> dict[str, Any]:
+    if tree is None:
+        return {
+            "lookbackHints": [],
+            "calendarHints": [],
+            "parameterHints": [],
+            "constantHints": [],
+        }
+    lookback_hints: list[dict[str, Any]] = []
+    calendar_hints: list[dict[str, Any]] = []
+    parameter_hints: list[dict[str, Any]] = []
+    constant_hints: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int]] = set()
+
+    def append_unique(collection: list[dict[str, Any]], item: dict[str, Any]) -> None:
+        key = (_clean(item.get("kind")), _clean(item.get("expression")), int(item.get("line") or 0))
+        if key in seen:
+            return
+        seen.add(key)
+        collection.append(item)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            value = _literal_or_tuple_display(node.value)
+            if value is not None:
+                for target in node.targets:
+                    if not isinstance(target, ast.Name):
+                        continue
+                    lowered_name = target.id.lower()
+                    if not any(part in lowered_name for part in TEMPORAL_CONSTANT_NAME_PARTS):
+                        continue
+                    append_unique(
+                        constant_hints,
+                        {
+                            "name": target.id,
+                            "value": value,
+                            "line": getattr(node, "lineno", 0),
+                            "kind": "constant",
+                            "expression": target.id,
+                        },
+                    )
+        if isinstance(node, ast.Call):
+            name = call_name(node.func)
+            lowered_call = name.lower()
+            if lowered_call in {"range"} or lowered_call.endswith(".range"):
+                append_unique(
+                    calendar_hints,
+                    {
+                        "kind": "rangeLoop",
+                        "expression": _source_segment(source, node),
+                        "line": getattr(node, "lineno", 0),
+                    },
+                )
+            if lowered_call in {
+                "bfill",
+                "cummax",
+                "cummin",
+                "cumprod",
+                "cumsum",
+                "ewm",
+                "expanding",
+                "ffill",
+                "pct_change",
+                "quantile",
+                "rank",
+                "rolling",
+                "shift",
+            } or lowered_call.endswith(TEMPORAL_CALL_SUFFIXES):
+                append_unique(
+                    lookback_hints,
+                    {
+                        "kind": lowered_call.rsplit(".", 1)[-1],
+                        "expression": _source_segment(source, node),
+                        "line": getattr(node, "lineno", 0),
+                    },
+                )
+            for keyword in node.keywords:
+                if keyword.arg not in TEMPORAL_KEYWORD_NAMES:
+                    continue
+                value = _literal_or_tuple_display(keyword.value) or _source_segment(
+                    source, keyword.value
+                )
+                append_unique(
+                    parameter_hints,
+                    {
+                        "kind": "parameter",
+                        "name": keyword.arg,
+                        "value": value,
+                        "expression": f"{keyword.arg}={value}",
+                        "line": getattr(keyword, "lineno", getattr(node, "lineno", 0)),
+                    },
+                )
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
+            expression = _source_segment(source, node)
+            if expression:
+                append_unique(
+                    calendar_hints,
+                    {
+                        "kind": "moduloOrdinal",
+                        "expression": expression,
+                        "line": getattr(node, "lineno", 0),
+                    },
+                )
+        if isinstance(node, ast.Attribute) and node.attr == "iloc":
+            append_unique(
+                calendar_hints,
+                {
+                    "kind": "positionalIndexing",
+                    "expression": _source_segment(source, node),
+                    "line": getattr(node, "lineno", 0),
+                },
+            )
+
+    return {
+        "lookbackHints": lookback_hints[:40],
+        "calendarHints": calendar_hints[:40],
+        "parameterHints": parameter_hints[:40],
+        "constantHints": constant_hints[:40],
+        "interpretation": (
+            "Facts only. The agent decides the temporal dependency contract; "
+            "calendar hints such as range/modulo/iloc often mean row-index "
+            "chronology must be anchored to the selected backtest window."
+        ),
+    }
+
+
+def source_scan_observations(
+    source: str,
+    tree: ast.AST | None,
+    *,
+    file_accesses: list[dict[str, Any]],
+) -> dict[str, Any]:
+    temporal = source_temporal_dependency_facts(source, tree)
+    observed_fit_calls = training_call_facts(tree) if tree is not None else []
+    observed_state_writes = [
+        item
+        for item in file_accesses
+        if isinstance(item, dict) and item.get("access") == "write"
+    ]
+    return {
+        "coverage": "best_effort_static_ast",
+        "positiveFindings": {
+            "observedFitCalls": observed_fit_calls,
+            "observedStateWriteCalls": observed_state_writes,
+            "observedLookbackOps": temporal.get("lookbackHints", []),
+            "observedCalendarOps": temporal.get("calendarHints", []),
+        },
+        "unprovenAbsences": [
+            "No observed fit/train call does not prove absence.",
+            "No observed state write does not prove statelessness.",
+            "Static scan does not replace source reading by the agent.",
+        ],
+        "agentDuty": (
+            "Inspect source and report semantic dependencies the static scan missed."
+        ),
+    }
 
 
 def training_call_facts(function: ast.AST | None) -> list[str]:
@@ -193,3 +463,86 @@ def _empty_design_facts() -> dict[str, Any]:
         "usesStateDir": False,
         "writesState": False,
     }
+
+
+def _top_level_module(value: str) -> str:
+    return str(value or "").split(".", 1)[0].strip()
+
+
+def _import_classification(module: str) -> str:
+    if module == "__future__" or module in sys.stdlib_module_names:
+        return "stdlib"
+    if module in PROMOTION_ALLOWED_RUNTIME_IMPORTS:
+        return "allowed_runtime"
+    return "nonstandard"
+
+
+def _file_access_kind(name: str) -> str | None:
+    if (
+        name in PROMOTION_FILE_READ_FUNCTIONS
+        or name in {"read_text", "read_bytes"}
+        or name.endswith(".read_text")
+        or name.endswith(".read_bytes")
+    ):
+        return "read"
+    if (
+        name in PROMOTION_FILE_WRITE_FUNCTIONS
+        or name in {"write_text", "write_bytes"}
+        or name.endswith(".write_text")
+        or name.endswith(".write_bytes")
+    ):
+        return "write"
+    return None
+
+
+def _literal_or_tuple_display(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, (str, int, float, bool)):
+        return repr(node.value) if isinstance(node.value, str) else str(node.value)
+    if isinstance(node, (ast.Tuple, ast.List)):
+        values: list[str] = []
+        for item in node.elts:
+            item_value = _literal_or_tuple_display(item)
+            if item_value is None:
+                return None
+            values.append(item_value)
+        opener, closer = ("(", ")") if isinstance(node, ast.Tuple) else ("[", "]")
+        return f"{opener}{', '.join(values)}{closer}"
+    return None
+
+
+def _source_segment(source: str, node: ast.AST) -> str:
+    try:
+        segment = ast.get_source_segment(source, node)
+    except Exception:
+        segment = None
+    if segment:
+        return " ".join(segment.strip().split())
+    try:
+        return ast.unparse(node)
+    except Exception:
+        return ""
+
+
+def _string_expr_value(node: ast.AST, constants: dict[str, str]) -> str:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id, "")
+    return ""
+
+
+def _string_constants(tree: ast.AST) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not isinstance(node.value, ast.Constant) or not isinstance(node.value.value, str):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                values[target.id] = node.value.value
+    return values
+
+
+def _clean(value: Any) -> str:
+    return str(value or "").strip()

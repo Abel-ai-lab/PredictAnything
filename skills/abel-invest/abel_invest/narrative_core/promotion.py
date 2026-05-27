@@ -25,8 +25,32 @@ from abel_edge.engine.ledger import read_trade_log
 from abel_edge.engine.trader import paper_run_one
 from abel_edge.research.promotion_gate import build_promotion_gate_report
 
-from . import promotion_source
+from . import promotion_source, promotion_tail
 
+
+_call_name = promotion_source.call_name
+_paper_signal_design_facts = promotion_source.paper_signal_design_facts
+_paper_signal_uses_full_runtime_compute = (
+    promotion_source.paper_signal_uses_full_runtime_compute
+)
+_source_file_access_facts = promotion_source.source_file_access_facts
+_source_import_facts = promotion_source.source_import_facts
+_source_overrides_get_paper_signal = promotion_source.source_overrides_get_paper_signal
+_source_scan_observations = promotion_source.source_scan_observations
+_source_temporal_dependency_facts = promotion_source.source_temporal_dependency_facts
+_training_call_facts = promotion_source.training_call_facts
+PROMOTION_PAPER_TAIL_MAX_COUNT = promotion_tail.PROMOTION_PAPER_TAIL_MAX_COUNT
+PROMOTION_PAPER_TAIL_TARGET_COUNT = promotion_tail.PROMOTION_PAPER_TAIL_TARGET_COUNT
+PROMOTION_PAPER_TAIL_TOLERANCE = promotion_tail.PROMOTION_PAPER_TAIL_TOLERANCE
+_paper_tail_oracle_rows = promotion_tail.paper_tail_oracle_rows
+_paper_tail_position_change_count = promotion_tail.paper_tail_position_change_count
+_paper_tail_prior_row = promotion_tail.paper_tail_prior_row
+_paper_tail_selection_reason = promotion_tail.paper_tail_selection_reason
+_redacted_tail_failure_payload = promotion_tail.redacted_tail_failure_payload
+_redacted_timeline_row = promotion_tail.redacted_timeline_row
+_redacted_trade_log_oracle_sample = promotion_tail.redacted_trade_log_oracle_sample
+_select_paper_tail_oracle_sample = promotion_tail.select_paper_tail_oracle_sample
+_tail_consistency_payload = promotion_tail.tail_consistency_payload
 
 LOCAL_RUNTIME_STATE_DIR = Path(".abel-runtime") / "state"
 PROMOTION_MODE_ZERO_CHANGE = "zero_change"
@@ -42,10 +66,7 @@ PROMOTION_HOSTED_CONTRACT_SCOPE = "hosted_paper_contract"
 PROMOTION_PAPER_SMOKE_WARN_SECONDS = 5.0
 PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS = 5.0
 PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS = 150.0
-PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK = 3
-PROMOTION_PAPER_TAIL_TARGET_COUNT = 20
-PROMOTION_PAPER_TAIL_MAX_COUNT = 60
-PROMOTION_PAPER_TAIL_TOLERANCE = 1e-9
+PROMOTION_LIVE_CONTRACT_FAILURES_BEFORE_FALLBACK = 3
 PROMOTION_LIVE_READINESS_CONFLICT_PHRASES = (
     "after the packaged log",
     "can only replay",
@@ -93,7 +114,7 @@ PROMOTION_CONTINUATION_METHODS = {
     "full_replay_fallback",
     "not_hostable",
 }
-PROMOTION_REWRITE_REQUESTS_BEFORE_FALLBACK = 3
+PROMOTION_CONTRACT_REQUESTS_BEFORE_FALLBACK = 3
 PROMOTION_ML_STATE_EVIDENCE_TERMS = (
     "calibrator",
     "checkpoint",
@@ -169,34 +190,6 @@ STATE_SELF_CHECK_SOURCE_PATH_PARTS = {
     "scaler",
     "scalers",
 }
-PROMOTION_ALLOWED_RUNTIME_IMPORTS = {
-    "abel_edge",
-    "numpy",
-    "pandas",
-}
-PROMOTION_FILE_READ_FUNCTIONS = {
-    "open",
-    "pd.read_csv",
-    "pd.read_json",
-    "pd.read_parquet",
-    "pd.read_pickle",
-    "pandas.read_csv",
-    "pandas.read_json",
-    "pandas.read_parquet",
-    "pandas.read_pickle",
-    "np.load",
-    "numpy.load",
-    "joblib.load",
-    "pickle.load",
-}
-PROMOTION_FILE_WRITE_FUNCTIONS = {
-    "Path.write_text",
-    "Path.write_bytes",
-    "np.save",
-    "numpy.save",
-    "joblib.dump",
-    "pickle.dump",
-}
 PROMOTION_BRANCH_FILE_SUFFIXES = {
     ".csv",
     ".json",
@@ -244,8 +237,12 @@ class PromotionResult:
         return self.mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT
 
 
-class PromotionHostedPaperRewriteRequired(RuntimeError):
+class PromotionHostedPaperContractRequired(RuntimeError):
     """Raised when promotion needs a hosted paper contract before publishing."""
+
+
+# Backward-compatible alias for older internal imports.
+PromotionHostedPaperRewriteRequired = PromotionHostedPaperContractRequired
 
 
 def prepare_promotion(
@@ -285,7 +282,7 @@ def prepare_promotion(
             dependency_scan=dependency_scan,
             signals=contract_signals,
         )
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "hosted paper contract required before first artifact export; "
             f"request written to {request_path}"
         )
@@ -306,7 +303,7 @@ def prepare_promotion(
         contract_report = _load_agent_contract_report(existing_contract_report)
         contract_replacements = _report_replacements(contract_report)
         if not _report_has_hosted_paper_contract(contract_report):
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "hosted paper contract report must use hosted_paper_contract scope"
             )
         contract_summary = _clean(contract_report.get("summary")) or (
@@ -447,7 +444,7 @@ def prepare_promotion(
             signals=failure_signals,
             validation_failure=failure_details,
         )
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "promotion gate did not pass: "
             f"{gate_report.get('status')}; request updated at {request_path}"
         )
@@ -586,7 +583,8 @@ def _hosted_paper_contract_signals(scan: dict[str, Any]) -> list[dict[str, str]]
             value=", ".join(observed_training_calls[:8]),
             reason=(
                 "source scan observed training/refit/update calls; hosted paper "
-                "contract must use stateful_continuation and edit source"
+                "contract should use stateful_continuation first, with "
+                "full_replay_fallback available only after attemptPolicy allows it"
             ),
         )
     paper_signal = scan.get("paperSignal")
@@ -839,258 +837,6 @@ def _trade_log_oracle_facts(trade_log_path: Path | None) -> dict[str, Any]:
     }
 
 
-def _redacted_trade_log_oracle_sample(
-    comparable: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    return [
-        _redacted_timeline_row(item)
-        for item in _select_paper_tail_oracle_sample(comparable)
-    ]
-
-
-def _redacted_timeline_row(item: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "decisionIndex": item.get("decisionIndex"),
-        "asOf": item["asOf"],
-        "decisionTime": item.get("decisionTime") or item["asOf"],
-        "effectiveTime": item.get("effectiveTime") or item["asOf"],
-        "source": item.get("source"),
-    }
-
-
-TEMPORAL_CONSTANT_NAME_PARTS = (
-    "bars",
-    "calendar",
-    "horizon",
-    "lag",
-    "lookback",
-    "min",
-    "period",
-    "refit",
-    "retrain",
-    "row",
-    "shift",
-    "train",
-    "window",
-)
-TEMPORAL_KEYWORD_NAMES = {
-    "alpha",
-    "halflife",
-    "lag",
-    "limit",
-    "lookback",
-    "min_periods",
-    "min_rows",
-    "periods",
-    "refit_every",
-    "span",
-    "train_window",
-    "window",
-    "windows",
-}
-TEMPORAL_CALL_SUFFIXES = (
-    ".bfill",
-    ".cummax",
-    ".cummin",
-    ".cumprod",
-    ".cumsum",
-    ".ewm",
-    ".expanding",
-    ".ffill",
-    ".pct_change",
-    ".quantile",
-    ".rank",
-    ".rolling",
-    ".shift",
-)
-
-
-def _source_temporal_dependency_facts(source: str, tree: ast.AST | None) -> dict[str, Any]:
-    if tree is None:
-        return {
-            "lookbackHints": [],
-            "calendarHints": [],
-            "parameterHints": [],
-            "constantHints": [],
-        }
-    lookback_hints: list[dict[str, Any]] = []
-    calendar_hints: list[dict[str, Any]] = []
-    parameter_hints: list[dict[str, Any]] = []
-    constant_hints: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, int]] = set()
-
-    def append_unique(collection: list[dict[str, Any]], item: dict[str, Any]) -> None:
-        key = (_clean(item.get("kind")), _clean(item.get("expression")), int(item.get("line") or 0))
-        if key in seen:
-            return
-        seen.add(key)
-        collection.append(item)
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            value = _literal_or_tuple_display(node.value)
-            if value is not None:
-                for target in node.targets:
-                    if not isinstance(target, ast.Name):
-                        continue
-                    lowered_name = target.id.lower()
-                    if not any(part in lowered_name for part in TEMPORAL_CONSTANT_NAME_PARTS):
-                        continue
-                    append_unique(
-                        constant_hints,
-                        {
-                            "name": target.id,
-                            "value": value,
-                            "line": getattr(node, "lineno", 0),
-                            "kind": "constant",
-                            "expression": target.id,
-                        },
-                    )
-        if isinstance(node, ast.Call):
-            call_name = _call_name(node.func)
-            lowered_call = call_name.lower()
-            if lowered_call in {"range"} or lowered_call.endswith(".range"):
-                append_unique(
-                    calendar_hints,
-                    {
-                        "kind": "rangeLoop",
-                        "expression": _source_segment(source, node),
-                        "line": getattr(node, "lineno", 0),
-                    },
-                )
-            if lowered_call in {
-                "bfill",
-                "cummax",
-                "cummin",
-                "cumprod",
-                "cumsum",
-                "ewm",
-                "expanding",
-                "ffill",
-                "pct_change",
-                "quantile",
-                "rank",
-                "rolling",
-                "shift",
-            } or lowered_call.endswith(TEMPORAL_CALL_SUFFIXES):
-                append_unique(
-                    lookback_hints,
-                    {
-                        "kind": lowered_call.rsplit(".", 1)[-1],
-                        "expression": _source_segment(source, node),
-                        "line": getattr(node, "lineno", 0),
-                    },
-                )
-            for keyword in node.keywords:
-                if keyword.arg not in TEMPORAL_KEYWORD_NAMES:
-                    continue
-                value = _literal_or_tuple_display(keyword.value) or _source_segment(
-                    source, keyword.value
-                )
-                append_unique(
-                    parameter_hints,
-                    {
-                        "kind": "parameter",
-                        "name": keyword.arg,
-                        "value": value,
-                        "expression": f"{keyword.arg}={value}",
-                        "line": getattr(keyword, "lineno", getattr(node, "lineno", 0)),
-                    },
-                )
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
-            expression = _source_segment(source, node)
-            if expression:
-                append_unique(
-                    calendar_hints,
-                    {
-                        "kind": "moduloOrdinal",
-                        "expression": expression,
-                        "line": getattr(node, "lineno", 0),
-                    },
-                )
-        if isinstance(node, ast.Attribute) and node.attr == "iloc":
-            append_unique(
-                calendar_hints,
-                {
-                    "kind": "positionalIndexing",
-                    "expression": _source_segment(source, node),
-                    "line": getattr(node, "lineno", 0),
-                },
-            )
-
-    return {
-        "lookbackHints": lookback_hints[:40],
-        "calendarHints": calendar_hints[:40],
-        "parameterHints": parameter_hints[:40],
-        "constantHints": constant_hints[:40],
-        "interpretation": (
-            "Facts only. The agent decides the temporal dependency contract; "
-            "calendar hints such as range/modulo/iloc often mean row-index "
-            "chronology must be anchored to the selected backtest window."
-        ),
-    }
-
-
-def _source_scan_observations(
-    source: str,
-    tree: ast.AST | None,
-    *,
-    file_accesses: list[dict[str, Any]],
-) -> dict[str, Any]:
-    temporal = _source_temporal_dependency_facts(source, tree)
-    observed_fit_calls = _training_call_facts(tree) if tree is not None else []
-    observed_state_writes = [
-        item
-        for item in file_accesses
-        if isinstance(item, dict) and item.get("access") == "write"
-    ]
-    return {
-        "coverage": "best_effort_static_ast",
-        "positiveFindings": {
-            "observedFitCalls": observed_fit_calls,
-            "observedStateWriteCalls": observed_state_writes,
-            "observedLookbackOps": temporal.get("lookbackHints", []),
-            "observedCalendarOps": temporal.get("calendarHints", []),
-        },
-        "unprovenAbsences": [
-            "No observed fit/train call does not prove absence.",
-            "No observed state write does not prove statelessness.",
-            "Static scan does not replace source reading by the agent.",
-        ],
-        "agentDuty": (
-            "Inspect source and report semantic dependencies the static scan missed."
-        ),
-    }
-
-
-def _literal_or_tuple_display(node: ast.AST) -> str | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, (str, int, float, bool)):
-        return repr(node.value) if isinstance(node.value, str) else str(node.value)
-    if isinstance(node, (ast.Tuple, ast.List)):
-        values: list[str] = []
-        for item in node.elts:
-            item_value = _literal_or_tuple_display(item)
-            if item_value is None:
-                return None
-            values.append(item_value)
-        opener, closer = ("(", ")") if isinstance(node, ast.Tuple) else ("[", "]")
-        return f"{opener}{', '.join(values)}{closer}"
-    return None
-
-
-def _source_segment(source: str, node: ast.AST) -> str:
-    try:
-        segment = ast.get_source_segment(source, node)
-    except Exception:
-        segment = None
-    if segment:
-        return " ".join(segment.strip().split())
-    try:
-        return ast.unparse(node)
-    except Exception:
-        return ""
-
-
 def _write_artifact_contract_report(
     promoted_dir: Path,
     report: dict[str, Any],
@@ -1149,29 +895,44 @@ def _hosted_paper_contract_requirements(
     attempt_policy: dict[str, Any],
 ) -> dict[str, Any]:
     training_calls = _observed_source_training_calls(dependency_scan)
-    stateful_required = bool(training_calls)
+    fallback_allowed = bool(attempt_policy.get("fullReplayFallbackEligible"))
+    training_observed = bool(training_calls)
+    stateful_required = training_observed and not fallback_allowed
     source_edit_policy = _source_edit_policy(
         dependency_scan,
+        ml_training_observed=training_observed,
         stateful_required=stateful_required,
+        fallback_allowed=fallback_allowed,
     )
-    return {
-        "continuationMethod": (
-            "stateful_continuation" if stateful_required else "agent_choice"
-        ),
-        "statefulContinuationRequired": stateful_required,
-        "sourceEditPolicy": source_edit_policy,
-        "reason": (
+    if training_observed and fallback_allowed:
+        continuation_method = "stateful_continuation_or_full_replay_fallback"
+        reason = (
+            "Static source scan observed training/refit/update calls in the "
+            "selected research source. ML or fitted-object strategies should "
+            "use stateful_continuation first. Because fallback eligibility is "
+            "now open, full_replay_fallback is also allowed if it passes tail "
+            "parity and the hosted paper performance limit."
+        )
+    elif training_observed:
+        continuation_method = "stateful_continuation"
+        reason = (
             "Static source scan observed training/refit/update calls in the "
             "selected research source. ML or fitted-object strategies must "
             "continue strategy-owned state instead of cold refitting on every "
-            "paper call."
-            if stateful_required
-            else (
-                "No training call was observed by static scan. This is not proof "
-                "of statelessness; inspect the source and choose the continuation "
-                "method that preserves the strategy semantics."
-            )
-        ),
+            "paper call until fallback eligibility opens."
+        )
+    else:
+        continuation_method = "agent_choice"
+        reason = (
+            "No training call was observed by static scan. This is not proof "
+            "of statelessness; inspect the source and choose the continuation "
+            "method that preserves the strategy semantics."
+        )
+    return {
+        "continuationMethod": continuation_method,
+        "statefulContinuationRequired": stateful_required,
+        "sourceEditPolicy": source_edit_policy,
+        "reason": reason,
         "observedTrainingCalls": training_calls,
         "fallback": {
             "fullReplayFallbackEligible": bool(
@@ -1193,12 +954,17 @@ def _hosted_paper_contract_requirements(
             "fallbackEligibilityReason": _clean(
                 attempt_policy.get("fallbackEligibilityReason")
             ),
+            "fullReplayFallbackMaxSeconds": _finite_float(
+                attempt_policy.get("fullReplayFallbackMaxSeconds")
+            )
+            or PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS,
         },
         "hardBoundaries": [
             "Do not edit the original research branch source.",
             "Edit sourcePath only when sourceEditPolicy.required is true or when a listed allowed reason is genuinely needed.",
             "Do not package selected-round trade-log.csv, gate answers, or promotion outputs as live strategy assets or startup state.",
             "Do not choose full_replay_fallback or not_hostable unless fallback.fullReplayFallbackEligible is true.",
+            "full_replay_fallback must pass tail parity and the hosted paper fallback timeout.",
         ],
     }
 
@@ -1206,14 +972,20 @@ def _hosted_paper_contract_requirements(
 def _source_edit_policy(
     dependency_scan: dict[str, Any],
     *,
+    ml_training_observed: bool,
     stateful_required: bool,
+    fallback_allowed: bool,
 ) -> dict[str, Any]:
     allowed_reasons = ["asset_path_normalization", "source_bug_fix"]
-    if stateful_required:
+    if ml_training_observed:
         allowed_reasons.insert(0, "stateful_continuation")
-    expected = stateful_required or _scan_has_external_file_dependency(dependency_scan)
+        if fallback_allowed:
+            allowed_reasons.insert(1, "full_replay_fallback")
+    expected = ml_training_observed or _scan_has_external_file_dependency(dependency_scan)
     required = stateful_required
     reason = "stateful_continuation" if stateful_required else ""
+    if not reason and ml_training_observed and fallback_allowed:
+        reason = "stateful_continuation_or_full_replay_fallback"
     if not reason and _scan_has_external_file_dependency(dependency_scan):
         reason = "asset_path_normalization"
     return {
@@ -1260,8 +1032,8 @@ def _contract_attempt_policy(
     if validation_failure is not None:
         failures += 1
     request_refreshes = _nonnegative_int(previous.get("contractRequestRefreshes")) + 1
-    failure_eligible = failures >= PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK
-    refresh_eligible = request_refreshes >= PROMOTION_REWRITE_REQUESTS_BEFORE_FALLBACK
+    failure_eligible = failures >= PROMOTION_LIVE_CONTRACT_FAILURES_BEFORE_FALLBACK
+    refresh_eligible = request_refreshes >= PROMOTION_CONTRACT_REQUESTS_BEFORE_FALLBACK
     eligible = failure_eligible or refresh_eligible
     eligibility_reason = ""
     if failure_eligible:
@@ -1273,8 +1045,8 @@ def _contract_attempt_policy(
         "contractRequestRefreshes": request_refreshes,
         "fullReplayFallbackEligible": eligible,
         "notHostableAllowed": eligible,
-        "fallbackAfterFailures": PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK,
-        "fallbackAfterRequestRefreshes": PROMOTION_REWRITE_REQUESTS_BEFORE_FALLBACK,
+        "fallbackAfterFailures": PROMOTION_LIVE_CONTRACT_FAILURES_BEFORE_FALLBACK,
+        "fallbackAfterRequestRefreshes": PROMOTION_CONTRACT_REQUESTS_BEFORE_FALLBACK,
         "fallbackEligibilityReason": eligibility_reason,
         "fullReplayFallbackMaxSeconds": PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS,
         "rule": (
@@ -1444,40 +1216,6 @@ def _promotion_gate_failure_request_payload(gate_report: dict[str, Any]) -> dict
     }
 
 
-def _redacted_tail_failure_payload(tail: dict[str, Any]) -> dict[str, Any]:
-    comparisons = tail.get("comparisons")
-    failed: list[dict[str, Any]] = []
-    checked = 0
-    if isinstance(comparisons, list):
-        for item in comparisons:
-            if not isinstance(item, dict):
-                continue
-            checked += 1
-            abs_diff = _finite_float(item.get("absDiff"))
-            if abs_diff is not None and abs_diff <= PROMOTION_PAPER_TAIL_TOLERANCE:
-                continue
-            failed.append(
-                {
-                    "asOf": _clean(item.get("asOf")),
-                    "decisionIndex": item.get("decisionIndex"),
-                    "absDiffPresent": abs_diff is not None,
-                    "stateChanged": item.get("stateChanged") is True,
-                }
-            )
-    return {
-        "status": _clean(tail.get("status")),
-        "method": _clean(tail.get("method")),
-        "sampleSize": tail.get("sampleSize"),
-        "checkedCount": checked or None,
-        "failedSampleDates": failed,
-        "diagnostic": (
-            "sampled behavior diverged from the selected-round continuation "
-            "oracle; revisit paperSignal.continuation and paperSignal.evidence "
-            "instead of patching individual expected values"
-        ),
-    }
-
-
 def _report_has_hosted_paper_contract(report: dict[str, Any]) -> bool:
     return (
         _clean(report.get("kind")) == PROMOTION_HOSTED_CONTRACT_SCOPE
@@ -1505,18 +1243,18 @@ def _report_packaged_files(
     seen: set[str] = set()
     for raw_files, forced_role in packaged_groups:
         if not isinstance(raw_files, list):
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paper contract report paths packaged file fields must be lists"
             )
         for raw in raw_files:
             if not isinstance(raw, dict):
-                raise PromotionHostedPaperRewriteRequired("packaged file entries must be objects")
+                raise PromotionHostedPaperContractRequired("packaged file entries must be objects")
             artifact_path = _normalize_report_packaged_artifact_path(
                 raw.get("artifactPath") or raw.get("path"),
                 forced_role=forced_role,
             )
             if artifact_path in seen:
-                raise PromotionHostedPaperRewriteRequired(
+                raise PromotionHostedPaperContractRequired(
                     f"duplicate packaged artifact path: {artifact_path}"
                 )
             seen.add(artifact_path)
@@ -1528,7 +1266,7 @@ def _report_packaged_files(
             )
             source_path = _resolve_report_source_path(raw, branch=branch, artifact_path=artifact_path)
             if not source_path.is_file():
-                raise PromotionHostedPaperRewriteRequired(
+                raise PromotionHostedPaperContractRequired(
                     f"packaged source file is missing for {artifact_path}: {source_path}"
                 )
             packaged.append(
@@ -1554,7 +1292,7 @@ def _validate_packaged_source_roles(packaged: list[PromotionPackagedFile]) -> No
     ]
     if duplicated:
         sample = ", ".join(str(path) for path in duplicated[:3])
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "the same source file cannot be packaged as both immutable strategy "
             f"asset and mutable initial state seed: {sample}"
         )
@@ -1588,7 +1326,7 @@ def _validate_packaged_research_evidence_sources(
         _validate_initial_state_not_oracle_answers(packaged)
         return
     sample = _packaged_file_sample(evidence_assets)
-    raise PromotionHostedPaperRewriteRequired(
+    raise PromotionHostedPaperContractRequired(
         "generated research evidence or export output cannot be packaged as a live "
         "strategy asset "
         f"while paperSignal.incrementalReady=true: {sample}. Package the original "
@@ -1609,7 +1347,7 @@ def _validate_initial_state_not_oracle_answers(
     if not contaminated:
         return
     sample = _packaged_file_sample(contaminated)
-    raise PromotionHostedPaperRewriteRequired(
+    raise PromotionHostedPaperContractRequired(
         "validation oracle answers cannot be packaged as mutable startup state "
         f"while paperSignal.incrementalReady=true: {sample}. Initial state must be "
         "strategy-owned cutover state such as model/cache/cursor/retrain metadata, "
@@ -1690,7 +1428,7 @@ def _normalize_report_packaged_artifact_path(value: Any, *, forced_role: str | N
         text = f"runtime/initial-state/{text.removeprefix('state/')}"
     path = Path(text)
     if not text or path.is_absolute() or ".." in path.parts:
-        raise PromotionHostedPaperRewriteRequired(f"invalid packaged artifact path: {text!r}")
+        raise PromotionHostedPaperContractRequired(f"invalid packaged artifact path: {text!r}")
     return path.as_posix()
 
 
@@ -1699,7 +1437,7 @@ def _packaged_file_role(artifact_path: str) -> str:
         return "initial_state"
     if artifact_path.startswith("strategy/"):
         return "base_asset"
-    raise PromotionHostedPaperRewriteRequired(
+    raise PromotionHostedPaperContractRequired(
         "packaged files must use strategy/** or runtime/initial-state/** artifact paths: "
         f"{artifact_path}"
     )
@@ -1714,18 +1452,18 @@ def _validate_packaged_artifact_path(
     if role == "base_asset":
         relative = Path(artifact_path.removeprefix("strategy/"))
         if is_denylisted_source(relative):
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 f"packaged artifact path is denylisted: {artifact_path}"
             )
         return
     if role == "initial_state":
         relative = Path(artifact_path.removeprefix("runtime/initial-state/"))
         if relative.is_absolute() or ".." in relative.parts or not relative.parts:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 f"invalid runtime initial state artifact path: {artifact_path}"
             )
         if is_denylisted_source(relative):
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 f"runtime initial state artifact path is denylisted: {artifact_path}"
             )
 
@@ -1760,25 +1498,25 @@ def _validate_agent_paper_signal_contract(
     paper_signal = report.get("paperSignal")
     if not isinstance(paper_signal, dict):
         if require_paper_signal:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "hosted paper contract report must include paperSignal"
             )
         return
     implemented = paper_signal.get("implemented")
     incremental_ready = paper_signal.get("incrementalReady")
     if require_paper_signal and implemented is not True:
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "hosted paper contract must set paperSignal.implemented=true"
         )
     continuation = _paper_signal_continuation_payload(paper_signal)
     continuation_method = _clean(continuation.get("method")) if continuation else ""
     if require_paper_signal and incremental_ready is not True:
         if continuation_method == "not_hostable":
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paper contract report declares paperSignal.continuation.method=not_hostable; "
                 "promotion cannot export a continuing hosted paper artifact"
             )
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "hosted paper contract must set paperSignal.incrementalReady=true"
         )
     if incremental_ready is True:
@@ -1788,7 +1526,7 @@ def _validate_agent_paper_signal_contract(
             continuation_method == "full_replay_fallback"
             and not full_replay_fallback_allowed
         ):
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.continuation.method=full_replay_fallback is only "
                 "available after attemptPolicy.fullReplayFallbackEligible=true"
             )
@@ -1807,6 +1545,7 @@ def _validate_agent_paper_signal_contract(
             source,
             paper_signal,
             continuation_method=continuation_method,
+            full_replay_fallback_allowed=full_replay_fallback_allowed,
             source_dependency_scan=source_dependency_scan,
         )
         _validate_source_edit_contract(
@@ -1820,7 +1559,7 @@ def _validate_agent_paper_signal_contract(
         and continuation_method != "stateless_recompute"
         and not _source_overrides_get_paper_signal(source)
     ):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.implemented=true but promoted source does not define get_paper_signal"
         )
 
@@ -1835,16 +1574,16 @@ def _validate_source_edit_contract(
     source_edit = report.get("sourceEdit")
     if not source_changed:
         if isinstance(source_edit, dict) and source_edit.get("changed") is True:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "sourceEdit.changed=true conflicts with unchanged promoted source"
             )
         return
     if not isinstance(source_edit, dict):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "promoted source changed; paper-contract report must declare sourceEdit"
         )
     if source_edit.get("changed") is not True:
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "promoted source changed; sourceEdit.changed must be true"
         )
     reason = _clean(source_edit.get("reason"))
@@ -1854,13 +1593,13 @@ def _validate_source_edit_contract(
     )
     if reason not in allowed:
         allowed_text = ", ".join(sorted(allowed))
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "promoted source changed for an unsupported sourceEdit.reason "
             f"{reason!r}; allowed reasons: {allowed_text}"
         )
     paths = source_edit.get("paths")
     if not isinstance(paths, list) or not paths:
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "sourceEdit.paths must list the promoted files changed"
         )
 
@@ -1921,29 +1660,29 @@ def _validate_paper_signal_continuation_contract(
 ) -> None:
     continuation = _paper_signal_continuation_payload(paper_signal)
     if not isinstance(continuation, dict):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "continuing hosted paper reports must declare "
             "paperSignal.continuation"
         )
     method = _clean(continuation.get("method"))
     if method not in PROMOTION_CONTINUATION_METHODS:
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.method must be one of "
             "stateless_recompute, stateful_continuation, "
             "full_replay_fallback, or not_hostable"
         )
     if method == "not_hostable":
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.incrementalReady=true conflicts with "
             "paperSignal.continuation.method=not_hostable"
         )
     if not _clean(continuation.get("reason")):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.reason must explain why the chosen "
             "continuation shape preserves research decision semantics"
         )
     if not _clean(continuation.get("futureDailyFlow")):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.futureDailyFlow must explain how future "
             "hosted paper as_of calls continue after cutover"
         )
@@ -1958,25 +1697,25 @@ def _validate_paper_signal_design_contract(
 ) -> None:
     design = _paper_signal_design_payload(paper_signal)
     if not isinstance(design, dict):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "continuing hosted paper reports must declare "
             "paperSignal.design with history/state/calendar/cutover/dailyStep"
         )
     history = design.get("history")
     if not isinstance(history, dict):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.history must describe the bounded "
             "history needed by hosted paper execution"
         )
     min_bars = history.get("minBars")
     if min_bars is not None:
         if not isinstance(min_bars, int) or isinstance(min_bars, bool) or min_bars < 0:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.design.history.minBars must be a "
                 "non-negative integer or null"
             )
     if not _clean(history.get("reason")):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.history.reason must explain the "
             "lookback/history requirement"
         )
@@ -1987,7 +1726,7 @@ def _validate_paper_signal_design_contract(
         "state_only",
         "full_replay",
     }:
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.history.boundary must be one of "
             "fixed_lookback, origin_anchored, state_only, or full_replay"
         )
@@ -1996,14 +1735,14 @@ def _validate_paper_signal_design_contract(
     if not isinstance(state, dict) or not isinstance(
         state.get("usesPersistentState"), bool
     ):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.state.usesPersistentState must be true or false"
         )
     state_files = state.get("stateFiles")
     if state.get("usesPersistentState") is True and not (
         isinstance(state_files, list) and bool(state_files)
     ):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.state.stateFiles must list the "
             "strategy-owned state files used by hosted paper"
         )
@@ -2012,14 +1751,14 @@ def _validate_paper_signal_design_contract(
     if not isinstance(calendar, dict) or not isinstance(
         calendar.get("usesAbsoluteDecisionOrdinal"), bool
     ):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.calendar.usesAbsoluteDecisionOrdinal "
             "must be true or false"
         )
     if calendar.get("usesAbsoluteDecisionOrdinal") is True and not _clean(
         calendar.get("origin")
     ):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.calendar.origin is required when "
             "absolute decision ordinals are used"
         )
@@ -2028,23 +1767,23 @@ def _validate_paper_signal_design_contract(
     if not isinstance(cutover, dict) or not isinstance(
         cutover.get("requiresStartupState"), bool
     ):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.cutover.requiresStartupState must be true or false"
         )
     mode = _clean(cutover.get("mode") or cutover.get("approach"))
     if not mode:
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.cutover.mode must be one of "
             "none, minimal_cutover_state, or full_replay"
         )
     if mode not in PROMOTION_RECONSTRUCTION_MODES:
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.cutover.mode must be one of "
             "none, minimal_cutover_state, or full_replay"
         )
     required = cutover.get("requiresStartupState") is True
     if required and mode == "none":
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.cutover.requiresStartupState=true must use "
             "cutover.mode=minimal_cutover_state or full_replay"
         )
@@ -2052,12 +1791,12 @@ def _validate_paper_signal_design_contract(
         mode == "none"
         or (continuation_method == "full_replay_fallback" and mode == "full_replay")
     ):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.cutover.requiresStartupState=false must use "
             "cutover.mode=none"
         )
     if mode == "full_replay" and continuation_method != "full_replay_fallback":
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.incrementalReady=true conflicts with "
             "cutover.mode=full_replay unless continuation.method is "
             "full_replay_fallback"
@@ -2065,51 +1804,51 @@ def _validate_paper_signal_design_contract(
     if required:
         state_end = _date_part(_clean(cutover.get("stateEnd")))
         if not _clean(cutover.get("dataHistoryStart")) or not state_end:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.design.cutover must declare "
                 "dataHistoryStart and stateEnd when startup state is required"
             )
         if cutover_end and state_end != cutover_end:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.design.cutover.stateEnd must equal "
                 f"the selected round cutover end {cutover_end}; startup state should "
                 "be valid through the selected research result before future paper "
                 "continues"
             )
     if continuation_method == "stateless_recompute" and required:
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.method=stateless_recompute must not "
             "require startup cutover state; use stateful_continuation when "
             "startup state is required"
         )
     if continuation_method == "stateful_continuation":
         if not required or mode != "minimal_cutover_state":
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.continuation.method=stateful_continuation requires "
                 "paperSignal.design.cutover.requiresStartupState=true and "
                 "cutover.mode=minimal_cutover_state"
             )
         if state.get("usesPersistentState") is not True:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.continuation.method=stateful_continuation requires "
                 "paperSignal.design.state.usesPersistentState=true"
             )
         if _clean(cutover.get("bootstrapHook")) != "build_paper_initial_state":
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.design.cutover.bootstrapHook must be "
                 "build_paper_initial_state for stateful_continuation"
             )
 
     if continuation_method == "full_replay_fallback":
         if boundary != "full_replay" or mode != "full_replay":
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.continuation.method=full_replay_fallback requires "
                 "history.boundary=full_replay and cutover.mode=full_replay"
             )
 
     daily_step = design.get("dailyStep")
     if not isinstance(daily_step, dict) or not _clean(daily_step.get("reason")):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.design.dailyStep.reason must explain how one future as_of "
             "runs and how state advances if any"
         )
@@ -2122,23 +1861,23 @@ def _validate_paper_signal_evidence_contract(
 ) -> None:
     evidence = _paper_signal_evidence_payload(paper_signal)
     if not isinstance(evidence, dict):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "continuing hosted paper reports must declare paperSignal.evidence"
         )
     observations = evidence.get("observations")
     if not isinstance(observations, list) or not any(
         _clean(item) for item in observations
     ):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.evidence.observations must include at least one "
             "source or local evidence fact supporting the continuation design"
         )
     if not isinstance(evidence.get("semanticChecks", []), list):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.evidence.semanticChecks must be a list"
         )
     if not _clean(evidence.get("whySufficient")):
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.evidence.whySufficient must explain why the evidence "
             "supports the chosen continuation method"
         )
@@ -2147,7 +1886,7 @@ def _validate_paper_signal_evidence_contract(
             _clean(item).lower() for item in evidence.get("semanticChecks") or []
         )
         if "state" not in checks and "cutover" not in checks:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.continuation.method=stateful_continuation requires "
                 "paperSignal.evidence.semanticChecks to support cutover state validity"
             )
@@ -2184,6 +1923,7 @@ def _validate_continuation_method_admissibility(
     paper_signal: dict[str, Any],
     *,
     continuation_method: str,
+    full_replay_fallback_allowed: bool,
     source_dependency_scan: dict[str, Any] | None = None,
 ) -> None:
     source_facts = _paper_signal_design_facts(source)
@@ -2192,17 +1932,27 @@ def _validate_continuation_method_admissibility(
     ) or source_facts.get("sourceTrainingCalls") or source_facts.get("trainingCalls") or []
     if continuation_method == "stateless_recompute" and observed_fit_calls:
         joined = ", ".join(_clean(item) for item in observed_fit_calls if _clean(item))
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.method=stateless_recompute conflicts with "
             f"observed ML training/refit/update calls in the selected source: {joined}. "
             "Use stateful_continuation and reread references/hosted-paper-contract.md."
         )
-    if observed_fit_calls and continuation_method != "stateful_continuation":
+    if (
+        observed_fit_calls
+        and continuation_method != "stateful_continuation"
+        and not (
+            continuation_method == "full_replay_fallback"
+            and full_replay_fallback_allowed
+        )
+    ):
         joined = ", ".join(_clean(item) for item in observed_fit_calls if _clean(item))
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             "observed ML training/refit/update calls require "
-            f"paperSignal.continuation.method=stateful_continuation: {joined}. "
-            "Fallback methods are only available after attemptPolicy allows them."
+            "paperSignal.continuation.method=stateful_continuation before "
+            f"fallback eligibility opens: {joined}. "
+            "After attemptPolicy.fullReplayFallbackEligible=true, "
+            "full_replay_fallback is allowed but must pass tail parity and the "
+            "hosted paper performance limit."
         )
     if continuation_method == "stateful_continuation":
         if observed_fit_calls and not _has_ml_state_continuation_evidence(
@@ -2211,7 +1961,7 @@ def _validate_continuation_method_admissibility(
             joined = ", ".join(
                 _clean(item) for item in observed_fit_calls if _clean(item)
             )
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "observed ML training/refit/update calls require the "
                 "stateful_continuation design to evidence persisted fitted-object "
                 "or equivalent training state, not only cursor/cache state: "
@@ -2230,7 +1980,7 @@ def _validate_live_readiness_claim(report: dict[str, Any]) -> None:
     if not conflicts:
         return
     sample = "; ".join(conflicts[:3])
-    raise PromotionHostedPaperRewriteRequired(
+    raise PromotionHostedPaperContractRequired(
         "paperSignal.incrementalReady=true conflicts with report text that "
         f"describes finite replay, research evidence, or not-continuing readiness: {sample}"
     )
@@ -2318,7 +2068,7 @@ def _validate_promoted_source_static(source_path: Path) -> None:
     ]
     if local_literals:
         sample = ", ".join(sorted(local_literals)[:3])
-        raise PromotionHostedPaperRewriteRequired(
+        raise PromotionHostedPaperContractRequired(
             f"promoted source still contains developer-local absolute path(s): {sample}"
         )
 
@@ -2433,99 +2183,6 @@ def _append_self_check_signal(
     signals.append(payload)
 
 
-def _source_import_facts(tree: ast.AST | None) -> list[dict[str, str]]:
-    if tree is None:
-        return []
-    modules: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                module = _top_level_module(alias.name)
-                if module:
-                    modules.add(module)
-        elif isinstance(node, ast.ImportFrom):
-            module = _top_level_module(node.module or "")
-            if module:
-                modules.add(module)
-    return [
-        {"module": module, "classification": _import_classification(module)}
-        for module in sorted(modules)
-    ]
-
-
-def _top_level_module(value: str) -> str:
-    return str(value or "").split(".", 1)[0].strip()
-
-
-def _import_classification(module: str) -> str:
-    if module == "__future__" or module in sys.stdlib_module_names:
-        return "stdlib"
-    if module in PROMOTION_ALLOWED_RUNTIME_IMPORTS:
-        return "allowed_runtime"
-    return "nonstandard"
-
-
-def _source_file_access_facts(tree: ast.AST | None) -> list[dict[str, Any]]:
-    if tree is None:
-        return []
-    constants = _string_constants(tree)
-    facts: list[dict[str, Any]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        call_name = _call_name(node.func)
-        access = _file_access_kind(call_name)
-        if access is None:
-            continue
-        path_value = ""
-        if node.args:
-            path_value = _string_expr_value(node.args[0], constants)
-        facts.append(
-            {
-                "function": call_name,
-                "access": access,
-                "path": path_value,
-                "line": getattr(node, "lineno", 0),
-            }
-        )
-    return facts
-
-
-def _file_access_kind(call_name: str) -> str | None:
-    if (
-        call_name in PROMOTION_FILE_READ_FUNCTIONS
-        or call_name in {"read_text", "read_bytes"}
-        or call_name.endswith(".read_text")
-        or call_name.endswith(".read_bytes")
-    ):
-        return "read"
-    if (
-        call_name in PROMOTION_FILE_WRITE_FUNCTIONS
-        or call_name in {"write_text", "write_bytes"}
-        or call_name.endswith(".write_text")
-        or call_name.endswith(".write_bytes")
-    ):
-        return "write"
-    return None
-
-
-def _call_name(node: ast.AST) -> str:
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        parent = _call_name(node.value)
-        return f"{parent}.{node.attr}" if parent else node.attr
-    return ""
-
-
-def _string_expr_value(node: ast.AST, constants: dict[str, str]) -> str:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    if isinstance(node, ast.Name):
-        return constants.get(node.id, "")
-    return ""
-
-
 def _display_source_path(branch: Path, source_path: Path) -> str:
     try:
         return source_path.relative_to(branch).as_posix()
@@ -2542,10 +2199,6 @@ def _is_local_absolute_path(value: str) -> bool:
     if any(text.startswith(prefix) for prefix in ("http://", "https://", "s3://", "efs://")):
         return False
     return Path(text).is_absolute()
-
-
-def _source_overrides_get_paper_signal(source: str) -> bool:
-    return promotion_source.source_overrides_get_paper_signal(source)
 
 
 def _source_string_literals(source: str) -> list[str]:
@@ -2579,19 +2232,6 @@ def _source_state_reference_signal(value: str) -> str | None:
     ):
         return "source string looks like a durable state path"
     return None
-
-
-def _string_constants(tree: ast.AST) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign):
-            continue
-        if not isinstance(node.value, ast.Constant) or not isinstance(node.value.value, str):
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name):
-                values[target.id] = node.value.value
-    return values
 
 
 def _default_behavior_equivalence(
@@ -2651,12 +2291,12 @@ def _report_paper_execution_profile(report: dict[str, Any] | None) -> dict[str, 
         try:
             lookback_bars = int(raw_lookback)
         except (TypeError, ValueError) as exc:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.design.history.lookbackBars or minBars must be a "
                 "positive integer for fixed_lookback paper execution"
             ) from exc
         if lookback_bars <= 0:
-            raise PromotionHostedPaperRewriteRequired(
+            raise PromotionHostedPaperContractRequired(
                 "paperSignal.design.history.lookbackBars or minBars must be a "
                 "positive integer for fixed_lookback paper execution"
             )
@@ -3473,160 +3113,6 @@ def _selected_input_symbols(value: Any) -> list[str]:
     return symbols
 
 
-def _paper_tail_oracle_rows(trade_log_path: Path) -> list[dict[str, Any]]:
-    if not trade_log_path.is_file():
-        return []
-    try:
-        with trade_log_path.open(newline="", encoding="utf-8") as handle:
-            rows = list(csv.DictReader(handle))
-    except OSError:
-        return []
-    comparable: list[dict[str, Any]] = []
-    for idx, row in enumerate(rows):
-        as_of = _date_part(_clean(row.get("date") or row.get("decision_time")))
-        expected = _finite_float(row.get("next_position") or row.get("nextPosition"))
-        if not as_of or expected is None:
-            continue
-        comparable.append(
-            {
-                "decisionIndex": idx,
-                "asOf": as_of,
-                "expectedNextPosition": expected,
-                "source": trade_log_path.name,
-            }
-        )
-    selected = _select_paper_tail_oracle_sample(comparable)
-    if not selected:
-        return []
-    holdout_start_index = _nonnegative_int(selected[0].get("decisionIndex"))
-    cutover = comparable[holdout_start_index - 1] if holdout_start_index > 0 else None
-    prior = _paper_tail_prior_row(comparable, selected)
-    position_change_count = _paper_tail_position_change_count(selected, prior=prior)
-    selection_reason = _paper_tail_selection_reason(comparable, selected)
-    for item in selected:
-        item["validationRole"] = "holdout"
-        item["holdoutStartDecisionIndex"] = holdout_start_index
-        item["validationCutoverAsOf"] = cutover.get("asOf") if cutover else None
-        item["validationCutoverDecisionIndex"] = (
-            cutover.get("decisionIndex") if cutover else None
-        )
-        item["positionChangeCount"] = position_change_count
-        item["selectionReason"] = selection_reason
-    return selected
-
-
-def _select_paper_tail_oracle_sample(
-    comparable: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    if not comparable:
-        return []
-    available = len(comparable) - 1 if len(comparable) > 1 else len(comparable)
-    if available <= 0:
-        return comparable[-1:]
-
-    target_count = min(PROMOTION_PAPER_TAIL_TARGET_COUNT, available)
-    max_count = min(PROMOTION_PAPER_TAIL_MAX_COUNT, available)
-    selected = comparable[-target_count:]
-    prior = _paper_tail_prior_row(comparable, selected)
-    if _paper_tail_position_change_count(selected, prior=prior) > 0:
-        return selected
-
-    for count in range(target_count + 1, max_count + 1):
-        expanded = comparable[-count:]
-        prior = _paper_tail_prior_row(comparable, expanded)
-        if _paper_tail_position_change_count(expanded, prior=prior) > 0:
-            return expanded
-        selected = expanded
-    return selected
-
-
-def _paper_tail_prior_row(
-    comparable: list[dict[str, Any]],
-    selected: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    if not selected:
-        return None
-    start_index = _nonnegative_int(selected[0].get("decisionIndex"))
-    if start_index is None or start_index <= 0:
-        return None
-    for item in reversed(comparable):
-        if item.get("decisionIndex") == start_index - 1:
-            return item
-    return None
-
-
-def _paper_tail_position_change_count(
-    selected: list[dict[str, Any]],
-    *,
-    prior: dict[str, Any] | None = None,
-) -> int:
-    previous = (
-        _finite_float(prior.get("expectedNextPosition"))
-        if isinstance(prior, dict)
-        else None
-    )
-    count = 0
-    for item in selected:
-        current = _finite_float(item.get("expectedNextPosition"))
-        if current is None:
-            continue
-        if (
-            previous is not None
-            and abs(current - previous) > PROMOTION_PAPER_TAIL_TOLERANCE
-        ):
-            count += 1
-        previous = current
-    return count
-
-
-def _paper_tail_selection_reason(
-    comparable: list[dict[str, Any]],
-    selected: list[dict[str, Any]],
-) -> str:
-    if not selected:
-        return "none"
-    available = len(comparable) - 1 if len(comparable) > 1 else len(comparable)
-    target_count = min(PROMOTION_PAPER_TAIL_TARGET_COUNT, available)
-    if len(selected) < target_count:
-        return "all_available_with_cutover"
-    if len(selected) == target_count:
-        return "target_tail_window"
-    prior = _paper_tail_prior_row(comparable, selected)
-    changes = _paper_tail_position_change_count(selected, prior=prior)
-    if changes > 0:
-        return "expanded_to_recent_position_change"
-    return "expanded_to_max_without_position_change"
-
-
-def _tail_consistency_payload(
-    oracle_rows: list[dict[str, Any]],
-    comparisons: list[dict[str, Any]],
-    *,
-    status: str,
-) -> dict[str, Any]:
-    return {
-        "status": status,
-        "method": "trade_log_holdout_next_position",
-        "sampleSize": len(oracle_rows),
-        "tolerance": PROMOTION_PAPER_TAIL_TOLERANCE,
-        "windowStartAsOf": oracle_rows[0].get("asOf") if oracle_rows else None,
-        "windowEndAsOf": oracle_rows[-1].get("asOf") if oracle_rows else None,
-        "holdoutStartDecisionIndex": oracle_rows[0].get("holdoutStartDecisionIndex")
-        if oracle_rows
-        else None,
-        "positionChangeCount": oracle_rows[0].get("positionChangeCount")
-        if oracle_rows
-        else None,
-        "selectionReason": oracle_rows[0].get("selectionReason")
-        if oracle_rows
-        else None,
-        "validationCutoverAsOf": oracle_rows[0].get("validationCutoverAsOf")
-        if oracle_rows
-        else None,
-        "comparisons": _json_safe(comparisons),
-    }
-
-
 def _warm_start_payload(
     comparisons: list[dict[str, Any]],
     *,
@@ -3768,18 +3254,6 @@ def _json_safe(value: Any) -> Any:
         except Exception:
             pass
     return str(value)
-
-
-def _paper_signal_design_facts(source: str) -> dict[str, Any]:
-    return promotion_source.paper_signal_design_facts(source)
-
-
-def _training_call_facts(function: ast.AST | None) -> list[str]:
-    return promotion_source.training_call_facts(function)
-
-
-def _paper_signal_uses_full_runtime_compute(source: str) -> bool:
-    return promotion_source.paper_signal_uses_full_runtime_compute(source)
 
 
 def _simple_patch_summary(

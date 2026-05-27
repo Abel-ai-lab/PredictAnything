@@ -2801,7 +2801,7 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
     assert warm_start["sampleSize"] == 2
 
 
-def test_refactor_report_rejects_same_source_as_asset_and_initial_state(
+def test_contract_report_rejects_same_source_as_asset_and_initial_state(
     tmp_path: Path,
 ) -> None:
     branch = tmp_path / "branch"
@@ -2828,7 +2828,7 @@ def test_refactor_report_rejects_same_source_as_asset_and_initial_state(
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="both immutable strategy asset and mutable initial state seed",
     ):
         promotion_helpers._report_packaged_files(
@@ -2838,7 +2838,7 @@ def test_refactor_report_rejects_same_source_as_asset_and_initial_state(
         )
 
 
-def test_refactor_report_rejects_research_evidence_as_live_asset(
+def test_contract_report_rejects_research_evidence_as_live_asset(
     tmp_path: Path,
 ) -> None:
     branch = tmp_path / "branch"
@@ -2857,7 +2857,7 @@ def test_refactor_report_rejects_research_evidence_as_live_asset(
     )
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="generated research evidence",
     ):
         promotion_helpers._validate_packaged_research_evidence_sources(
@@ -2867,7 +2867,7 @@ def test_refactor_report_rejects_research_evidence_as_live_asset(
         )
 
 
-def test_refactor_report_rejects_temp_generated_asset_as_live_asset(
+def test_contract_report_rejects_temp_generated_asset_as_live_asset(
     tmp_path: Path,
 ) -> None:
     branch = tmp_path / "branch"
@@ -2886,7 +2886,7 @@ def test_refactor_report_rejects_temp_generated_asset_as_live_asset(
     )
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="generated research evidence",
     ):
         promotion_helpers._validate_packaged_research_evidence_sources(
@@ -2896,7 +2896,7 @@ def test_refactor_report_rejects_temp_generated_asset_as_live_asset(
         )
 
 
-def test_refactor_report_rejects_export_trade_log_as_live_asset(
+def test_contract_report_rejects_export_trade_log_as_live_asset(
     tmp_path: Path,
 ) -> None:
     branch = tmp_path / "branch"
@@ -2916,7 +2916,7 @@ def test_refactor_report_rejects_export_trade_log_as_live_asset(
     )
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="generated research evidence or export output",
     ):
         promotion_helpers._validate_packaged_research_evidence_sources(
@@ -2927,7 +2927,7 @@ def test_refactor_report_rejects_export_trade_log_as_live_asset(
         )
 
 
-def test_refactor_report_allows_external_trade_log_named_asset(
+def test_contract_report_allows_external_trade_log_named_asset(
     tmp_path: Path,
 ) -> None:
     branch = tmp_path / "branch"
@@ -2955,7 +2955,7 @@ def test_refactor_report_allows_external_trade_log_named_asset(
     )
 
 
-def test_refactor_report_rejects_oracle_answers_as_initial_state(
+def test_contract_report_rejects_oracle_answers_as_initial_state(
     tmp_path: Path,
 ) -> None:
     branch = tmp_path / "branch"
@@ -2983,7 +2983,7 @@ def test_refactor_report_rejects_oracle_answers_as_initial_state(
     )
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="validation oracle answers",
     ):
         promotion_helpers._validate_packaged_research_evidence_sources(
@@ -2993,7 +2993,7 @@ def test_refactor_report_rejects_oracle_answers_as_initial_state(
         )
 
 
-def test_refactor_report_allows_strategy_owned_initial_state(
+def test_contract_report_allows_strategy_owned_initial_state(
     tmp_path: Path,
 ) -> None:
     branch = tmp_path / "branch"
@@ -3028,7 +3028,7 @@ def test_refactor_report_allows_strategy_owned_initial_state(
     )
 
 
-def test_refactor_report_rejects_incremental_ready_contradiction() -> None:
+def test_contract_report_rejects_incremental_ready_contradiction() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3043,7 +3043,7 @@ def test_refactor_report_rejects_incremental_ready_contradiction() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="incrementalReady=true conflicts",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3053,7 +3053,7 @@ def test_refactor_report_rejects_incremental_ready_contradiction() -> None:
         )
 
 
-def test_refactor_report_allows_negated_replay_language() -> None:
+def test_contract_report_allows_negated_replay_language() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3078,7 +3078,7 @@ def test_refactor_report_allows_negated_replay_language() -> None:
     )
 
 
-def test_refactor_report_requires_paper_signal_design_contract() -> None:
+def test_contract_report_requires_paper_signal_design_contract() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3097,7 +3097,7 @@ def test_refactor_report_requires_paper_signal_design_contract() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="paperSignal.design",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3107,7 +3107,7 @@ def test_refactor_report_requires_paper_signal_design_contract() -> None:
         )
 
 
-def test_refactor_report_requires_continuation_contract() -> None:
+def test_contract_report_requires_continuation_contract() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3126,7 +3126,7 @@ def test_refactor_report_requires_continuation_contract() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="paperSignal.continuation",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3136,7 +3136,7 @@ def test_refactor_report_requires_continuation_contract() -> None:
         )
 
 
-def test_refactor_report_requires_evidence_contract() -> None:
+def test_contract_report_requires_evidence_contract() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3155,7 +3155,7 @@ def test_refactor_report_requires_evidence_contract() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="paperSignal.evidence",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3165,7 +3165,7 @@ def test_refactor_report_requires_evidence_contract() -> None:
         )
 
 
-def test_refactor_report_allows_stateless_without_get_paper_signal() -> None:
+def test_contract_report_allows_stateless_without_get_paper_signal() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3283,7 +3283,7 @@ def test_hosted_paper_request_opens_full_replay_fallback_after_failures(
     assert policy["notHostableAllowed"] is True
 
 
-def test_refactor_report_rejects_full_replay_fallback_before_policy_allows() -> None:
+def test_contract_report_rejects_full_replay_fallback_before_policy_allows() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3303,7 +3303,7 @@ def test_refactor_report_rejects_full_replay_fallback_before_policy_allows() -> 
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="fullReplayFallbackEligible=true",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3317,6 +3317,16 @@ def test_refactor_report_rejects_full_replay_fallback_before_policy_allows() -> 
         source,
         require_paper_signal=True,
         full_replay_fallback_allowed=True,
+    )
+
+    promotion_helpers._validate_agent_paper_signal_contract(
+        report,
+        source,
+        require_paper_signal=True,
+        full_replay_fallback_allowed=True,
+        source_dependency_scan={
+            "sourceScan": {"positiveFindings": {"observedFitCalls": ["model.fit"]}}
+        },
     )
 
 
@@ -3336,7 +3346,7 @@ def test_training_scan_reports_observed_calls_without_false_trainy_match() -> No
     assert "train_y.notna" not in facts["sourceTrainingCalls"]
 
 
-def test_refactor_report_rejects_stateless_recompute_with_fit_in_signal_path() -> None:
+def test_contract_report_rejects_stateless_recompute_with_fit_in_signal_path() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3350,7 +3360,7 @@ def test_refactor_report_rejects_stateless_recompute_with_fit_in_signal_path() -
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="stateless_recompute conflicts with observed ML training",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3360,7 +3370,7 @@ def test_refactor_report_rejects_stateless_recompute_with_fit_in_signal_path() -
         )
 
 
-def test_refactor_report_rejects_stateless_override_for_fit_observation() -> None:
+def test_contract_report_rejects_stateless_override_for_fit_observation() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3383,7 +3393,7 @@ def test_refactor_report_rejects_stateless_override_for_fit_observation() -> Non
     ]
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="stateful_continuation",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3412,7 +3422,7 @@ def test_trade_log_oracle_facts_withhold_expected_values(tmp_path: Path) -> None
     assert "withheld" in facts["diagnosticPolicy"]
 
 
-def test_refactor_report_allows_cutover_state_without_initial_state_files() -> None:
+def test_contract_report_allows_cutover_state_without_initial_state_files() -> None:
     source = (
         "import json\n"
         "from abel_edge.engine.base import StrategyEngine\n"
@@ -3449,7 +3459,7 @@ def test_refactor_report_allows_cutover_state_without_initial_state_files() -> N
     )
 
 
-def test_refactor_report_rejects_cutover_state_before_selected_round_end() -> None:
+def test_contract_report_rejects_cutover_state_before_selected_round_end() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3480,7 +3490,7 @@ def test_refactor_report_rejects_cutover_state_before_selected_round_end() -> No
     candidate = Namespace(edge_result={"effective_window": {"end": "2020-12-31"}})
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="selected round cutover end 2020-12-31",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3491,7 +3501,7 @@ def test_refactor_report_rejects_cutover_state_before_selected_round_end() -> No
         )
 
 
-def test_refactor_report_rejects_full_replay_cutover_mode() -> None:
+def test_contract_report_rejects_full_replay_cutover_mode() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3521,7 +3531,7 @@ def test_refactor_report_rejects_full_replay_cutover_mode() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionHostedPaperRewriteRequired,
+        promotion_helpers.PromotionHostedPaperContractRequired,
         match="full_replay",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(

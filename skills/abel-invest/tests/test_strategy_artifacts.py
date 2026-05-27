@@ -9,13 +9,15 @@ import pytest
 from abel_invest.narrative_core.contracts.constants import EVENTS_HEADER, RESULTS_HEADER
 from abel_invest.narrative_core.io import write_tsv_rows
 from abel_invest.narrative_core.promotion import (
-    PromotionHostedPaperRewriteRequired,
+    PromotionHostedPaperContractRequired,
     _paper_smoke_context,
-    _paper_tail_position_change_count,
-    _paper_tail_selection_reason,
-    _select_paper_tail_oracle_sample,
     _validate_agent_paper_signal_contract,
     _write_hosted_paper_contract_request,
+)
+from abel_invest.narrative_core.promotion_tail import (
+    paper_tail_position_change_count,
+    paper_tail_selection_reason,
+    select_paper_tail_oracle_sample,
 )
 from abel_invest.narrative_core.strategy_artifact_upload import (
     render_strategy_artifact_upload_lines,
@@ -309,11 +311,11 @@ def test_tail_oracle_sample_uses_dynamic_holdout_window():
         for idx in range(40)
     ]
 
-    selected = _select_paper_tail_oracle_sample(comparable)
+    selected = select_paper_tail_oracle_sample(comparable)
 
     assert len(selected) == 20
     assert selected[0]["decisionIndex"] == 20
-    assert _paper_tail_selection_reason(comparable, selected) == "target_tail_window"
+    assert paper_tail_selection_reason(comparable, selected) == "target_tail_window"
 
 
 def test_tail_oracle_sample_expands_to_recent_position_change():
@@ -326,16 +328,16 @@ def test_tail_oracle_sample_expands_to_recent_position_change():
         for idx in range(100)
     ]
 
-    selected = _select_paper_tail_oracle_sample(comparable)
+    selected = select_paper_tail_oracle_sample(comparable)
 
     assert len(selected) == 25
     assert selected[0]["decisionIndex"] == 75
-    assert _paper_tail_position_change_count(
+    assert paper_tail_position_change_count(
         selected,
         prior=comparable[74],
     ) == 1
     assert (
-        _paper_tail_selection_reason(comparable, selected)
+        paper_tail_selection_reason(comparable, selected)
         == "expanded_to_recent_position_change"
     )
 
@@ -488,7 +490,7 @@ class BranchEngine:
         return {"next_position": 0.0}
 """
 
-    with pytest.raises(PromotionHostedPaperRewriteRequired, match="stateful_continuation"):
+    with pytest.raises(PromotionHostedPaperContractRequired, match="stateful_continuation"):
         _validate_agent_paper_signal_contract(
             report,
             source,
@@ -583,7 +585,7 @@ class BranchEngine:
 
 
 def test_ml_training_stateful_rejects_cursor_only_state_report():
-    with pytest.raises(PromotionHostedPaperRewriteRequired, match="fitted-object"):
+    with pytest.raises(PromotionHostedPaperContractRequired, match="fitted-object"):
         _validate_agent_paper_signal_contract(
             _stateful_training_report(
                 state_reason=(
@@ -659,3 +661,12 @@ def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp
     assert payload["attemptPolicy"]["contractRequestRefreshes"] == 3
     assert payload["attemptPolicy"]["fullReplayFallbackEligible"] is True
     assert payload["attemptPolicy"]["fallbackEligibilityReason"] == "contract_request_budget"
+    assert payload["requirements"]["statefulContinuationRequired"] is False
+    assert (
+        payload["requirements"]["continuationMethod"]
+        == "stateful_continuation_or_full_replay_fallback"
+    )
+    assert payload["requirements"]["fallback"]["fullReplayFallbackMaxSeconds"] == 150.0
+    assert "full_replay_fallback" in payload["requirements"]["sourceEditPolicy"][
+        "allowedReasons"
+    ]

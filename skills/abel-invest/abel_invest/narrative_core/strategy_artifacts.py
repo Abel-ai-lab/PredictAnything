@@ -35,7 +35,7 @@ from abel_invest.narrative_core.promotion import (
     PROMOTION_PATCH_FILENAME,
     PROMOTION_CONTRACT_REPORT_FILENAME,
     PROMOTION_CONTRACT_REQUEST_FILENAME,
-    PromotionHostedPaperRewriteRequired,
+    PromotionHostedPaperContractRequired,
     PromotionResult,
     prepare_promotion,
 )
@@ -139,7 +139,6 @@ STALE_STRATEGY_ARTIFACT_FILES = (
 )
 STALE_PROMOTED_GENERATED_FILES = (
     PROMOTION_PATCH_FILENAME,
-    "paper-contract-report.artifact.json",
     "paper-contract-report.artifact.json",
 )
 
@@ -611,7 +610,7 @@ def _prepare_promotion_for_export(
             sha256_file=_sha256_file,
             runtime_env=_runtime_env(candidate.branch),
         )
-    except PromotionHostedPaperRewriteRequired as exc:
+    except PromotionHostedPaperContractRequired as exc:
         request_path = _promotion_contract_request_path(destination)
         result = _artifact_skip_result(
             PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED,

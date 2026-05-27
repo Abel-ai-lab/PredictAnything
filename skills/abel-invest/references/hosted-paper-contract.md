@@ -115,6 +115,11 @@ each daily paper call. A cursor-only state file, last position cache, or last
 If the request sets `requirements.statefulContinuationRequired=true`, implement
 `stateful_continuation`. Do not choose `stateless_recompute`.
 
+When ML training or fitted-object state was observed and the request later opens
+`fallback.fullReplayFallbackEligible=true`, `full_replay_fallback` becomes
+allowed as the last resort. It still must pass the same tail parity gate and the
+hosted paper fallback performance limit.
+
 Every method must declare the paper history boundary. The gate packages that
 boundary into `manifest.runtime.paperExecutionProfile`, and Edge uses it to
 limit paper-time feed reads. For expanding, ranking, cumulative, or ordinal
