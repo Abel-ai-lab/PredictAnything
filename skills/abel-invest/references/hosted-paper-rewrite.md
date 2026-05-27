@@ -24,7 +24,9 @@ absence. Read the source and report semantic dependencies the scan missed.
 
 ## Loop
 
-1. Read `refactor-request.json`.
+1. Read `refactor-request.json` for this branch/round's facts and hard
+   requirements, then keep this guide open for the rewrite method and report
+   contract.
 2. Choose the continuation method: `stateless_recompute`,
    `stateful_continuation`, `full_replay_fallback`, or `not_hostable`.
 3. Use request facts as evidence: feeds, selected window, source observations,
@@ -92,6 +94,9 @@ Any fitted object that participates in the signal makes the strategy stateful:
 models, scalers, encoders, calibrators, feature selectors, online learners, and
 similar objects should be continued as state instead of refit from scratch on
 each daily paper call.
+
+If the request sets `requirements.statefulContinuationRequired=true`, implement
+`stateful_continuation`. Do not choose `stateless_recompute` for that promotion.
 
 For expanding, ranking, cumulative, or ordinal logic, declare the calendar or
 history origin. Fixed-window indicators may use a recent lookback; origin-based

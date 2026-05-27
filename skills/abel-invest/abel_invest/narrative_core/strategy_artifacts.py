@@ -9,6 +9,7 @@ import hashlib
 from importlib.metadata import PackageNotFoundError, version
 import json
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any
 
@@ -33,6 +34,7 @@ from abel_invest.narrative_core.promotion import (
     PROMOTION_MODE_ZERO_CHANGE,
     PROMOTION_PATCH_FILENAME,
     PROMOTION_REFACTOR_REPORT_FILENAME,
+    PROMOTION_REFACTOR_REQUEST_FILENAME,
     PromotionNeedsAgentRefactor,
     PromotionResult,
     prepare_promotion,
@@ -72,6 +74,7 @@ SELECTION_REASON_AUTO_BEST_PASS = (
     "drawdown, then highest validation pass rate; ties use latest recorded round"
 )
 DEFAULT_PROMOTIONS_DIRNAME = "promotions"
+LEGACY_SESSION_ARTIFACT_DIRNAME = "paper_ready_artifact"
 RUNTIME_STATE_SCHEMA = "abel-invest.runtime-state/v1"
 DENYLISTED_STRATEGY_PARTS = {
     ".git",
@@ -122,6 +125,21 @@ ARTIFACT_NULL_METRIC_KEYS_BY_APPLICABILITY = (
         ("position_ic_stability", "position_ic_monthly_mean"),
     ),
     ("loss_years_applicable", ("loss_years",)),
+)
+STALE_STRATEGY_ARTIFACT_FILES = (
+    "artifact.zip",
+    "edge-result.artifact.json",
+    "edge-result.json",
+    "edge-validation.md",
+    "extra-source-map.json",
+    "manifest.json",
+    "metric-input.csv",
+    PROMOTION_GATE_FILENAME,
+    "trade-log.csv",
+)
+STALE_PROMOTED_GENERATED_FILES = (
+    PROMOTION_PATCH_FILENAME,
+    "refactor-report.artifact.json",
 )
 
 
@@ -499,6 +517,7 @@ def _export_strategy_artifact_candidate(
     runner,
 ) -> dict[str, Any]:
     destination = _artifact_output_dir(candidate, output_dir=output_dir)
+    _cleanup_stale_strategy_artifact_outputs(candidate, destination=destination)
     python_bin = _normalize_python_bin(
         python_bin or resolve_default_python_bin(candidate.branch),
         anchor=candidate.session,
@@ -811,6 +830,62 @@ def _artifact_output_dir(
         )
     destination.mkdir(parents=True, exist_ok=True)
     return destination
+
+
+def _cleanup_stale_strategy_artifact_outputs(
+    candidate: StrategyArtifactCandidate,
+    *,
+    destination: Path,
+) -> None:
+    legacy_session_artifact = candidate.session / LEGACY_SESSION_ARTIFACT_DIRNAME
+    if legacy_session_artifact.is_dir():
+        shutil.rmtree(legacy_session_artifact)
+    elif legacy_session_artifact.exists():
+        legacy_session_artifact.unlink()
+
+    active_refactor = _destination_has_active_agent_refactor(destination)
+    for name in STALE_STRATEGY_ARTIFACT_FILES:
+        path = destination / name
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+    promoted_dir = destination / "promoted"
+    if not promoted_dir.exists():
+        return
+    if not active_refactor:
+        shutil.rmtree(promoted_dir)
+        return
+    for name in STALE_PROMOTED_GENERATED_FILES:
+        path = promoted_dir / name
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+
+
+def _destination_has_active_agent_refactor(destination: Path) -> bool:
+    promoted_dir = destination / "promoted"
+    promoted_source = promoted_dir / "engine.py"
+    report = promoted_dir / PROMOTION_REFACTOR_REPORT_FILENAME
+    if not promoted_source.is_file() or not report.is_file():
+        return False
+    gate_status = _promotion_gate_status(destination / PROMOTION_GATE_FILENAME)
+    if gate_status == "failed":
+        return True
+    if gate_status == "passed":
+        return False
+    if (destination / "artifact.zip").exists() or (destination / "manifest.json").exists():
+        return False
+    return True
+
+
+def _promotion_gate_status(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return _clean(payload.get("status"))
 
 
 def _ensure_metric_input_for_artifact(

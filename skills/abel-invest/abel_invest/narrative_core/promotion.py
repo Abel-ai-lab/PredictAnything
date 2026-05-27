@@ -296,6 +296,7 @@ def prepare_promotion(
             require_paper_signal=True,
             candidate=candidate,
             full_replay_fallback_allowed=_full_replay_fallback_allowed(promoted_dir),
+            source_dependency_scan=dependency_scan,
         )
         mode = PROMOTION_MODE_AGENT_REFACTOR
         strategy_source_path = promoted_source
@@ -522,6 +523,18 @@ def _collect_hosted_paper_dependency_scan(
 def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
     signals: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
+    observed_training_calls = _observed_source_training_calls(scan)
+    if observed_training_calls:
+        _append_hosted_rewrite_signal(
+            signals,
+            seen,
+            kind="ml_training_observed",
+            value=", ".join(observed_training_calls[:8]),
+            reason=(
+                "source scan observed training/refit/update calls; hosted paper "
+                "rewrite must use stateful_continuation"
+            ),
+        )
     paper_signal = scan.get("paperSignal")
     if not isinstance(paper_signal, dict) or paper_signal.get("implemented") is not True:
         _append_hosted_rewrite_signal(
@@ -1039,107 +1052,82 @@ def _sanitized_packaged_file_entry(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _hosted_paper_rewrite_work_order(
+def _hosted_paper_rewrite_guide_reference() -> dict[str, Any]:
+    guide_path = Path(__file__).resolve().parents[2] / "references" / "hosted-paper-rewrite.md"
+    return {
+        "path": str(guide_path),
+        "relativePath": "references/hosted-paper-rewrite.md",
+        "instruction": (
+            "Read this Markdown guide before editing. The request contains only "
+            "this promotion's facts and hard requirements; the guide contains "
+            "the live-paper rewrite method, report shape, and validation model."
+        ),
+    }
+
+
+def _hosted_paper_rewrite_requirements(
     dependency_scan: dict[str, Any],
     *,
-    signals: list[dict[str, str]],
-    validation_failure: dict[str, Any] | None,
-) -> list[str]:
-    signal_kinds = {
-        _clean(signal.get("kind"))
-        for signal in signals
-        if isinstance(signal, dict) and _clean(signal.get("kind"))
-    }
-    order = [
-        "Edit only sourcePath and leave the original research branch source unchanged.",
-        (
-            "Use this request and references/hosted-paper-rewrite.md as the task "
-            "model. Your task is to design a live-paper continuation, not to "
-            "repair the promotion gate. Treat facts as evidence for your own "
-            "strategy understanding, not as a strategy-type classification."
+    attempt_policy: dict[str, Any],
+) -> dict[str, Any]:
+    training_calls = _observed_source_training_calls(dependency_scan)
+    stateful_required = bool(training_calls)
+    return {
+        "continuationMethod": (
+            "stateful_continuation" if stateful_required else "agent_choice"
         ),
-        (
-            "Before coding, choose the continuation method: stateless_recompute, "
-            "stateful_continuation, full_replay_fallback, or not_hostable. The "
-            "method must explain how the strategy naturally continues after the "
-            "selected research cutover."
-        ),
-        (
-            "Implement BranchEngine.get_paper_signal(as_of=...) as one future "
-            "hosted paper day that returns compiled absolute target "
-            "next_position for as_of."
-        ),
-        (
-            "Resolve hosted paths with "
-            "from abel_edge.runtime_paths import context_runtime_paths; "
-            "paths = context_runtime_paths(self.context)."
-        ),
-        (
-            "Write refactor-report.json with paperSignal.continuation, "
-            "paperSignal.design, and paperSignal.evidence. The evidence should "
-            "support the continuation design, not just describe gate output."
-        ),
-        (
-            "If timeline or state semantics are uncertain, create the smallest "
-            "local probe that answers your semantic question, and summarize the "
-            "finding in paperSignal.evidence. Do not make probe shape the "
-            "rewrite goal."
-        ),
-        (
-            "Do not choose full_replay_fallback or not_hostable unless "
-            "attemptPolicy.fullReplayFallbackEligible is true."
-        ),
-        (
-            "Rerun the same promote/export/visualize command after the promoted "
-            "source and report are updated."
-        ),
-    ]
-    if "paper_signal_full_recompute" in signal_kinds:
-        order.insert(
-            2,
-            (
-                "Replace the current paper signal wrapper around "
-                "compute_runtime_output with a live-paper step; full replay is "
-                "not the hosted paper contract."
-            ),
-        )
-    if validation_failure:
-        order.append(
-            "Use validation.lastGateFailure as diagnostics for the continuation "
-            "design and evidence. Do not treat it as a public unit test to patch "
-            "date-by-date."
-        )
-        if _validation_failure_has_tail_consistency(validation_failure):
-            order.append(
-                "Tail consistency diagnostics mean the continuation design, "
-                "state/cutover evidence, or stateless recompute proof is not yet "
-                "strong enough. Revisit the design/evidence before changing "
-                "individual dates."
+        "statefulContinuationRequired": stateful_required,
+        "reason": (
+            "Static source scan observed training/refit/update calls in the "
+            "selected research source. ML or fitted-object strategies must "
+            "continue strategy-owned state instead of cold refitting on every "
+            "paper call."
+            if stateful_required
+            else (
+                "No training call was observed by static scan. This is not proof "
+                "of statelessness; inspect the source and choose the continuation "
+                "method that preserves the strategy semantics."
             )
-    if "developer_local_absolute_path" in signal_kinds or "developer_local_file_access" in signal_kinds:
-        order.append(
-            "Replace developer-local paths with packaged original dependencies or "
-            "runtime/state paths."
-        )
-    if "nonstandard_import" in signal_kinds:
-        order.append(
-            "Confirm non-standard imports are available in the hosted runtime; do not "
-            "install packages from inside strategy code."
-        )
-    return order
+        ),
+        "observedTrainingCalls": training_calls,
+        "fallback": {
+            "fullReplayFallbackEligible": bool(
+                attempt_policy.get("fullReplayFallbackEligible")
+            ),
+            "notHostableAllowed": bool(attempt_policy.get("notHostableAllowed")),
+            "liveRewriteFailures": _nonnegative_int(
+                attempt_policy.get("liveRewriteFailures")
+            ),
+            "fallbackAfterFailures": _nonnegative_int(
+                attempt_policy.get("fallbackAfterFailures")
+            ),
+        },
+        "hardBoundaries": [
+            "Do not edit the original research branch source; edit only sourcePath.",
+            "Do not package selected-round trade-log.csv, gate answers, or promotion outputs as live strategy assets or startup state.",
+            "Do not choose full_replay_fallback or not_hostable unless fallback.fullReplayFallbackEligible is true.",
+        ],
+    }
 
 
-def _validation_failure_has_tail_consistency(validation_failure: dict[str, Any]) -> bool:
-    for gate in validation_failure.get("failedGates") or []:
-        if not isinstance(gate, dict):
-            continue
-        smoke = gate.get("smoke")
-        if not isinstance(smoke, dict):
-            continue
-        tail = smoke.get("tailConsistency")
-        if isinstance(tail, dict) and tail.get("status") == "failed":
-            return True
-    return False
+def _observed_source_training_calls(scan: dict[str, Any] | None) -> list[str]:
+    if not isinstance(scan, dict):
+        return []
+    source_scan = scan.get("sourceScan")
+    if not isinstance(source_scan, dict):
+        return []
+    findings = source_scan.get("positiveFindings")
+    if not isinstance(findings, dict):
+        return []
+    calls = findings.get("observedFitCalls")
+    if not isinstance(calls, list):
+        return []
+    observed: list[str] = []
+    for item in calls:
+        text = _clean(item)
+        if text and text not in observed:
+            observed.append(text)
+    return observed[:20]
 
 
 def _rewrite_attempt_policy(
@@ -1217,11 +1205,6 @@ def _write_hosted_paper_rewrite_request(
         promoted_dir,
         validation_failure=validation_failure,
     )
-    work_order = _hosted_paper_rewrite_work_order(
-        dependency_scan,
-        signals=signals,
-        validation_failure=validation_failure,
-    )
     validation_payload: dict[str, Any] = {
         "smoke": (
             "Rerun the same promote/export command after writing "
@@ -1245,6 +1228,10 @@ def _write_hosted_paper_rewrite_request(
             tree,
             file_accesses=facts.get("fileAccesses", []),
         )
+    requirements = _hosted_paper_rewrite_requirements(
+        facts,
+        attempt_policy=attempt_policy,
+    )
     request_path.write_text(
         json.dumps(
             {
@@ -1253,236 +1240,25 @@ def _write_hosted_paper_rewrite_request(
                 "scope": PROMOTION_HOSTED_REWRITE_SCOPE,
                 "sourcePath": str(source_path),
                 "branchPath": str(branch),
-                "mission": {
-                    "design": (
-                        "Design a live-paper continuation for the selected research "
-                        "strategy after the selected round cutover."
-                    ),
-                    "implement": (
-                        "Implement get_paper_signal(as_of=...) so one future hosted "
-                        "paper day can return a compiled absolute target exposure "
-                        "without full historical replay."
-                    ),
-                    "prove": (
-                        "Use refactor-report.json to declare the continuation method, "
-                        "runtime design, and evidence chain. The gate verifies that "
-                        "evidence and behavior are consistent."
-                    ),
-                    "agentRole": (
-                        "The agent decides the strategy-specific continuation design "
-                        "from the facts; the request does not classify the strategy type."
-                    ),
-                    "notGateRepair": (
-                        "Gate feedback is diagnostics. Do not patch individual "
-                        "validation dates or oracle answers to make the gate pass."
+                "output": {
+                    "artifactDir": str(promoted_dir.parent),
+                    "promotedDir": str(promoted_dir),
+                    "reportPath": str(
+                        promoted_dir / PROMOTION_REFACTOR_REPORT_FILENAME
                     ),
                 },
-                "workOrder": work_order,
+                "rewriteGuide": _hosted_paper_rewrite_guide_reference(),
+                "task": (
+                    "Rewrite the promoted copy into a live-paper continuation of "
+                    "the selected research strategy. Read rewriteGuide first, then "
+                    "use this request for the current branch/round facts."
+                ),
+                "requirements": requirements,
                 "signals": signals,
                 "facts": facts,
                 "attemptPolicy": attempt_policy,
-                "evidenceGuidance": {
-                    "purpose": (
-                        "Use source reading and any small local probes as evidence "
-                        "for the continuation design. The evidence should answer "
-                        "strategy semantics; it is not a fixed mode taxonomy."
-                    ),
-                    "canonicalTimeline": (
-                        "facts.validationOracle.canonicalDecisionTimeline, when "
-                        "present, is the selected-round canonical decision index "
-                        "derived from trade-log.csv row order. Use it for ordinal "
-                        "anchoring and semantic evidence; never package it as "
-                        "a live strategy dependency."
-                    ),
-                    "fullReplayPolicy": (
-                        "Do not use full historical replay as the first rewrite "
-                        "design. It is only a fallback when attemptPolicy says "
-                        "fullReplayFallbackEligible=true."
-                    ),
-                    "artifactPolicy": (
-                        "Temporary evidence scripts and outputs are not live "
-                        "strategy inputs. Do not list them in packagedFiles or "
-                        "initialStateFiles unless the file is genuine strategy-owned "
-                        "startup state."
-                    ),
-                },
-                "runtimeApiFacts": {
-                    "paperSignalSignature": (
-                        "def get_paper_signal(self, *, as_of=None) -> dict"
-                    ),
-                    "pathHelperImport": (
-                        "from abel_edge.runtime_paths import context_runtime_paths"
-                    ),
-                    "pathHelperUsage": "paths = context_runtime_paths(self.context)",
-                    "baseAssetRoot": "paths.base_strategy",
-                    "runtimeRoot": "paths.runtime",
-                    "strategyStateRoot": "paths.state / 'strategy'",
-                    "paperSignalReturn": (
-                        "return a dict containing a finite numeric next_position; "
-                        "next_position is the compiled absolute target exposure for "
-                        "as_of, matching selected-round trade-log next_position; it "
-                        "is not an order delta or '0 means unchanged' event"
-                    ),
-                    "sameAsOfRule": (
-                        "a repeated call for the same as_of must return the same "
-                        "signal and must not advance strategy state twice"
-                    ),
-                    "cutoverMeaning": (
-                        "startup state, when needed, is strategy-owned cutover state "
-                        "valid through the selected round end and ready for the next "
-                        "hosted paper day"
-                    ),
-                    "selectedRoundCutoverEnd": cutover_end,
-                    "startupStateOutput": (
-                        "if paperSignal.design.cutover.requiresStartupState=true, "
-                        "create the state files during the rewrite and declare them "
-                        "in paths.initialStateFiles"
-                    ),
-                    "researchAuthority": (
-                        "compute_decisions(self, ctx) remains the backtest authority; "
-                        "ctx.paths and ctx.state_dir are valid there"
-                    ),
-                },
-                "avoidBeforeFirstEdit": [
-                    "Do not read Abel-skills promotion.py or strategy_artifacts.py to infer the task.",
-                    "Do not read Abel-edge promotion_gate.py to infer the gate.",
-                    "Do not create generated Markdown notes.",
-                    "Do not launch a separate agent process.",
-                    "Do not use selected-round trade-log.csv as a live strategy asset.",
-                    "Do not use other sessions' promoted artifacts as rewrite templates.",
-                ],
                 "validation": validation_payload,
-                "reportContract": {
-                    "schema": PROMOTION_AGENT_REPORT_SCHEMA,
-                    "kind": PROMOTION_HOSTED_REWRITE_SCOPE,
-                    "summary": "<brief hosted paper rewrite summary>",
-                    "scope": PROMOTION_HOSTED_REWRITE_SCOPE,
-                    "paths": {
-                        "packagedFiles": [
-                            {
-                                "artifactPath": "strategy/assets/<file>",
-                                "sourcePath": "<absolute or branch-relative source file>",
-                                "purpose": "<why the promoted strategy needs this read-only asset>",
-                            }
-                        ],
-                        "initialStateFiles": [
-                            {
-                                "artifactPath": "runtime/initial-state/strategy/<file>",
-                                "sourcePath": "<absolute or branch-relative source file>",
-                                "purpose": "<why paper startup needs this mutable state seed>",
-                            }
-                        ],
-                    },
-                    "paperSignal": {
-                        "implemented": True,
-                        "incrementalReady": (
-                            "<true only if the promoted source can continue future "
-                            "daily paper signals; otherwise false>"
-                        ),
-                        "continuation": {
-                            "method": (
-                                "<stateless_recompute | stateful_continuation | "
-                                "full_replay_fallback | not_hostable>"
-                            ),
-                            "reason": (
-                                "<why this continuation shape preserves the "
-                                "research decision semantics>"
-                            ),
-                            "futureDailyFlow": (
-                                "<how future as_of calls continue after cutover>"
-                            ),
-                        },
-                        "design": {
-                            "history": {
-                                "minBars": "<integer minimum bars needed, or null if state-only>",
-                                "feeds": ["<symbols or feeds used by the paper signal>"],
-                                "reason": "<lookback, lag, rolling, or state-history explanation>",
-                            },
-                            "state": {
-                                "usesPersistentState": "<true if get_paper_signal reads/writes strategy state>",
-                                "stateFiles": ["strategy/<state-file>"],
-                                "reason": "<what survives across paper runs>",
-                            },
-                            "calendar": {
-                                "usesAbsoluteDecisionOrdinal": (
-                                    "<true if row indexes/retrain cadence must be anchored "
-                                    "to the research window>"
-                                ),
-                                "origin": "<selected backtest start date if used, else null>",
-                                "reason": "<why ordinal anchoring is or is not needed>",
-                            },
-                            "cutover": {
-                                "requiresStartupState": (
-                                    "<true if startup state must be built before daily paper>"
-                                ),
-                                "mode": (
-                                    "<none | minimal_cutover_state | "
-                                    "full_replay>"
-                                ),
-                                "dataHistoryStart": "<date used to rebuild current state, or null>",
-                                "stateEnd": (
-                                    "<selected round cutover end date the current "
-                                    "state is valid through, or null>"
-                                ),
-                                "reason": (
-                                    "<why this is the minimal cutover state needed, "
-                                    "or why startup state is unnecessary>"
-                                ),
-                            },
-                            "dailyStep": {
-                                "reason": (
-                                    "<how one future as_of runs, how state advances "
-                                    "if any, and what expensive work is avoided>"
-                                )
-                            },
-                        },
-                        "evidence": {
-                            "observations": [
-                                "<facts learned from source reading or local probes>"
-                            ],
-                            "agentOverrides": [
-                                "<optional explanations for static observations the agent found irrelevant>"
-                            ],
-                            "semanticChecks": [
-                                "<calendar/state/cutover/parity checks that support the design>"
-                            ],
-                            "whySufficient": (
-                                "<why this evidence is enough for the chosen "
-                                "continuation method>"
-                            ),
-                        },
-                        "liveReadiness": (
-                            "<future signal source, state transition, idempotence, "
-                            "and known limits>"
-                        ),
-                    },
-                    "limitations": [],
-                    "replacements": [],
-                },
-                "gateContract": {
-                    "static": [
-                        "no developer-local absolute paths in promoted source",
-                        "package entries are valid and not denylisted",
-                        "generated research/promotion evidence is not packaged as live strategy input",
-                        "continuing-ready reports declare paperSignal.continuation, paperSignal.design, and paperSignal.evidence",
-                        "startup state declarations include paths.initialStateFiles",
-                    ],
-                    "paperSmoke": [
-                        "stage strategy/runtime/state like the artifact runner",
-                        "walk forward over held-out selected-round paper dates and compare get_paper_signal(as_of) to compiled trade-log next_position",
-                        "repeat the latest sampled as_of and require idempotence",
-                        "record elapsed time, state changes, and warm-start diagnostics",
-                    ],
-                    "semanticEvidence": [
-                        "agent chooses evidence from source analysis, not from strategy-type classification",
-                        "canonical decision indexes come from selected-round trade-log row order when available",
-                        "full replay fallback is available only after the fallback policy opens it",
-                    ],
-                    "diagnosticsPolicy": (
-                        "expected values in validation.lastGateFailure are diagnostics "
-                        "only; do not encode them in strategy assets or startup state"
-                    ),
-                },
+                "selectedRoundCutoverEnd": cutover_end,
             },
             indent=2,
             sort_keys=True,
@@ -1847,6 +1623,7 @@ def _validate_agent_paper_signal_contract(
     require_paper_signal: bool,
     candidate: Any | None = None,
     full_replay_fallback_allowed: bool = False,
+    source_dependency_scan: dict[str, Any] | None = None,
 ) -> None:
     paper_signal = report.get("paperSignal")
     if not isinstance(paper_signal, dict):
@@ -1898,6 +1675,7 @@ def _validate_agent_paper_signal_contract(
             source,
             paper_signal,
             continuation_method=continuation_method,
+            source_dependency_scan=source_dependency_scan,
         )
     if implemented is True and not _source_overrides_get_paper_signal(source):
         raise PromotionNeedsAgentRefactor(
@@ -2181,53 +1959,39 @@ def _validate_continuation_method_admissibility(
     paper_signal: dict[str, Any],
     *,
     continuation_method: str,
+    source_dependency_scan: dict[str, Any] | None = None,
 ) -> None:
     source_facts = _paper_signal_design_facts(source)
-    observed_fit_calls = source_facts.get("trainingCalls") or []
-    if (
-        continuation_method == "stateless_recompute"
-        and observed_fit_calls
-        and not _report_has_agent_override_for_fit(report, paper_signal)
-    ):
+    observed_fit_calls = _observed_source_training_calls(
+        source_dependency_scan
+    ) or source_facts.get("sourceTrainingCalls") or source_facts.get("trainingCalls") or []
+    if continuation_method == "stateless_recompute" and observed_fit_calls:
         joined = ", ".join(_clean(item) for item in observed_fit_calls if _clean(item))
         raise PromotionNeedsAgentRefactor(
             "paperSignal.continuation.method=stateless_recompute conflicts with "
-            f"observed fit/update calls in the source signal path: {joined}. "
-            "Use stateful_continuation, or add a documented agentOverrides "
-            "entry proving the fitted object does not affect the paper signal."
+            f"observed ML training/refit/update calls in the selected source: {joined}. "
+            "Use stateful_continuation and reread references/hosted-paper-rewrite.md."
         )
-
-
-def _report_has_agent_override_for_fit(
-    report: dict[str, Any],
-    paper_signal: dict[str, Any],
-) -> bool:
-    evidence = _paper_signal_evidence_payload(paper_signal)
-    if not isinstance(evidence, dict):
-        return False
-    overrides = evidence.get("agentOverrides")
-    if not isinstance(overrides, list):
-        return False
-    for item in overrides:
-        if isinstance(item, dict):
-            text = " ".join(
-                _clean(item.get(key))
-                for key in ("scanObservation", "agentFinding", "evidence", "reason")
-            ).lower()
-        else:
-            text = _clean(item).lower()
-        if "fit" in text and any(
-            term in text
-            for term in (
-                "does not affect",
-                "not used",
-                "unused",
-                "not part of",
-                "not participate",
+    if observed_fit_calls and continuation_method != "stateful_continuation":
+        joined = ", ".join(_clean(item) for item in observed_fit_calls if _clean(item))
+        raise PromotionNeedsAgentRefactor(
+            "observed ML training/refit/update calls require "
+            f"paperSignal.continuation.method=stateful_continuation: {joined}. "
+            "Fallback methods are only available after attemptPolicy allows them."
+        )
+    if continuation_method == "stateful_continuation":
+        if source_facts.get("usesStateDir") is not True:
+            raise PromotionNeedsAgentRefactor(
+                "stateful_continuation requires get_paper_signal to use the hosted "
+                "state directory via context_runtime_paths(self.context).state."
             )
-        ):
-            return True
-    return False
+        if source_facts.get("writesState") is not True:
+            raise PromotionNeedsAgentRefactor(
+                "stateful_continuation requires get_paper_signal to write or save "
+                "strategy-owned state so future paper calls continue from the "
+                "latest model/cache/cursor. Reread the stateful continuation "
+                "section of references/hosted-paper-rewrite.md."
+            )
 
 
 def _report_initial_state_entries(report: dict[str, Any]) -> list[Any]:

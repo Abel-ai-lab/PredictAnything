@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
+
+import pytest
 
 from abel_invest.narrative_core.contracts.constants import EVENTS_HEADER, RESULTS_HEADER
 from abel_invest.narrative_core.io import write_tsv_rows
+from abel_invest.narrative_core.promotion import (
+    PromotionNeedsAgentRefactor,
+    _validate_agent_paper_signal_contract,
+    _write_hosted_paper_rewrite_request,
+)
 from abel_invest.narrative_core.strategy_artifact_upload import (
     render_strategy_artifact_upload_lines,
 )
 from abel_invest.narrative_core.strategy_artifacts import (
     SELECTION_METRIC_ORDER,
+    _cleanup_stale_strategy_artifact_outputs,
     select_best_pass_strategy,
 )
 
@@ -195,3 +204,157 @@ def test_strategy_artifact_skip_line_keeps_session_view_language():
         "exist, but none currently has the files needed for a hostable strategy artifact"
     ]
     assert "skipped" not in lines[0].lower()
+
+
+def test_artifact_export_cleanup_removes_legacy_and_completed_outputs(tmp_path):
+    session = tmp_path / "research" / "meta" / "session"
+    session.mkdir(parents=True)
+    legacy = session / "paper_ready_artifact"
+    legacy.mkdir()
+    (legacy / "old.txt").write_text("old", encoding="utf-8")
+    destination = tmp_path / "artifact"
+    promoted = destination / "promoted"
+    promoted.mkdir(parents=True)
+    (destination / "artifact.zip").write_text("zip", encoding="utf-8")
+    (destination / "manifest.json").write_text("{}", encoding="utf-8")
+    (destination / "promotion-gate.json").write_text(
+        json.dumps({"status": "passed"}),
+        encoding="utf-8",
+    )
+    (promoted / "engine.py").write_text("class BranchEngine: pass\n", encoding="utf-8")
+    (promoted / "refactor-report.json").write_text("{}", encoding="utf-8")
+
+    _cleanup_stale_strategy_artifact_outputs(
+        SimpleNamespace(session=session),
+        destination=destination,
+    )
+
+    assert not legacy.exists()
+    assert not (destination / "artifact.zip").exists()
+    assert not promoted.exists()
+
+
+def test_artifact_export_cleanup_preserves_active_agent_refactor(tmp_path):
+    session = tmp_path / "research" / "meta" / "session"
+    session.mkdir(parents=True)
+    destination = tmp_path / "artifact"
+    promoted = destination / "promoted"
+    promoted.mkdir(parents=True)
+    (destination / "artifact.zip").write_text("stale", encoding="utf-8")
+    (destination / "promotion-gate.json").write_text(
+        json.dumps({"status": "failed"}),
+        encoding="utf-8",
+    )
+    (promoted / "engine.py").write_text("class BranchEngine: pass\n", encoding="utf-8")
+    (promoted / "refactor-report.json").write_text("{}", encoding="utf-8")
+    (promoted / "promotion.patch").write_text("old patch", encoding="utf-8")
+
+    _cleanup_stale_strategy_artifact_outputs(
+        SimpleNamespace(session=session),
+        destination=destination,
+    )
+
+    assert not (destination / "artifact.zip").exists()
+    assert (promoted / "engine.py").is_file()
+    assert (promoted / "refactor-report.json").is_file()
+    assert not (promoted / "promotion.patch").exists()
+
+
+def test_rewrite_request_is_slim_and_marks_training_stateful(tmp_path):
+    branch = tmp_path / "branch"
+    promoted = tmp_path / "artifact" / "promoted"
+    promoted.mkdir(parents=True)
+    branch.mkdir()
+    source = promoted / "engine.py"
+    source.write_text("class BranchEngine: pass\n", encoding="utf-8")
+
+    request_path = _write_hosted_paper_rewrite_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan={
+            "sourceScan": {
+                "positiveFindings": {
+                    "observedFitCalls": ["model.fit"],
+                }
+            },
+            "backtestWindow": {
+                "effectiveWindow": {"start": "2024-01-01", "end": "2024-02-01"}
+            },
+        },
+        signals=[],
+    )
+
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    assert payload["requirements"]["statefulContinuationRequired"] is True
+    assert payload["requirements"]["continuationMethod"] == "stateful_continuation"
+    assert "rewriteGuide" in payload
+    assert "reportContract" not in payload
+    assert "gateContract" not in payload
+    assert "runtimeApiFacts" not in payload
+
+
+def test_ml_training_source_rejects_stateless_recompute_report():
+    report = {
+        "schema": "abel-invest.agent-refactor-report/v1",
+        "kind": "hosted_paper_rewrite",
+        "scope": "hosted_paper_rewrite",
+        "summary": "paper signal",
+        "paths": {"packagedFiles": [], "initialStateFiles": []},
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "continuation": {
+                "method": "stateless_recompute",
+                "reason": "recompute from bars",
+                "futureDailyFlow": "load bars and compute signal",
+            },
+            "design": {
+                "history": {
+                    "boundary": "fixed_lookback",
+                    "minBars": 10,
+                    "reason": "rolling input window",
+                },
+                "state": {
+                    "usesPersistentState": False,
+                    "stateFiles": [],
+                    "reason": "none",
+                },
+                "calendar": {
+                    "usesAbsoluteDecisionOrdinal": False,
+                    "reason": "none",
+                },
+                "cutover": {
+                    "requiresStartupState": False,
+                    "mode": "none",
+                    "reason": "none",
+                },
+                "dailyStep": {"reason": "one as_of call"},
+            },
+            "evidence": {
+                "observations": ["source read"],
+                "semanticChecks": [],
+                "whySufficient": "same formula",
+            },
+            "liveReadiness": "continues from market data",
+        },
+    }
+    source = """
+class BranchEngine:
+    def get_paper_signal(self, *, as_of=None):
+        return {"next_position": 0.0}
+"""
+
+    with pytest.raises(PromotionNeedsAgentRefactor, match="stateful_continuation"):
+        _validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+            source_dependency_scan={
+                "sourceScan": {
+                    "positiveFindings": {
+                        "observedFitCalls": ["model.fit"],
+                    }
+                }
+            },
+        )
