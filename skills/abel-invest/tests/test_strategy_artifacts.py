@@ -358,3 +358,167 @@ class BranchEngine:
                 }
             },
         )
+
+
+def _stateful_training_report(*, state_reason: str) -> dict:
+    return {
+        "schema": "abel-invest.agent-refactor-report/v1",
+        "kind": "hosted_paper_rewrite",
+        "scope": "hosted_paper_rewrite",
+        "summary": "stateful paper signal",
+        "paths": {
+            "packagedFiles": [],
+            "initialStateFiles": [
+                {
+                    "artifactPath": "runtime/initial-state/strategy/paper-state.pkl",
+                    "sourcePath": "/tmp/paper-state.pkl",
+                    "purpose": state_reason,
+                }
+            ],
+        },
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "continuation": {
+                "method": "stateful_continuation",
+                "reason": "continue fitted training state",
+                "futureDailyFlow": "load state and advance one as_of",
+            },
+            "design": {
+                "history": {
+                    "boundary": "origin_anchored",
+                    "minBars": 20,
+                    "origin": "2024-01-01",
+                    "reason": "ordinal calendar",
+                },
+                "state": {
+                    "usesPersistentState": True,
+                    "stateFiles": ["strategy/paper-state.pkl"],
+                    "schema": "paper-state/v1",
+                    "validThrough": "2024-02-01",
+                    "reason": state_reason,
+                },
+                "calendar": {
+                    "usesAbsoluteDecisionOrdinal": True,
+                    "origin": "2024-01-01",
+                    "reason": "row ordinal",
+                },
+                "cutover": {
+                    "requiresStartupState": True,
+                    "mode": "minimal_cutover_state",
+                    "dataHistoryStart": "2024-01-01",
+                    "stateEnd": "2024-02-01",
+                    "bootstrapHook": "build_paper_initial_state",
+                    "reason": "startup state is valid through cutover",
+                },
+                "dailyStep": {"reason": "advance from the persisted state"},
+            },
+            "evidence": {
+                "observations": ["source read"],
+                "semanticChecks": ["cutover state validity checked"],
+                "whySufficient": "same state schema is used by bootstrap and paper",
+            },
+            "liveReadiness": "future calls load state and continue",
+        },
+        "limitations": [],
+        "replacements": [],
+    }
+
+
+def _stateful_source() -> str:
+    return """
+from abel_edge.runtime_paths import context_runtime_paths
+
+class BranchEngine:
+    def __init__(self, context=None):
+        self.context = context or {}
+
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        return {}
+
+    def get_paper_signal(self, *, as_of=None):
+        paths = context_runtime_paths(self.context)
+        state_path = paths.state / "strategy" / "paper-state.pkl"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text("state")
+        return {"next_position": 0.0}
+"""
+
+
+def test_ml_training_stateful_rejects_cursor_only_state_report():
+    with pytest.raises(PromotionNeedsAgentRefactor, match="fitted-object"):
+        _validate_agent_paper_signal_contract(
+            _stateful_training_report(
+                state_reason=(
+                    "paper state stores last as_of, last next_position, and row cursor"
+                )
+            ),
+            _stateful_source(),
+            require_paper_signal=True,
+            source_dependency_scan={
+                "sourceScan": {
+                    "positiveFindings": {"observedFitCalls": ["model.fit"]}
+                }
+            },
+        )
+
+
+def test_ml_training_stateful_accepts_fitted_object_state_evidence():
+    _validate_agent_paper_signal_contract(
+        _stateful_training_report(
+            state_reason=(
+                "paper state stores fitted model, scaler, last fit index, and row cursor"
+            )
+        ),
+        _stateful_source(),
+        require_paper_signal=True,
+        source_dependency_scan={
+            "sourceScan": {"positiveFindings": {"observedFitCalls": ["model.fit"]}}
+        },
+    )
+
+
+def test_rewrite_request_budget_can_open_fallback_before_third_live_failure(tmp_path):
+    branch = tmp_path / "branch"
+    promoted = tmp_path / "artifact" / "promoted"
+    promoted.mkdir(parents=True)
+    branch.mkdir()
+    source = promoted / "engine.py"
+    source.write_text("class BranchEngine: pass\n", encoding="utf-8")
+    dependency_scan = {
+        "sourceScan": {"positiveFindings": {"observedFitCalls": ["model.fit"]}},
+    }
+    validation_failure = {"failedGates": [{"name": "paper_dry_run"}]}
+
+    request_path = _write_hosted_paper_rewrite_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan=dependency_scan,
+        signals=[],
+    )
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    assert payload["attemptPolicy"]["rewriteRequestRefreshes"] == 1
+    assert payload["attemptPolicy"]["fullReplayFallbackEligible"] is False
+
+    _write_hosted_paper_rewrite_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan=dependency_scan,
+        signals=[],
+        validation_failure=validation_failure,
+    )
+    request_path = _write_hosted_paper_rewrite_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan=dependency_scan,
+        signals=[],
+        validation_failure=validation_failure,
+    )
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    assert payload["attemptPolicy"]["liveRewriteFailures"] == 2
+    assert payload["attemptPolicy"]["rewriteRequestRefreshes"] == 3
+    assert payload["attemptPolicy"]["fullReplayFallbackEligible"] is True
+    assert payload["attemptPolicy"]["fallbackEligibilityReason"] == "rewrite_request_budget"

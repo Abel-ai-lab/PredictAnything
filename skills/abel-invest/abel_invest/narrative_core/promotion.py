@@ -84,6 +84,32 @@ PROMOTION_CONTINUATION_METHODS = {
     "full_replay_fallback",
     "not_hostable",
 }
+PROMOTION_REWRITE_REQUESTS_BEFORE_FALLBACK = 3
+PROMOTION_ML_STATE_EVIDENCE_TERMS = (
+    "calibrator",
+    "checkpoint",
+    "coef",
+    "coefficient",
+    "coefficients",
+    "encoder",
+    "estimator",
+    "feature selector",
+    "fit index",
+    "fitted",
+    "forest",
+    "last fit",
+    "learner",
+    "model",
+    "models",
+    "parameter",
+    "parameters",
+    "rf state",
+    "scaler",
+    "scalers",
+    "training state",
+    "transformer",
+    "weights",
+)
 STATE_SELF_CHECK_FILE_SUFFIXES = {
     ".joblib",
     ".npy",
@@ -1101,6 +1127,15 @@ def _hosted_paper_rewrite_requirements(
             "fallbackAfterFailures": _nonnegative_int(
                 attempt_policy.get("fallbackAfterFailures")
             ),
+            "rewriteRequestRefreshes": _nonnegative_int(
+                attempt_policy.get("rewriteRequestRefreshes")
+            ),
+            "fallbackAfterRequestRefreshes": _nonnegative_int(
+                attempt_policy.get("fallbackAfterRequestRefreshes")
+            ),
+            "fallbackEligibilityReason": _clean(
+                attempt_policy.get("fallbackEligibilityReason")
+            ),
         },
         "hardBoundaries": [
             "Do not edit the original research branch source; edit only sourcePath.",
@@ -1141,17 +1176,28 @@ def _rewrite_attempt_policy(
     failures = _nonnegative_int(previous.get("liveRewriteFailures"))
     if validation_failure is not None:
         failures += 1
-    eligible = failures >= PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK
+    request_refreshes = _nonnegative_int(previous.get("rewriteRequestRefreshes")) + 1
+    failure_eligible = failures >= PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK
+    refresh_eligible = request_refreshes >= PROMOTION_REWRITE_REQUESTS_BEFORE_FALLBACK
+    eligible = failure_eligible or refresh_eligible
+    eligibility_reason = ""
+    if failure_eligible:
+        eligibility_reason = "live_rewrite_failures"
+    elif refresh_eligible:
+        eligibility_reason = "rewrite_request_budget"
     return {
         "liveRewriteFailures": failures,
+        "rewriteRequestRefreshes": request_refreshes,
         "fullReplayFallbackEligible": eligible,
         "notHostableAllowed": eligible,
         "fallbackAfterFailures": PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK,
+        "fallbackAfterRequestRefreshes": PROMOTION_REWRITE_REQUESTS_BEFORE_FALLBACK,
+        "fallbackEligibilityReason": eligibility_reason,
         "fullReplayFallbackMaxSeconds": PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS,
         "rule": (
             "Use stateless_recompute or stateful_continuation first. "
             "full_replay_fallback and not_hostable are only available after "
-            "the live rewrite gate has failed enough complete attempts."
+            "enough complete live rewrite failures or rewrite request refreshes."
         ),
     }
 
@@ -1953,6 +1999,31 @@ def _validate_paper_signal_evidence_contract(
             )
 
 
+def _ml_state_evidence_text(report: dict[str, Any], paper_signal: dict[str, Any]) -> str:
+    snippets: list[Any] = []
+    design = _paper_signal_design_payload(paper_signal)
+    if isinstance(design, dict):
+        for key in ("state", "cutover", "dailyStep"):
+            value = design.get(key)
+            if isinstance(value, dict):
+                snippets.append(value.get("reason"))
+    paths = report.get("paths")
+    if isinstance(paths, dict):
+        for item in paths.get("initialStateFiles") or []:
+            if isinstance(item, dict):
+                snippets.append(item.get("purpose"))
+    snippets.append(paper_signal.get("liveReadiness"))
+    return json.dumps(_json_safe(snippets), sort_keys=True).lower()
+
+
+def _has_ml_state_continuation_evidence(
+    report: dict[str, Any],
+    paper_signal: dict[str, Any],
+) -> bool:
+    text = _ml_state_evidence_text(report, paper_signal)
+    return any(term in text for term in PROMOTION_ML_STATE_EVIDENCE_TERMS)
+
+
 def _validate_continuation_method_admissibility(
     report: dict[str, Any],
     source: str,
@@ -1991,6 +2062,19 @@ def _validate_continuation_method_admissibility(
                 "strategy-owned state so future paper calls continue from the "
                 "latest model/cache/cursor. Reread the stateful continuation "
                 "section of references/hosted-paper-rewrite.md."
+            )
+        if observed_fit_calls and not _has_ml_state_continuation_evidence(
+            report, paper_signal
+        ):
+            joined = ", ".join(
+                _clean(item) for item in observed_fit_calls if _clean(item)
+            )
+            raise PromotionNeedsAgentRefactor(
+                "observed ML training/refit/update calls require the "
+                "stateful_continuation design to evidence persisted fitted-object "
+                "or equivalent training state, not only cursor/cache state: "
+                f"{joined}. Reread the stateful continuation section of "
+                "references/hosted-paper-rewrite.md."
             )
 
 

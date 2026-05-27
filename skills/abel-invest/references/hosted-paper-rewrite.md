@@ -93,7 +93,11 @@ Choose one runtime shape:
 Any fitted object that participates in the signal makes the strategy stateful:
 models, scalers, encoders, calibrators, feature selectors, online learners, and
 similar objects should be continued as state instead of refit from scratch on
-each daily paper call.
+each daily paper call. For ML or fitted-object strategies,
+`stateful_continuation` means the startup state contains the fitted object or an
+equivalent sufficient training state, plus the processed cursor needed to
+advance it. A cursor-only state file, last position cache, or last `as_of`
+marker is not enough.
 
 If the request sets `requirements.statefulContinuationRequired=true`, implement
 `stateful_continuation`. Do not choose `stateless_recompute` for that promotion.
@@ -115,6 +119,12 @@ The hook builds state valid through `cutover_as_of` using the same state schema
 that `get_paper_signal` consumes. It may return JSON-serializable state or a
 manifest of files written under the staged state directory when fitted objects
 need file serialization.
+
+For fitted-object strategies, use this hook to create the production startup
+state. Future `get_paper_signal(as_of=...)` calls should load that state,
+advance only the rows/dates after the stored cursor, refit only when the
+original strategy's continuation calendar says a refit is due, and persist the
+updated state. Do not cold-start the whole training path on every paper call.
 
 The gate calls the hook for validation cutover before the hidden holdout tail.
 Use the same hook and state schema to create the production startup files listed
