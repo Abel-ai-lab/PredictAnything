@@ -25,7 +25,7 @@ from . import promotion_source
 
 LOCAL_RUNTIME_STATE_DIR = Path(".abel-runtime") / "state"
 PROMOTION_MODE_ZERO_CHANGE = "zero_change"
-PROMOTION_MODE_NEEDS_AGENT_REFACTOR = "needs_agent_refactor"
+PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED = "hosted_paper_rewrite_required"
 PROMOTION_MODE_AGENT_REFACTOR = "agent_refactor"
 PROMOTION_GATE_FILENAME = "promotion-gate.json"
 PROMOTION_PATCH_FILENAME = "promotion.patch"
@@ -235,8 +235,8 @@ class PromotionResult:
         return self.mode == PROMOTION_MODE_AGENT_REFACTOR
 
 
-class PromotionNeedsAgentRefactor(RuntimeError):
-    """Raised when promotion needs agent-assisted refactor before publishing."""
+class PromotionHostedPaperRewriteRequired(RuntimeError):
+    """Raised when promotion needs a hosted paper rewrite before publishing."""
 
 
 def prepare_promotion(
@@ -276,7 +276,7 @@ def prepare_promotion(
             dependency_scan=dependency_scan,
             signals=rewrite_signals,
         )
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "hosted paper rewrite required before first artifact export; "
             f"request written to {request_path}"
         )
@@ -296,8 +296,8 @@ def prepare_promotion(
         refactor_report = _load_agent_refactor_report(existing_refactor_report)
         refactor_replacements = _report_replacements(refactor_report)
         if not _report_has_hosted_rewrite_contract(refactor_report):
-            raise PromotionNeedsAgentRefactor(
-                "agent refactor report must use hosted_paper_rewrite scope"
+            raise PromotionHostedPaperRewriteRequired(
+                "hosted paper rewrite report must use hosted_paper_rewrite scope"
             )
         refactor_summary = _clean(refactor_report.get("summary")) or (
             "Agent refactored the promoted strategy for hosted paper."
@@ -374,6 +374,17 @@ def prepare_promotion(
         runtime_env=runtime_env,
         is_denylisted_source=is_denylisted_source,
     )
+    if paper_dry_run.get("status") == "passed":
+        replay_state_files = _generated_replay_initial_state_files(destination)
+        if replay_state_files:
+            replay_artifact_paths = {
+                item.artifact_path for item in replay_state_files
+            }
+            packaged_files = tuple(
+                item
+                for item in packaged_files
+                if item.artifact_path not in replay_artifact_paths
+            ) + replay_state_files
     gate_path = destination / PROMOTION_GATE_FILENAME
     gate_report = build_promotion_gate_report(
         promotion_mode=mode,
@@ -424,7 +435,7 @@ def prepare_promotion(
             signals=failure_signals,
             validation_failure=failure_details,
         )
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "promotion gate did not pass: "
             f"{gate_report.get('status')}; request updated at {request_path}"
         )
@@ -1440,18 +1451,18 @@ def _report_packaged_files(
     seen: set[str] = set()
     for raw_files, forced_role in packaged_groups:
         if not isinstance(raw_files, list):
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "refactor report paths packaged file fields must be lists"
             )
         for raw in raw_files:
             if not isinstance(raw, dict):
-                raise PromotionNeedsAgentRefactor("packaged file entries must be objects")
+                raise PromotionHostedPaperRewriteRequired("packaged file entries must be objects")
             artifact_path = _normalize_report_packaged_artifact_path(
                 raw.get("artifactPath") or raw.get("path"),
                 forced_role=forced_role,
             )
             if artifact_path in seen:
-                raise PromotionNeedsAgentRefactor(
+                raise PromotionHostedPaperRewriteRequired(
                     f"duplicate packaged artifact path: {artifact_path}"
                 )
             seen.add(artifact_path)
@@ -1463,7 +1474,7 @@ def _report_packaged_files(
             )
             source_path = _resolve_report_source_path(raw, branch=branch, artifact_path=artifact_path)
             if not source_path.is_file():
-                raise PromotionNeedsAgentRefactor(
+                raise PromotionHostedPaperRewriteRequired(
                     f"packaged source file is missing for {artifact_path}: {source_path}"
                 )
             packaged.append(
@@ -1489,7 +1500,7 @@ def _validate_packaged_source_roles(packaged: list[PromotionPackagedFile]) -> No
     ]
     if duplicated:
         sample = ", ".join(str(path) for path in duplicated[:3])
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "the same source file cannot be packaged as both immutable strategy "
             f"asset and mutable initial state seed: {sample}"
         )
@@ -1523,7 +1534,7 @@ def _validate_packaged_research_evidence_sources(
         _validate_initial_state_not_oracle_answers(packaged)
         return
     sample = _packaged_file_sample(evidence_assets)
-    raise PromotionNeedsAgentRefactor(
+    raise PromotionHostedPaperRewriteRequired(
         "generated research evidence or export output cannot be packaged as a live "
         "strategy asset "
         f"while paperSignal.incrementalReady=true: {sample}. Package the original "
@@ -1544,7 +1555,7 @@ def _validate_initial_state_not_oracle_answers(
     if not contaminated:
         return
     sample = _packaged_file_sample(contaminated)
-    raise PromotionNeedsAgentRefactor(
+    raise PromotionHostedPaperRewriteRequired(
         "validation oracle answers cannot be packaged as mutable startup state "
         f"while paperSignal.incrementalReady=true: {sample}. Initial state must be "
         "strategy-owned cutover state such as model/cache/cursor/retrain metadata, "
@@ -1625,7 +1636,7 @@ def _normalize_report_packaged_artifact_path(value: Any, *, forced_role: str | N
         text = f"runtime/initial-state/{text.removeprefix('state/')}"
     path = Path(text)
     if not text or path.is_absolute() or ".." in path.parts:
-        raise PromotionNeedsAgentRefactor(f"invalid packaged artifact path: {text!r}")
+        raise PromotionHostedPaperRewriteRequired(f"invalid packaged artifact path: {text!r}")
     return path.as_posix()
 
 
@@ -1634,7 +1645,7 @@ def _packaged_file_role(artifact_path: str) -> str:
         return "initial_state"
     if artifact_path.startswith("strategy/"):
         return "base_asset"
-    raise PromotionNeedsAgentRefactor(
+    raise PromotionHostedPaperRewriteRequired(
         "packaged files must use strategy/** or runtime/initial-state/** artifact paths: "
         f"{artifact_path}"
     )
@@ -1649,18 +1660,18 @@ def _validate_packaged_artifact_path(
     if role == "base_asset":
         relative = Path(artifact_path.removeprefix("strategy/"))
         if is_denylisted_source(relative):
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 f"packaged artifact path is denylisted: {artifact_path}"
             )
         return
     if role == "initial_state":
         relative = Path(artifact_path.removeprefix("runtime/initial-state/"))
         if relative.is_absolute() or ".." in relative.parts or not relative.parts:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 f"invalid runtime initial state artifact path: {artifact_path}"
             )
         if is_denylisted_source(relative):
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 f"runtime initial state artifact path is denylisted: {artifact_path}"
             )
 
@@ -1694,25 +1705,25 @@ def _validate_agent_paper_signal_contract(
     paper_signal = report.get("paperSignal")
     if not isinstance(paper_signal, dict):
         if require_paper_signal:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "hosted paper rewrite report must include paperSignal"
             )
         return
     implemented = paper_signal.get("implemented")
     incremental_ready = paper_signal.get("incrementalReady")
     if require_paper_signal and implemented is not True:
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "hosted paper rewrite must set paperSignal.implemented=true"
         )
     continuation = _paper_signal_continuation_payload(paper_signal)
     continuation_method = _clean(continuation.get("method")) if continuation else ""
     if require_paper_signal and incremental_ready is not True:
         if continuation_method == "not_hostable":
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "refactor report declares paperSignal.continuation.method=not_hostable; "
                 "promotion cannot export a continuing hosted paper artifact"
             )
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "hosted paper rewrite must set paperSignal.incrementalReady=true"
         )
     if incremental_ready is True:
@@ -1722,7 +1733,7 @@ def _validate_agent_paper_signal_contract(
             continuation_method == "full_replay_fallback"
             and not full_replay_fallback_allowed
         ):
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.continuation.method=full_replay_fallback is only "
                 "available after attemptPolicy.fullReplayFallbackEligible=true"
             )
@@ -1744,7 +1755,7 @@ def _validate_agent_paper_signal_contract(
             source_dependency_scan=source_dependency_scan,
         )
     if implemented is True and not _source_overrides_get_paper_signal(source):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.implemented=true but promoted source does not define get_paper_signal"
         )
 
@@ -1779,29 +1790,29 @@ def _validate_paper_signal_continuation_contract(
 ) -> None:
     continuation = _paper_signal_continuation_payload(paper_signal)
     if not isinstance(continuation, dict):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "continuing hosted paper reports must declare "
             "paperSignal.continuation"
         )
     method = _clean(continuation.get("method"))
     if method not in PROMOTION_CONTINUATION_METHODS:
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.continuation.method must be one of "
             "stateless_recompute, stateful_continuation, "
             "full_replay_fallback, or not_hostable"
         )
     if method == "not_hostable":
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.incrementalReady=true conflicts with "
             "paperSignal.continuation.method=not_hostable"
         )
     if not _clean(continuation.get("reason")):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.continuation.reason must explain why the chosen "
             "continuation shape preserves research decision semantics"
         )
     if not _clean(continuation.get("futureDailyFlow")):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.continuation.futureDailyFlow must explain how future "
             "hosted paper as_of calls continue after cutover"
         )
@@ -1816,25 +1827,25 @@ def _validate_paper_signal_design_contract(
 ) -> None:
     design = _paper_signal_design_payload(paper_signal)
     if not isinstance(design, dict):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "continuing hosted paper reports must declare "
             "paperSignal.design with history/state/calendar/cutover/dailyStep"
         )
     history = design.get("history")
     if not isinstance(history, dict):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.history must describe the bounded "
             "history needed by get_paper_signal"
         )
     min_bars = history.get("minBars")
     if min_bars is not None:
         if not isinstance(min_bars, int) or isinstance(min_bars, bool) or min_bars < 0:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.design.history.minBars must be a "
                 "non-negative integer or null"
             )
     if not _clean(history.get("reason")):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.history.reason must explain the "
             "lookback/history requirement"
         )
@@ -1845,7 +1856,7 @@ def _validate_paper_signal_design_contract(
         "state_only",
         "full_replay",
     }:
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.history.boundary must be one of "
             "fixed_lookback, origin_anchored, state_only, or full_replay"
         )
@@ -1854,14 +1865,14 @@ def _validate_paper_signal_design_contract(
     if not isinstance(state, dict) or not isinstance(
         state.get("usesPersistentState"), bool
     ):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.state.usesPersistentState must be true or false"
         )
     state_files = state.get("stateFiles")
     if state.get("usesPersistentState") is True and not (
         isinstance(state_files, list) and bool(state_files)
     ):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.state.stateFiles must list the "
             "strategy-owned state files used by hosted paper"
         )
@@ -1870,14 +1881,14 @@ def _validate_paper_signal_design_contract(
     if not isinstance(calendar, dict) or not isinstance(
         calendar.get("usesAbsoluteDecisionOrdinal"), bool
     ):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.calendar.usesAbsoluteDecisionOrdinal "
             "must be true or false"
         )
     if calendar.get("usesAbsoluteDecisionOrdinal") is True and not _clean(
         calendar.get("origin")
     ):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.calendar.origin is required when "
             "absolute decision ordinals are used"
         )
@@ -1886,23 +1897,23 @@ def _validate_paper_signal_design_contract(
     if not isinstance(cutover, dict) or not isinstance(
         cutover.get("requiresStartupState"), bool
     ):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.cutover.requiresStartupState must be true or false"
         )
     mode = _clean(cutover.get("mode") or cutover.get("approach"))
     if not mode:
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.cutover.mode must be one of "
             "none, minimal_cutover_state, or full_replay"
         )
     if mode not in PROMOTION_RECONSTRUCTION_MODES:
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.cutover.mode must be one of "
             "none, minimal_cutover_state, or full_replay"
         )
     required = cutover.get("requiresStartupState") is True
     if required and mode == "none":
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.cutover.requiresStartupState=true must use "
             "cutover.mode=minimal_cutover_state or full_replay"
         )
@@ -1910,12 +1921,12 @@ def _validate_paper_signal_design_contract(
         mode == "none"
         or (continuation_method == "full_replay_fallback" and mode == "full_replay")
     ):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.cutover.requiresStartupState=false must use "
             "cutover.mode=none"
         )
     if mode == "full_replay" and continuation_method != "full_replay_fallback":
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.incrementalReady=true conflicts with "
             "cutover.mode=full_replay unless continuation.method is "
             "full_replay_fallback"
@@ -1923,59 +1934,51 @@ def _validate_paper_signal_design_contract(
     if required:
         state_end = _date_part(_clean(cutover.get("stateEnd")))
         if not _clean(cutover.get("dataHistoryStart")) or not state_end:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.design.cutover must declare "
                 "dataHistoryStart and stateEnd when startup state is required"
             )
         if cutover_end and state_end != cutover_end:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.design.cutover.stateEnd must equal "
                 f"the selected round cutover end {cutover_end}; startup state should "
                 "be valid through the selected research result before future paper "
                 "continues"
             )
-        initial_state_files = _report_initial_state_entries(report)
-        if not initial_state_files:
-            raise PromotionNeedsAgentRefactor(
-                "paperSignal.design.cutover.requiresStartupState=true means promotion must package "
-                "strategy-owned startup state through paths.initialStateFiles, or "
-                "set requiresStartupState=false and explain the bounded on-demand path"
-            )
-
     if continuation_method == "stateless_recompute" and required:
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.continuation.method=stateless_recompute must not "
             "require startup cutover state; use stateful_continuation when "
             "startup state is required"
         )
     if continuation_method == "stateful_continuation":
         if not required or mode != "minimal_cutover_state":
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.continuation.method=stateful_continuation requires "
                 "paperSignal.design.cutover.requiresStartupState=true and "
                 "cutover.mode=minimal_cutover_state"
             )
         if state.get("usesPersistentState") is not True:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.continuation.method=stateful_continuation requires "
                 "paperSignal.design.state.usesPersistentState=true"
             )
         if _clean(cutover.get("bootstrapHook")) != "build_paper_initial_state":
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.design.cutover.bootstrapHook must be "
                 "build_paper_initial_state for stateful_continuation"
             )
 
     if continuation_method == "full_replay_fallback":
         if boundary != "full_replay" or mode != "full_replay":
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.continuation.method=full_replay_fallback requires "
                 "history.boundary=full_replay and cutover.mode=full_replay"
             )
 
     daily_step = design.get("dailyStep")
     if not isinstance(daily_step, dict) or not _clean(daily_step.get("reason")):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.design.dailyStep.reason must explain how one future as_of "
             "runs and how state advances if any"
         )
@@ -1988,23 +1991,23 @@ def _validate_paper_signal_evidence_contract(
 ) -> None:
     evidence = _paper_signal_evidence_payload(paper_signal)
     if not isinstance(evidence, dict):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "continuing hosted paper reports must declare paperSignal.evidence"
         )
     observations = evidence.get("observations")
     if not isinstance(observations, list) or not any(
         _clean(item) for item in observations
     ):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.evidence.observations must include at least one "
             "source or local evidence fact supporting the continuation design"
         )
     if not isinstance(evidence.get("semanticChecks", []), list):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.evidence.semanticChecks must be a list"
         )
     if not _clean(evidence.get("whySufficient")):
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.evidence.whySufficient must explain why the evidence "
             "supports the chosen continuation method"
         )
@@ -2013,7 +2016,7 @@ def _validate_paper_signal_evidence_contract(
             _clean(item).lower() for item in evidence.get("semanticChecks") or []
         )
         if "state" not in checks and "cutover" not in checks:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "paperSignal.continuation.method=stateful_continuation requires "
                 "paperSignal.evidence.semanticChecks to support cutover state validity"
             )
@@ -2058,26 +2061,26 @@ def _validate_continuation_method_admissibility(
     ) or source_facts.get("sourceTrainingCalls") or source_facts.get("trainingCalls") or []
     if continuation_method == "stateless_recompute" and observed_fit_calls:
         joined = ", ".join(_clean(item) for item in observed_fit_calls if _clean(item))
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "paperSignal.continuation.method=stateless_recompute conflicts with "
             f"observed ML training/refit/update calls in the selected source: {joined}. "
             "Use stateful_continuation and reread references/hosted-paper-rewrite.md."
         )
     if observed_fit_calls and continuation_method != "stateful_continuation":
         joined = ", ".join(_clean(item) for item in observed_fit_calls if _clean(item))
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             "observed ML training/refit/update calls require "
             f"paperSignal.continuation.method=stateful_continuation: {joined}. "
             "Fallback methods are only available after attemptPolicy allows them."
         )
     if continuation_method == "stateful_continuation":
         if source_facts.get("usesStateDir") is not True:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "stateful_continuation requires get_paper_signal to use the hosted "
                 "state directory via context_runtime_paths(self.context).state."
             )
         if source_facts.get("writesState") is not True:
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "stateful_continuation requires get_paper_signal to write or save "
                 "strategy-owned state so future paper calls continue from the "
                 "latest model/cache/cursor. Reread the stateful continuation "
@@ -2089,21 +2092,13 @@ def _validate_continuation_method_admissibility(
             joined = ", ".join(
                 _clean(item) for item in observed_fit_calls if _clean(item)
             )
-            raise PromotionNeedsAgentRefactor(
+            raise PromotionHostedPaperRewriteRequired(
                 "observed ML training/refit/update calls require the "
                 "stateful_continuation design to evidence persisted fitted-object "
                 "or equivalent training state, not only cursor/cache state: "
                 f"{joined}. Reread the stateful continuation section of "
                 "references/hosted-paper-rewrite.md."
             )
-
-
-def _report_initial_state_entries(report: dict[str, Any]) -> list[Any]:
-    paths = report.get("paths")
-    if not isinstance(paths, dict):
-        return []
-    entries = paths.get("initialStateFiles")
-    return entries if isinstance(entries, list) else []
 
 
 def _validate_live_readiness_claim(report: dict[str, Any]) -> None:
@@ -2116,7 +2111,7 @@ def _validate_live_readiness_claim(report: dict[str, Any]) -> None:
     if not conflicts:
         return
     sample = "; ".join(conflicts[:3])
-    raise PromotionNeedsAgentRefactor(
+    raise PromotionHostedPaperRewriteRequired(
         "paperSignal.incrementalReady=true conflicts with report text that "
         f"describes finite replay, research evidence, or not-continuing readiness: {sample}"
     )
@@ -2204,7 +2199,7 @@ def _validate_promoted_source_static(source_path: Path) -> None:
     ]
     if local_literals:
         sample = ", ".join(sorted(local_literals)[:3])
-        raise PromotionNeedsAgentRefactor(
+        raise PromotionHostedPaperRewriteRequired(
             f"promoted source still contains developer-local absolute path(s): {sample}"
         )
 
@@ -2644,6 +2639,8 @@ def _run_artifact_paper_signal_smoke(
     requires_validation_bootstrap = (
         _report_continuation_method(report) == "stateful_continuation"
     )
+    if requires_validation_bootstrap:
+        _clear_replay_initial_state(destination)
     try:
         with tempfile.TemporaryDirectory(prefix="abel-paper-smoke-") as temp_name:
             root = Path(temp_name)
@@ -2806,6 +2803,26 @@ def _run_artifact_paper_signal_smoke(
                     "paper signal smoke is slow; agent should confirm this is acceptable "
                     "for hosted daily paper or persist strategy state"
                 )
+            generated_initial_state_files = []
+            if requires_validation_bootstrap:
+                generated_initial_state_files = _materialize_replay_initial_state(
+                    state_dir,
+                    destination=destination,
+                )
+                if not generated_initial_state_files:
+                    return {
+                        "status": "failed",
+                        "reason": (
+                            "stateful_continuation replay produced no startup "
+                            "state files to package"
+                        ),
+                        "tailConsistency": _tail_consistency_payload(
+                            oracle_rows,
+                            tail_comparisons,
+                            status="passed",
+                        ),
+                        "warmStart": warm_start,
+                    }
             return {
                 "status": "passed",
                 "asOf": as_of,
@@ -2822,6 +2839,7 @@ def _run_artifact_paper_signal_smoke(
                     status="passed",
                 ),
                 "validationBootstrap": bootstrap,
+                "generatedInitialStateFiles": generated_initial_state_files,
                 "warmStart": warm_start,
                 "warnings": warnings,
                 "result": _json_safe(latest_result),
@@ -2832,6 +2850,73 @@ def _run_artifact_paper_signal_smoke(
             "reason": f"{exc.__class__.__name__}: {exc}",
             "elapsedSeconds": round(time.monotonic() - started_at, 6),
         }
+
+
+def _replay_initial_state_root(destination: Path) -> Path:
+    return destination / "promoted" / "runtime" / "initial-state"
+
+
+def _clear_replay_initial_state(destination: Path) -> None:
+    root = _replay_initial_state_root(destination)
+    if root.exists():
+        shutil.rmtree(root)
+
+
+def _materialize_replay_initial_state(
+    state_dir: Path,
+    *,
+    destination: Path,
+) -> list[dict[str, Any]]:
+    target_root = _replay_initial_state_root(destination)
+    if target_root.exists():
+        shutil.rmtree(target_root)
+    target_root.mkdir(parents=True, exist_ok=True)
+    entries: list[dict[str, Any]] = []
+    for source in sorted(path for path in state_dir.rglob("*") if path.is_file()):
+        relative = source.relative_to(state_dir)
+        artifact_path = f"runtime/initial-state/{relative.as_posix()}"
+        _validate_packaged_artifact_path(
+            artifact_path,
+            role="initial_state",
+            is_denylisted_source=lambda _relative: False,
+        )
+        target = target_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        data = target.read_bytes()
+        entries.append(
+            {
+                "artifactPath": artifact_path,
+                "bytes": len(data),
+                "sha256": _sha256_bytes(data),
+                "source": "gate_tail_replay_state",
+            }
+        )
+    return entries
+
+
+def _generated_replay_initial_state_files(
+    destination: Path,
+) -> tuple[PromotionPackagedFile, ...]:
+    root = _replay_initial_state_root(destination)
+    if not root.is_dir():
+        return ()
+    generated: list[PromotionPackagedFile] = []
+    for source in sorted(path for path in root.rglob("*") if path.is_file()):
+        relative = source.relative_to(root)
+        artifact_path = f"runtime/initial-state/{relative.as_posix()}"
+        generated.append(
+            PromotionPackagedFile(
+                artifact_path=artifact_path,
+                source_path=source,
+                purpose=(
+                    "Gate-generated startup state after successful stateful "
+                    "tail paper replay."
+                ),
+                role="initial_state",
+            )
+        )
+    return tuple(generated)
 
 
 def _stage_paper_smoke_files(

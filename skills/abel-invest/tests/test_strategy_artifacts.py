@@ -8,7 +8,7 @@ import pytest
 from abel_invest.narrative_core.contracts.constants import EVENTS_HEADER, RESULTS_HEADER
 from abel_invest.narrative_core.io import write_tsv_rows
 from abel_invest.narrative_core.promotion import (
-    PromotionNeedsAgentRefactor,
+    PromotionHostedPaperRewriteRequired,
     _paper_tail_position_change_count,
     _paper_tail_selection_reason,
     _select_paper_tail_oracle_sample,
@@ -389,7 +389,7 @@ class BranchEngine:
         return {"next_position": 0.0}
 """
 
-    with pytest.raises(PromotionNeedsAgentRefactor, match="stateful_continuation"):
+    with pytest.raises(PromotionHostedPaperRewriteRequired, match="stateful_continuation"):
         _validate_agent_paper_signal_contract(
             report,
             source,
@@ -412,13 +412,7 @@ def _stateful_training_report(*, state_reason: str) -> dict:
         "summary": "stateful paper signal",
         "paths": {
             "packagedFiles": [],
-            "initialStateFiles": [
-                {
-                    "artifactPath": "runtime/initial-state/strategy/paper-state.pkl",
-                    "sourcePath": "/tmp/paper-state.pkl",
-                    "purpose": state_reason,
-                }
-            ],
+            "initialStateFiles": [],
         },
         "paperSignal": {
             "implemented": True,
@@ -490,7 +484,7 @@ class BranchEngine:
 
 
 def test_ml_training_stateful_rejects_cursor_only_state_report():
-    with pytest.raises(PromotionNeedsAgentRefactor, match="fitted-object"):
+    with pytest.raises(PromotionHostedPaperRewriteRequired, match="fitted-object"):
         _validate_agent_paper_signal_contract(
             _stateful_training_report(
                 state_reason=(

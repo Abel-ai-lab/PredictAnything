@@ -30,12 +30,12 @@ from abel_invest.narrative_core.promotion import (
     PROMOTION_GATE_FILENAME,
     PROMOTION_HOSTED_REWRITE_SCOPE,
     PROMOTION_MODE_AGENT_REFACTOR,
-    PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
+    PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED,
     PROMOTION_MODE_ZERO_CHANGE,
     PROMOTION_PATCH_FILENAME,
     PROMOTION_REFACTOR_REPORT_FILENAME,
     PROMOTION_REFACTOR_REQUEST_FILENAME,
-    PromotionNeedsAgentRefactor,
+    PromotionHostedPaperRewriteRequired,
     PromotionResult,
     prepare_promotion,
 )
@@ -608,15 +608,15 @@ def _prepare_promotion_for_export(
             sha256_file=_sha256_file,
             runtime_env=_runtime_env(candidate.branch),
         )
-    except PromotionNeedsAgentRefactor as exc:
+    except PromotionHostedPaperRewriteRequired as exc:
         request_path = _promotion_refactor_request_path(destination)
         result = _artifact_skip_result(
-            PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
+            PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED,
             selection=selection,
         )
-        result["promotionMode"] = PROMOTION_MODE_NEEDS_AGENT_REFACTOR
+        result["promotionMode"] = PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED
         result["promotionReport"] = {
-            "mode": PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
+            "mode": PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED,
             "reason": str(exc),
         }
         if request_path.is_file():

@@ -1758,7 +1758,7 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
     )
 
     assert first_result["artifactExported"] is False
-    assert first_result["skipReason"] == "needs_agent_refactor"
+    assert first_result["skipReason"] == "hosted_paper_rewrite_required"
     request_path = Path(first_result["promotionReport"]["requestPath"])
     request = json.loads(request_path.read_text(encoding="utf-8"))
     assert request["kind"] == "hosted_paper_rewrite"
@@ -1847,6 +1847,7 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
     }
     file_paths = [item["path"] for item in manifest["files"]]
     assert "runtime/initial-state/strategy/model/latest.joblib" in file_paths
+    assert "runtime/initial-state/strategy/paper_state.json" in file_paths
     assert "edge/promotion-gate.json" in file_paths
     assert "edge/promotion.patch" in file_paths
     assert "edge/refactor-report.json" in file_paths
@@ -1887,9 +1888,9 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_runtime_s
     )
 
     assert result["artifactUploadSkipped"] is True
-    assert result["skipReason"] == "needs_agent_refactor"
+    assert result["skipReason"] == "hosted_paper_rewrite_required"
     report = result["promotionReport"]
-    assert report["mode"] == "needs_agent_refactor"
+    assert report["mode"] == "hosted_paper_rewrite_required"
     assert "hosted paper rewrite required" in report["reason"]
     request = json.loads(Path(report["requestPath"]).read_text(encoding="utf-8"))
     assert request["kind"] == "hosted_paper_rewrite"
@@ -1980,7 +1981,7 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_absolute_
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "needs_agent_refactor"
+    assert result["skipReason"] == "hosted_paper_rewrite_required"
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
@@ -2155,7 +2156,7 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_nonstanda
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "needs_agent_refactor"
+    assert result["skipReason"] == "hosted_paper_rewrite_required"
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
@@ -2294,7 +2295,7 @@ def test_export_selected_strategy_artifact_ignores_legacy_state_intent(
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "needs_agent_refactor"
+    assert result["skipReason"] == "hosted_paper_rewrite_required"
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
@@ -2471,7 +2472,7 @@ def test_export_selected_strategy_artifact_rejects_full_compute_paper_signal(
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "needs_agent_refactor"
+    assert result["skipReason"] == "hosted_paper_rewrite_required"
     assert "gatePath" not in result["promotionReport"]
     assert "stateful_continuation requires" in result["promotionReport"]["reason"]
 
@@ -2561,7 +2562,7 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
     )
 
     assert result["artifactExported"] is False
-    assert result["promotionMode"] == "needs_agent_refactor"
+    assert result["promotionMode"] == "hosted_paper_rewrite_required"
     gate = json.loads(Path(result["promotionReport"]["gatePath"]).read_text(encoding="utf-8"))
     paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
     assert paper_gate["status"] == "failed"
@@ -2757,7 +2758,7 @@ def test_refactor_report_rejects_same_source_as_asset_and_initial_state(
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="both immutable strategy asset and mutable initial state seed",
     ):
         promotion_helpers._report_packaged_files(
@@ -2786,7 +2787,7 @@ def test_refactor_report_rejects_research_evidence_as_live_asset(
     )
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="generated research evidence",
     ):
         promotion_helpers._validate_packaged_research_evidence_sources(
@@ -2815,7 +2816,7 @@ def test_refactor_report_rejects_temp_generated_asset_as_live_asset(
     )
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="generated research evidence",
     ):
         promotion_helpers._validate_packaged_research_evidence_sources(
@@ -2845,7 +2846,7 @@ def test_refactor_report_rejects_export_trade_log_as_live_asset(
     )
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="generated research evidence or export output",
     ):
         promotion_helpers._validate_packaged_research_evidence_sources(
@@ -2912,7 +2913,7 @@ def test_refactor_report_rejects_oracle_answers_as_initial_state(
     )
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="validation oracle answers",
     ):
         promotion_helpers._validate_packaged_research_evidence_sources(
@@ -2972,7 +2973,7 @@ def test_refactor_report_rejects_incremental_ready_contradiction() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="incrementalReady=true conflicts",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3026,7 +3027,7 @@ def test_refactor_report_requires_paper_signal_design_contract() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="paperSignal.design",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3055,7 +3056,7 @@ def test_refactor_report_requires_continuation_contract() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="paperSignal.continuation",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3084,7 +3085,7 @@ def test_refactor_report_requires_evidence_contract() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="paperSignal.evidence",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3201,7 +3202,7 @@ def test_refactor_report_rejects_full_replay_fallback_before_policy_allows() -> 
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="fullReplayFallbackEligible=true",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3248,7 +3249,7 @@ def test_refactor_report_rejects_stateless_recompute_with_fit_in_signal_path() -
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="stateless_recompute conflicts with observed ML training",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3281,7 +3282,7 @@ def test_refactor_report_rejects_stateless_override_for_fit_observation() -> Non
     ]
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="stateful_continuation",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3310,11 +3311,21 @@ def test_trade_log_oracle_facts_withhold_expected_values(tmp_path: Path) -> None
     assert "withheld" in facts["diagnosticPolicy"]
 
 
-def test_refactor_report_rejects_cutover_state_without_initial_state() -> None:
+def test_refactor_report_allows_cutover_state_without_initial_state_files() -> None:
     source = (
+        "import json\n"
         "from abel_edge.engine.base import StrategyEngine\n"
+        "from abel_edge.runtime_paths import context_runtime_paths\n"
         "class BranchEngine(StrategyEngine):\n"
+        "    def build_paper_initial_state(self, *, cutover_as_of=None):\n"
+        "        path = context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'cutover_as_of': str(cutover_as_of)}), encoding='utf-8')\n"
+        "        return {'cutover_as_of': str(cutover_as_of)}\n"
         "    def get_paper_signal(self, *, as_of=None):\n"
+        "        path = context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'last_as_of': str(as_of)}), encoding='utf-8')\n"
         "        return {'next_position': 1.0}\n"
     )
     report = {
@@ -3330,15 +3341,11 @@ def test_refactor_report_rejects_cutover_state_without_initial_state() -> None:
         "limitations": [],
     }
 
-    with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
-        match="paths.initialStateFiles",
-    ):
-        promotion_helpers._validate_agent_paper_signal_contract(
-            report,
-            source,
-            require_paper_signal=True,
-        )
+    promotion_helpers._validate_agent_paper_signal_contract(
+        report,
+        source,
+        require_paper_signal=True,
+    )
 
 
 def test_refactor_report_rejects_cutover_state_before_selected_round_end() -> None:
@@ -3372,7 +3379,7 @@ def test_refactor_report_rejects_cutover_state_before_selected_round_end() -> No
     candidate = Namespace(edge_result={"effective_window": {"end": "2020-12-31"}})
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="selected round cutover end 2020-12-31",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3413,7 +3420,7 @@ def test_refactor_report_rejects_full_replay_cutover_mode() -> None:
     }
 
     with pytest.raises(
-        promotion_helpers.PromotionNeedsAgentRefactor,
+        promotion_helpers.PromotionHostedPaperRewriteRequired,
         match="full_replay",
     ):
         promotion_helpers._validate_agent_paper_signal_contract(
@@ -3624,7 +3631,7 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_stateful_
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "needs_agent_refactor"
+    assert result["skipReason"] == "hosted_paper_rewrite_required"
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
@@ -3773,6 +3780,7 @@ def test_export_selected_strategy_artifact_uses_local_runtime_state_source(
     file_paths = [item["path"] for item in manifest["files"]]
     assert result["promotionMode"] == "agent_refactor"
     assert "runtime/initial-state/strategy/model/latest.joblib" in file_paths
+    assert "runtime/initial-state/strategy/paper_state.json" in file_paths
     assert not any(path.startswith("strategy/.abel-runtime/") for path in file_paths)
 
 
@@ -3852,7 +3860,7 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
     )
 
     assert first_result["artifactExported"] is False
-    assert first_result["skipReason"] == "needs_agent_refactor"
+    assert first_result["skipReason"] == "hosted_paper_rewrite_required"
     request_path = Path(first_result["promotionReport"]["requestPath"])
     assert request_path.exists()
 
@@ -3949,6 +3957,7 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
     assert "edge/refactor-report.json" in file_paths
     assert "runtime/initial-state/strategy/model/latest.joblib" in file_paths
     assert "runtime/initial-state/strategy/model/feature_scaler.json" in file_paths
+    assert "runtime/initial-state/strategy/paper_state.json" in file_paths
     promoted_engine = output_dir / "promoted" / "engine.py"
     promoted_source = promoted_engine.read_text(encoding="utf-8")
     assert 'ctx.state_dir / "strategy/model/latest.joblib"' in promoted_source
@@ -4350,10 +4359,10 @@ def test_visualize_session_aborts_before_upload_when_agent_refactor_fails(
         lambda *args, **kwargs: {
             "artifactExported": False,
             "artifactUploadSkipped": True,
-            "skipReason": "needs_agent_refactor",
-            "promotionMode": "needs_agent_refactor",
+            "skipReason": "hosted_paper_rewrite_required",
+            "promotionMode": "hosted_paper_rewrite_required",
             "promotionReport": {
-                "mode": "needs_agent_refactor",
+                "mode": "hosted_paper_rewrite_required",
                 "reason": "dynamic state path requires refactor",
                 "requestPath": str(tmp_path / "refactor-request.json"),
             },
@@ -4370,7 +4379,7 @@ def test_visualize_session_aborts_before_upload_when_agent_refactor_fails(
         unexpected_post_session,
     )
 
-    with pytest.raises(RuntimeError, match="skill-level agent refactor"):
+    with pytest.raises(RuntimeError, match="hosted paper rewrite"):
         ni.upload_skill_dashboard_session(
             Namespace(
                 session=str(session),

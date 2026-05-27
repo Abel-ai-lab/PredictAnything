@@ -81,8 +81,9 @@ Choose one runtime shape:
 - `stateless_recompute`: each paper call computes the current signal from legal
   market data, immutable assets, source parameters, and an explicit history
   boundary. It writes no strategy state.
-- `stateful_continuation`: promotion builds strategy-owned cutover state, and
-  future paper calls load, advance, and persist that state.
+- `stateful_continuation`: the strategy can build strategy-owned cutover state,
+  advance it through paper dates, and persist the advanced state. The promotion
+  gate packages the final startup state after successful tail replay.
 - `full_replay_fallback`: last-resort fallback only when the request says it is
   eligible. It may call the original full path and must pass the fallback
   performance gate.
@@ -119,16 +120,18 @@ that `get_paper_signal` consumes. It may return JSON-serializable state or a
 manifest of files written under the staged state directory when fitted objects
 need file serialization.
 
-For fitted-object strategies, use this hook to create the production startup
-state. Future `get_paper_signal(as_of=...)` calls should load that state,
+For fitted-object strategies, use this hook to create state through the supplied
+cutover. Future `get_paper_signal(as_of=...)` calls should load that state,
 advance only the rows/dates after the stored cursor, refit only when the
 original strategy's continuation calendar says a refit is due, and persist the
 updated state. Do not cold-start the whole training path on every paper call.
 
-The gate calls the hook for validation cutover before the hidden holdout tail.
-Use the same hook and state schema to create the production startup files listed
-in `paths.initialStateFiles`. Do not hand-write separate validation state. Do
-not encode expected positions or gate answers in state.
+The gate calls the hook for the validation cutover before the hidden holdout
+tail, then walks the tail with `get_paper_signal(as_of=...)`. If parity and
+idempotence pass, the state directory produced by that replay is packaged as the
+artifact's `runtime/initial-state/`. Do not hand-build final startup files for
+normal stateful continuation, and do not encode expected positions or gate
+answers in state.
 
 ## Report
 
@@ -199,9 +202,10 @@ Write `refactor-report.json` with this shape:
 ```
 
 `packagedFiles` are immutable files copied under `strategy/**`.
-`initialStateFiles` are mutable startup seeds copied under
-`runtime/initial-state/**` and hydrated into state by the hosted runner.
-Do not list the same source file in both lists.
+For normal `stateful_continuation`, leave `initialStateFiles` empty and let the
+gate package the replayed state. Only list `initialStateFiles` for unusual
+manual startup assets that cannot be produced by the replay hook. Do not list
+the same source file in both lists.
 
 Set `paperSignal.incrementalReady=true` only when future hosted paper days can
 continue beyond the selected research result.
