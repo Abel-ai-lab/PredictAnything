@@ -115,7 +115,7 @@ def _strategy_artifact_preupload_error(export_result: dict) -> str:
     reason = str(promotion_report.get("reason") or "").strip()
     request_path = str(promotion_report.get("requestPath") or "").strip()
     message = (
-        "Strategy artifact publish requires hosted paper rewrite before "
+        "Strategy artifact publish requires a hosted paper contract before "
         f"upload: {skip_reason}"
     )
     if reason:

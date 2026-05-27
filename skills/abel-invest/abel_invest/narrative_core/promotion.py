@@ -12,6 +12,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -29,15 +30,15 @@ from . import promotion_source
 
 LOCAL_RUNTIME_STATE_DIR = Path(".abel-runtime") / "state"
 PROMOTION_MODE_ZERO_CHANGE = "zero_change"
-PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED = "hosted_paper_rewrite_required"
-PROMOTION_MODE_AGENT_REFACTOR = "agent_refactor"
+PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED = "hosted_paper_contract_required"
+PROMOTION_MODE_AGENT_PAPER_CONTRACT = "agent_paper_contract"
 PROMOTION_GATE_FILENAME = "promotion-gate.json"
 PROMOTION_PATCH_FILENAME = "promotion.patch"
-PROMOTION_REFACTOR_REPORT_FILENAME = "refactor-report.json"
-PROMOTION_REFACTOR_REQUEST_FILENAME = "refactor-request.json"
-PROMOTION_AGENT_REPORT_SCHEMA = "abel-invest.agent-refactor-report/v1"
-PROMOTION_AGENT_REQUEST_SCHEMA = "abel-invest.agent-refactor-request/v1"
-PROMOTION_HOSTED_REWRITE_SCOPE = "hosted_paper_rewrite"
+PROMOTION_CONTRACT_REPORT_FILENAME = "paper-contract-report.json"
+PROMOTION_CONTRACT_REQUEST_FILENAME = "paper-contract-request.json"
+PROMOTION_AGENT_REPORT_SCHEMA = "abel-invest.agent-paper-contract-report/v1"
+PROMOTION_AGENT_REQUEST_SCHEMA = "abel-invest.agent-paper-contract-request/v1"
+PROMOTION_HOSTED_CONTRACT_SCOPE = "hosted_paper_contract"
 PROMOTION_PAPER_SMOKE_WARN_SECONDS = 5.0
 PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS = 5.0
 PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS = 150.0
@@ -74,6 +75,9 @@ PROMOTION_INITIAL_STATE_ORACLE_PHRASES = (
 PROMOTION_LEGACY_PROMOTED_FILES = (
     "dependency-scan.json",
     "packaging-plan.json",
+    "refactor-request.json",
+    "refactor-report.json",
+    "refactor-report.artifact.json",
 )
 PROMOTION_LEGACY_DESTINATION_DIRS = (
     "promotion-replay",
@@ -231,17 +235,17 @@ class PromotionResult:
     extra_source_map: dict[str, Path]
     patch_path: Path | None
     gate_path: Path
-    refactor_report_path: Path | None
+    contract_report_path: Path | None
     paper_execution_profile: dict[str, Any] | None
     report: dict[str, Any]
 
     @property
     def adapted(self) -> bool:
-        return self.mode == PROMOTION_MODE_AGENT_REFACTOR
+        return self.mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT
 
 
 class PromotionHostedPaperRewriteRequired(RuntimeError):
-    """Raised when promotion needs a hosted paper rewrite before publishing."""
+    """Raised when promotion needs a hosted paper contract before publishing."""
 
 
 def prepare_promotion(
@@ -257,9 +261,9 @@ def prepare_promotion(
     promoted_dir.mkdir(parents=True, exist_ok=True)
     _cleanup_legacy_promotion_outputs(destination, promoted_dir)
     promoted_source = promoted_dir / "engine.py"
-    existing_refactor_report = promoted_dir / PROMOTION_REFACTOR_REPORT_FILENAME
+    existing_contract_report = promoted_dir / PROMOTION_CONTRACT_REPORT_FILENAME
     original_text = candidate.strategy_source_path.read_text(encoding="utf-8")
-    agent_refactor_ready = promoted_source.is_file() and existing_refactor_report.is_file()
+    agent_contract_ready = promoted_source.is_file() and existing_contract_report.is_file()
     dependency_scan = _collect_hosted_paper_dependency_scan(
         candidate.branch,
         strategy_source_path=candidate.strategy_source_path,
@@ -268,49 +272,49 @@ def prepare_promotion(
         destination=destination,
     )
 
-    hosted_rewrite_signals = _hosted_paper_rewrite_signals(dependency_scan)
-    if not agent_refactor_ready:
-        rewrite_signals = _initial_hosted_paper_rewrite_signals(
-            hosted_rewrite_signals
+    hosted_contract_signals = _hosted_paper_contract_signals(dependency_scan)
+    if not agent_contract_ready:
+        contract_signals = _initial_hosted_paper_contract_signals(
+            hosted_contract_signals
         )
         promoted_source.write_text(original_text, encoding="utf-8")
-        request_path = _write_hosted_paper_rewrite_request(
+        request_path = _write_hosted_paper_contract_request(
             promoted_dir,
             branch=candidate.branch,
             source_path=promoted_source,
             dependency_scan=dependency_scan,
-            signals=rewrite_signals,
+            signals=contract_signals,
         )
         raise PromotionHostedPaperRewriteRequired(
-            "hosted paper rewrite required before first artifact export; "
+            "hosted paper contract required before first artifact export; "
             f"request written to {request_path}"
         )
 
     strategy_source_path = candidate.strategy_source_path
     patch_path = None
-    refactor_report_path = None
+    contract_report_path = None
     mode = PROMOTION_MODE_ZERO_CHANGE
-    refactor_replacements: list[dict[str, str]] = []
-    refactor_summary = ""
+    contract_replacements: list[dict[str, str]] = []
+    contract_summary = ""
     packaged_files: tuple[PromotionPackagedFile, ...] = ()
-    refactor_report: dict[str, Any] | None = None
+    contract_report: dict[str, Any] | None = None
     paper_execution_profile: dict[str, Any] | None = None
     promoted_text = original_text
 
-    if agent_refactor_ready:
+    if agent_contract_ready:
         promoted_text = promoted_source.read_text(encoding="utf-8")
-        refactor_report = _load_agent_refactor_report(existing_refactor_report)
-        refactor_replacements = _report_replacements(refactor_report)
-        if not _report_has_hosted_rewrite_contract(refactor_report):
+        contract_report = _load_agent_contract_report(existing_contract_report)
+        contract_replacements = _report_replacements(contract_report)
+        if not _report_has_hosted_paper_contract(contract_report):
             raise PromotionHostedPaperRewriteRequired(
-                "hosted paper rewrite report must use hosted_paper_rewrite scope"
+                "hosted paper contract report must use hosted_paper_contract scope"
             )
-        refactor_summary = _clean(refactor_report.get("summary")) or (
-            "Agent refactored the promoted strategy for hosted paper."
+        contract_summary = _clean(contract_report.get("summary")) or (
+            "Agent declared the hosted paper contract."
         )
         packaged_files = tuple(
             _report_packaged_files(
-                refactor_report,
+                contract_report,
                 branch=candidate.branch,
                 is_denylisted_source=is_denylisted_source,
             )
@@ -319,35 +323,36 @@ def prepare_promotion(
             packaged_files,
             branch=candidate.branch,
             destination=destination,
-            report=refactor_report,
+            report=contract_report,
         )
-        artifact_refactor_report_path = _write_artifact_refactor_report(
+        artifact_contract_report_path = _write_artifact_contract_report(
             promoted_dir,
-            refactor_report,
+            contract_report,
         )
         _validate_agent_paper_signal_contract(
-            refactor_report,
+            contract_report,
             promoted_text,
             require_paper_signal=True,
             candidate=candidate,
             full_replay_fallback_allowed=_full_replay_fallback_allowed(promoted_dir),
             source_dependency_scan=dependency_scan,
+            original_source=original_text,
         )
-        paper_execution_profile = _report_paper_execution_profile(refactor_report)
-        mode = PROMOTION_MODE_AGENT_REFACTOR
+        paper_execution_profile = _report_paper_execution_profile(contract_report)
+        mode = PROMOTION_MODE_AGENT_PAPER_CONTRACT
         strategy_source_path = promoted_source
-        refactor_report_path = artifact_refactor_report_path
+        contract_report_path = artifact_contract_report_path
 
-    replacements = refactor_replacements
-    if mode == PROMOTION_MODE_AGENT_REFACTOR:
+    replacements = contract_replacements
+    if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
         patch_path = promoted_dir / PROMOTION_PATCH_FILENAME
         patch_path.write_text(
             _simple_patch_summary(
                 candidate.strategy_source_path,
                 replacements,
-                scope=_clean(refactor_report.get("scope"))
-                if refactor_report is not None
-                else "agent_refactor",
+                scope=_clean(contract_report.get("scope"))
+                if contract_report is not None
+                else "agent_paper_contract",
             ),
             encoding="utf-8",
         )
@@ -355,14 +360,14 @@ def prepare_promotion(
 
     original_sha = sha256_file(candidate.strategy_source_path)
     promoted_sha = sha256_file(strategy_source_path)
-    refactor_payload = (
+    contract_payload = (
         {
-            "kind": PROMOTION_HOSTED_REWRITE_SCOPE,
-            "summary": refactor_summary,
+            "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
+            "summary": contract_summary,
             "patchPath": f"edge/{PROMOTION_PATCH_FILENAME}",
-            "reportPath": f"edge/{PROMOTION_REFACTOR_REPORT_FILENAME}",
+            "reportPath": f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}",
         }
-        if mode == PROMOTION_MODE_AGENT_REFACTOR
+        if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT
         else None
     )
     behavior_equivalence = _default_behavior_equivalence(
@@ -372,7 +377,7 @@ def prepare_promotion(
     paper_dry_run = _fast_paper_validation(
         mode=mode,
         source=promoted_text,
-        report=refactor_report,
+        report=contract_report,
         candidate=candidate,
         strategy_source_path=strategy_source_path,
         packaged_files=packaged_files,
@@ -393,12 +398,12 @@ def prepare_promotion(
                 if item.artifact_path not in replay_artifact_paths
             ) + replay_state_files
     gate_path = destination / PROMOTION_GATE_FILENAME
-    gate_report = build_promotion_gate_report(
+    gate_report = _build_contract_promotion_gate_report(
         promotion_mode=mode,
         original_source_sha256=original_sha,
         promoted_source_sha256=promoted_sha,
         patch_sha256=sha256_file(patch_path) if patch_path is not None else None,
-        refactor=refactor_payload,
+        contract=contract_payload,
         state_entries=packaged_files,
         behavior_equivalence=behavior_equivalence,
         paper_dry_run=paper_dry_run,
@@ -420,7 +425,7 @@ def prepare_promotion(
             destination=destination,
         )
         failure_details = _promotion_gate_failure_request_payload(gate_report)
-        failure_signals = _hosted_paper_rewrite_signals(failure_scan)
+        failure_signals = _hosted_paper_contract_signals(failure_scan)
         failure_signals.append(
             {
                 "kind": "promotion_gate_failed",
@@ -434,7 +439,7 @@ def prepare_promotion(
                 "reason": "latest promotion gate did not pass",
             }
         )
-        request_path = _write_hosted_paper_rewrite_request(
+        request_path = _write_hosted_paper_contract_request(
             promoted_dir,
             branch=candidate.branch,
             source_path=request_source_path,
@@ -453,9 +458,9 @@ def prepare_promotion(
     extra_source_map[f"edge/{PROMOTION_GATE_FILENAME}"] = gate_path
     if patch_path is not None:
         extra_source_map[f"edge/{PROMOTION_PATCH_FILENAME}"] = patch_path
-    if mode == PROMOTION_MODE_AGENT_REFACTOR:
-        assert refactor_report_path is not None
-        extra_source_map[f"edge/{PROMOTION_REFACTOR_REPORT_FILENAME}"] = refactor_report_path
+    if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
+        assert contract_report_path is not None
+        extra_source_map[f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}"] = contract_report_path
 
     return PromotionResult(
         mode=mode,
@@ -464,7 +469,7 @@ def prepare_promotion(
         extra_source_map=extra_source_map,
         patch_path=patch_path,
         gate_path=gate_path,
-        refactor_report_path=refactor_report_path,
+        contract_report_path=contract_report_path,
         paper_execution_profile=paper_execution_profile,
         report={
             "mode": mode,
@@ -479,11 +484,11 @@ def prepare_promotion(
             ),
             "packagedFileCount": len(packaged_files),
             "replacementCount": len(replacements),
-            "refactorReplacementCount": len(refactor_replacements),
-            "refactorSummary": refactor_summary,
+            "contractReplacementCount": len(contract_replacements),
+            "contractSummary": contract_summary,
             "patchPath": str(patch_path) if patch_path is not None else "",
-            "refactorReportPath": str(refactor_report_path)
-            if refactor_report_path is not None
+            "contractReportPath": str(contract_report_path)
+            if contract_report_path is not None
             else "",
             "gatePath": str(gate_path),
         },
@@ -569,19 +574,19 @@ def _collect_hosted_paper_dependency_scan(
     }
 
 
-def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
+def _hosted_paper_contract_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
     signals: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     observed_training_calls = _observed_source_training_calls(scan)
     if observed_training_calls:
-        _append_hosted_rewrite_signal(
+        _append_hosted_contract_signal(
             signals,
             seen,
             kind="ml_training_observed",
             value=", ".join(observed_training_calls[:8]),
             reason=(
                 "source scan observed training/refit/update calls; hosted paper "
-                "rewrite must use stateful_continuation"
+                "contract must use stateful_continuation and edit source"
             ),
         )
     paper_signal = scan.get("paperSignal")
@@ -592,7 +597,7 @@ def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
             or paper_signal.get("implemented") is not True
         )
     ):
-        _append_hosted_rewrite_signal(
+        _append_hosted_contract_signal(
             signals,
             seen,
             kind="missing_paper_signal",
@@ -600,20 +605,20 @@ def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
             reason="stateful continuation must implement hosted paper signal path",
         )
     elif paper_signal.get("fullRuntimeCompute") is True:
-        _append_hosted_rewrite_signal(
+        _append_hosted_contract_signal(
             signals,
             seen,
             kind="paper_signal_full_recompute",
             value="compute_runtime_output",
             reason=(
                 "get_paper_signal must not wrap full historical strategy compute; "
-                "rewrite it as a live-paper fast path"
+                "stateful/direct paper code must use a live-paper fast path"
             ),
         )
     for item in scan.get("absolutePathLiterals") or []:
         if not isinstance(item, dict):
             continue
-        _append_hosted_rewrite_signal(
+        _append_hosted_contract_signal(
             signals,
             seen,
             kind="developer_local_absolute_path",
@@ -626,7 +631,7 @@ def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
         value = _clean(item.get("path"))
         if not _is_local_absolute_path(value):
             continue
-        _append_hosted_rewrite_signal(
+        _append_hosted_contract_signal(
             signals,
             seen,
             kind="developer_local_file_access",
@@ -638,7 +643,7 @@ def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
             continue
         if item.get("classification") in {"stdlib", "allowed_runtime"}:
             continue
-        _append_hosted_rewrite_signal(
+        _append_hosted_contract_signal(
             signals,
             seen,
             kind="nonstandard_import",
@@ -648,18 +653,18 @@ def _hosted_paper_rewrite_signals(scan: dict[str, Any]) -> list[dict[str, str]]:
     for item in scan.get("stateDependencies") or []:
         if not isinstance(item, dict):
             continue
-        _append_hosted_rewrite_signal(
+        _append_hosted_contract_signal(
             signals,
             seen,
             kind=_clean(item.get("kind")) or "state_dependency",
             value=_clean(item.get("value")),
             reason=_clean(item.get("reason"))
-            or "state-like dependency must be classified by hosted rewrite",
+            or "state-like dependency must be classified by hosted paper contract",
         )
     return signals
 
 
-def _initial_hosted_paper_rewrite_signals(
+def _initial_hosted_paper_contract_signals(
     scan_signals: list[dict[str, str]],
 ) -> list[dict[str, str]]:
     signals: list[dict[str, str]] = [
@@ -669,7 +674,7 @@ def _initial_hosted_paper_rewrite_signals(
             "reason": (
                 "research strategy must declare an explicit hosted live-paper "
                 "contract before first artifact export; only stateful "
-                "continuation requires source rewrite"
+                "continuation normally requires source edits"
             ),
         }
     ]
@@ -677,7 +682,7 @@ def _initial_hosted_paper_rewrite_signals(
     return signals
 
 
-def _append_hosted_rewrite_signal(
+def _append_hosted_contract_signal(
     signals: list[dict[str, str]],
     seen: set[tuple[str, str]],
     *,
@@ -1086,11 +1091,11 @@ def _source_segment(source: str, node: ast.AST) -> str:
         return ""
 
 
-def _write_artifact_refactor_report(
+def _write_artifact_contract_report(
     promoted_dir: Path,
     report: dict[str, Any],
 ) -> Path:
-    path = promoted_dir / "refactor-report.artifact.json"
+    path = promoted_dir / "paper-contract-report.artifact.json"
     payload = json.loads(json.dumps(report))
     paths = payload.get("paths")
     if isinstance(paths, dict):
@@ -1125,31 +1130,36 @@ def _sanitized_packaged_file_entry(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _hosted_paper_rewrite_guide_reference() -> dict[str, Any]:
-    guide_path = Path(__file__).resolve().parents[2] / "references" / "hosted-paper-rewrite.md"
+def _hosted_paper_contract_guide_reference() -> dict[str, Any]:
+    guide_path = Path(__file__).resolve().parents[2] / "references" / "hosted-paper-contract.md"
     return {
         "path": str(guide_path),
-        "relativePath": "references/hosted-paper-rewrite.md",
+        "relativePath": "references/hosted-paper-contract.md",
         "instruction": (
             "Read this Markdown guide before editing. The request contains only "
             "this promotion's facts and hard requirements; the guide contains "
-            "the live-paper rewrite method, report shape, and validation model."
+            "the live-paper contract method, report shape, and validation model."
         ),
     }
 
 
-def _hosted_paper_rewrite_requirements(
+def _hosted_paper_contract_requirements(
     dependency_scan: dict[str, Any],
     *,
     attempt_policy: dict[str, Any],
 ) -> dict[str, Any]:
     training_calls = _observed_source_training_calls(dependency_scan)
     stateful_required = bool(training_calls)
+    source_edit_policy = _source_edit_policy(
+        dependency_scan,
+        stateful_required=stateful_required,
+    )
     return {
         "continuationMethod": (
             "stateful_continuation" if stateful_required else "agent_choice"
         ),
         "statefulContinuationRequired": stateful_required,
+        "sourceEditPolicy": source_edit_policy,
         "reason": (
             "Static source scan observed training/refit/update calls in the "
             "selected research source. ML or fitted-object strategies must "
@@ -1168,14 +1178,14 @@ def _hosted_paper_rewrite_requirements(
                 attempt_policy.get("fullReplayFallbackEligible")
             ),
             "notHostableAllowed": bool(attempt_policy.get("notHostableAllowed")),
-            "liveRewriteFailures": _nonnegative_int(
-                attempt_policy.get("liveRewriteFailures")
+            "liveContractFailures": _nonnegative_int(
+                attempt_policy.get("liveContractFailures")
             ),
             "fallbackAfterFailures": _nonnegative_int(
                 attempt_policy.get("fallbackAfterFailures")
             ),
-            "rewriteRequestRefreshes": _nonnegative_int(
-                attempt_policy.get("rewriteRequestRefreshes")
+            "contractRequestRefreshes": _nonnegative_int(
+                attempt_policy.get("contractRequestRefreshes")
             ),
             "fallbackAfterRequestRefreshes": _nonnegative_int(
                 attempt_policy.get("fallbackAfterRequestRefreshes")
@@ -1185,10 +1195,36 @@ def _hosted_paper_rewrite_requirements(
             ),
         },
         "hardBoundaries": [
-            "Do not edit the original research branch source; edit only sourcePath.",
+            "Do not edit the original research branch source.",
+            "Edit sourcePath only when sourceEditPolicy.required is true or when a listed allowed reason is genuinely needed.",
             "Do not package selected-round trade-log.csv, gate answers, or promotion outputs as live strategy assets or startup state.",
             "Do not choose full_replay_fallback or not_hostable unless fallback.fullReplayFallbackEligible is true.",
         ],
+    }
+
+
+def _source_edit_policy(
+    dependency_scan: dict[str, Any],
+    *,
+    stateful_required: bool,
+) -> dict[str, Any]:
+    allowed_reasons = ["asset_path_normalization", "source_bug_fix"]
+    if stateful_required:
+        allowed_reasons.insert(0, "stateful_continuation")
+    expected = stateful_required or _scan_has_external_file_dependency(dependency_scan)
+    required = stateful_required
+    reason = "stateful_continuation" if stateful_required else ""
+    if not reason and _scan_has_external_file_dependency(dependency_scan):
+        reason = "asset_path_normalization"
+    return {
+        "expected": expected,
+        "required": required,
+        "reason": reason,
+        "allowedReasons": allowed_reasons,
+        "defaultForStateless": (
+            "Preserve sourcePath and write only paper-contract-report.json "
+            "unless an allowed source edit is genuinely required."
+        ),
     }
 
 
@@ -1212,29 +1248,29 @@ def _observed_source_training_calls(scan: dict[str, Any] | None) -> list[str]:
     return observed[:20]
 
 
-def _rewrite_attempt_policy(
+def _contract_attempt_policy(
     promoted_dir: Path,
     *,
     validation_failure: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    previous = _read_previous_rewrite_attempt_policy(
-        promoted_dir / PROMOTION_REFACTOR_REQUEST_FILENAME
+    previous = _read_previous_contract_attempt_policy(
+        promoted_dir / PROMOTION_CONTRACT_REQUEST_FILENAME
     )
-    failures = _nonnegative_int(previous.get("liveRewriteFailures"))
+    failures = _nonnegative_int(previous.get("liveContractFailures"))
     if validation_failure is not None:
         failures += 1
-    request_refreshes = _nonnegative_int(previous.get("rewriteRequestRefreshes")) + 1
+    request_refreshes = _nonnegative_int(previous.get("contractRequestRefreshes")) + 1
     failure_eligible = failures >= PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK
     refresh_eligible = request_refreshes >= PROMOTION_REWRITE_REQUESTS_BEFORE_FALLBACK
     eligible = failure_eligible or refresh_eligible
     eligibility_reason = ""
     if failure_eligible:
-        eligibility_reason = "live_rewrite_failures"
+        eligibility_reason = "live_contract_failures"
     elif refresh_eligible:
-        eligibility_reason = "rewrite_request_budget"
+        eligibility_reason = "contract_request_budget"
     return {
-        "liveRewriteFailures": failures,
-        "rewriteRequestRefreshes": request_refreshes,
+        "liveContractFailures": failures,
+        "contractRequestRefreshes": request_refreshes,
         "fullReplayFallbackEligible": eligible,
         "notHostableAllowed": eligible,
         "fallbackAfterFailures": PROMOTION_LIVE_REWRITE_FAILURES_BEFORE_FALLBACK,
@@ -1244,19 +1280,19 @@ def _rewrite_attempt_policy(
         "rule": (
             "Use stateless_recompute or stateful_continuation first. "
             "full_replay_fallback and not_hostable are only available after "
-            "enough complete live rewrite failures or rewrite request refreshes."
+            "enough complete live contract failures or contract request refreshes."
         ),
     }
 
 
 def _full_replay_fallback_allowed(promoted_dir: Path) -> bool:
-    policy = _read_previous_rewrite_attempt_policy(
-        promoted_dir / PROMOTION_REFACTOR_REQUEST_FILENAME
+    policy = _read_previous_contract_attempt_policy(
+        promoted_dir / PROMOTION_CONTRACT_REQUEST_FILENAME
     )
     return bool(policy.get("fullReplayFallbackEligible"))
 
 
-def _read_previous_rewrite_attempt_policy(request_path: Path) -> dict[str, Any]:
+def _read_previous_contract_attempt_policy(request_path: Path) -> dict[str, Any]:
     if not request_path.is_file():
         return {}
     try:
@@ -1284,7 +1320,7 @@ def _nonnegative_int(value: Any) -> int:
     return max(number, 0)
 
 
-def _write_hosted_paper_rewrite_request(
+def _write_hosted_paper_contract_request(
     promoted_dir: Path,
     *,
     branch: Path,
@@ -1293,15 +1329,15 @@ def _write_hosted_paper_rewrite_request(
     signals: list[dict[str, str]],
     validation_failure: dict[str, Any] | None = None,
 ) -> Path:
-    request_path = promoted_dir / PROMOTION_REFACTOR_REQUEST_FILENAME
-    attempt_policy = _rewrite_attempt_policy(
+    request_path = promoted_dir / PROMOTION_CONTRACT_REQUEST_FILENAME
+    attempt_policy = _contract_attempt_policy(
         promoted_dir,
         validation_failure=validation_failure,
     )
     validation_payload: dict[str, Any] = {
         "smoke": (
             "Rerun the same promote/export command after writing "
-            "refactor-report.json. Promotion will run an Edge paper_run_one "
+            "paper-contract-report.json. Promotion will run an Edge paper_run_one "
             "tail smoke automatically before export."
         )
     }
@@ -1321,7 +1357,7 @@ def _write_hosted_paper_rewrite_request(
             tree,
             file_accesses=facts.get("fileAccesses", []),
         )
-    requirements = _hosted_paper_rewrite_requirements(
+    requirements = _hosted_paper_contract_requirements(
         facts,
         attempt_policy=attempt_policy,
     )
@@ -1329,23 +1365,24 @@ def _write_hosted_paper_rewrite_request(
         json.dumps(
             {
                 "schema": PROMOTION_AGENT_REQUEST_SCHEMA,
-                "kind": "hosted_paper_rewrite",
-                "scope": PROMOTION_HOSTED_REWRITE_SCOPE,
+                "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
+                "scope": PROMOTION_HOSTED_CONTRACT_SCOPE,
                 "sourcePath": str(source_path),
                 "branchPath": str(branch),
                 "output": {
                     "artifactDir": str(promoted_dir.parent),
                     "promotedDir": str(promoted_dir),
                     "reportPath": str(
-                        promoted_dir / PROMOTION_REFACTOR_REPORT_FILENAME
+                        promoted_dir / PROMOTION_CONTRACT_REPORT_FILENAME
                     ),
                 },
-                "rewriteGuide": _hosted_paper_rewrite_guide_reference(),
+                "contractGuide": _hosted_paper_contract_guide_reference(),
                 "task": (
-                    "Promote the selected research strategy into a live-paper "
-                    "continuation. Read rewriteGuide first, then use this request "
+                    "Declare the selected research strategy's hosted live-paper "
+                    "contract. Read contractGuide first, then use this request "
                     "for the current branch/round facts. Stateless strategies "
-                    "usually need a history boundary profile, not source rewrite."
+                    "usually need only a history boundary profile and should "
+                    "preserve promoted source."
                 ),
                 "requirements": requirements,
                 "signals": signals,
@@ -1397,7 +1434,7 @@ def _promotion_gate_failure_request_payload(gate_report: dict[str, Any]) -> dict
                 failure["smoke"] = _json_safe(compact_smoke)
                 failure["oraclePolicy"] = (
                     "gate failures are semantic diagnostics only; exact oracle "
-                    "answers are not part of the rewrite request and must not be "
+                    "answers are not part of the paper contract request and must not be "
                     "patched into strategy code, assets, or initial state"
                 )
         failed_gates.append(failure)
@@ -1441,10 +1478,10 @@ def _redacted_tail_failure_payload(tail: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _report_has_hosted_rewrite_contract(report: dict[str, Any]) -> bool:
+def _report_has_hosted_paper_contract(report: dict[str, Any]) -> bool:
     return (
-        _clean(report.get("kind")) == PROMOTION_HOSTED_REWRITE_SCOPE
-        and _clean(report.get("scope")) == PROMOTION_HOSTED_REWRITE_SCOPE
+        _clean(report.get("kind")) == PROMOTION_HOSTED_CONTRACT_SCOPE
+        and _clean(report.get("scope")) == PROMOTION_HOSTED_CONTRACT_SCOPE
     )
 
 
@@ -1469,7 +1506,7 @@ def _report_packaged_files(
     for raw_files, forced_role in packaged_groups:
         if not isinstance(raw_files, list):
             raise PromotionHostedPaperRewriteRequired(
-                "refactor report paths packaged file fields must be lists"
+                "paper contract report paths packaged file fields must be lists"
             )
         for raw in raw_files:
             if not isinstance(raw, dict):
@@ -1718,30 +1755,31 @@ def _validate_agent_paper_signal_contract(
     candidate: Any | None = None,
     full_replay_fallback_allowed: bool = False,
     source_dependency_scan: dict[str, Any] | None = None,
+    original_source: str | None = None,
 ) -> None:
     paper_signal = report.get("paperSignal")
     if not isinstance(paper_signal, dict):
         if require_paper_signal:
             raise PromotionHostedPaperRewriteRequired(
-                "hosted paper rewrite report must include paperSignal"
+                "hosted paper contract report must include paperSignal"
             )
         return
     implemented = paper_signal.get("implemented")
     incremental_ready = paper_signal.get("incrementalReady")
     if require_paper_signal and implemented is not True:
         raise PromotionHostedPaperRewriteRequired(
-            "hosted paper rewrite must set paperSignal.implemented=true"
+            "hosted paper contract must set paperSignal.implemented=true"
         )
     continuation = _paper_signal_continuation_payload(paper_signal)
     continuation_method = _clean(continuation.get("method")) if continuation else ""
     if require_paper_signal and incremental_ready is not True:
         if continuation_method == "not_hostable":
             raise PromotionHostedPaperRewriteRequired(
-                "refactor report declares paperSignal.continuation.method=not_hostable; "
+                "paper contract report declares paperSignal.continuation.method=not_hostable; "
                 "promotion cannot export a continuing hosted paper artifact"
             )
         raise PromotionHostedPaperRewriteRequired(
-            "hosted paper rewrite must set paperSignal.incrementalReady=true"
+            "hosted paper contract must set paperSignal.incrementalReady=true"
         )
     if incremental_ready is True:
         _validate_live_readiness_claim(report)
@@ -1771,6 +1809,12 @@ def _validate_agent_paper_signal_contract(
             continuation_method=continuation_method,
             source_dependency_scan=source_dependency_scan,
         )
+        _validate_source_edit_contract(
+            report,
+            source_changed=original_source is not None and source != original_source,
+            continuation_method=continuation_method,
+            source_dependency_scan=source_dependency_scan,
+        )
     if (
         implemented is True
         and continuation_method != "stateless_recompute"
@@ -1779,6 +1823,72 @@ def _validate_agent_paper_signal_contract(
         raise PromotionHostedPaperRewriteRequired(
             "paperSignal.implemented=true but promoted source does not define get_paper_signal"
         )
+
+
+def _validate_source_edit_contract(
+    report: dict[str, Any],
+    *,
+    source_changed: bool,
+    continuation_method: str,
+    source_dependency_scan: dict[str, Any] | None,
+) -> None:
+    source_edit = report.get("sourceEdit")
+    if not source_changed:
+        if isinstance(source_edit, dict) and source_edit.get("changed") is True:
+            raise PromotionHostedPaperRewriteRequired(
+                "sourceEdit.changed=true conflicts with unchanged promoted source"
+            )
+        return
+    if not isinstance(source_edit, dict):
+        raise PromotionHostedPaperRewriteRequired(
+            "promoted source changed; paper-contract report must declare sourceEdit"
+        )
+    if source_edit.get("changed") is not True:
+        raise PromotionHostedPaperRewriteRequired(
+            "promoted source changed; sourceEdit.changed must be true"
+        )
+    reason = _clean(source_edit.get("reason"))
+    allowed = _allowed_source_edit_reasons(
+        continuation_method,
+        source_dependency_scan=source_dependency_scan,
+    )
+    if reason not in allowed:
+        allowed_text = ", ".join(sorted(allowed))
+        raise PromotionHostedPaperRewriteRequired(
+            "promoted source changed for an unsupported sourceEdit.reason "
+            f"{reason!r}; allowed reasons: {allowed_text}"
+        )
+    paths = source_edit.get("paths")
+    if not isinstance(paths, list) or not paths:
+        raise PromotionHostedPaperRewriteRequired(
+            "sourceEdit.paths must list the promoted files changed"
+        )
+
+
+def _allowed_source_edit_reasons(
+    continuation_method: str,
+    *,
+    source_dependency_scan: dict[str, Any] | None,
+) -> set[str]:
+    allowed = {"asset_path_normalization", "source_bug_fix"}
+    if continuation_method in {"stateful_continuation", "full_replay_fallback"}:
+        allowed.add(continuation_method)
+    if _scan_has_external_file_dependency(source_dependency_scan):
+        allowed.add("asset_path_normalization")
+    return allowed
+
+
+def _scan_has_external_file_dependency(scan: dict[str, Any] | None) -> bool:
+    if not isinstance(scan, dict):
+        return False
+    if scan.get("absolutePathLiterals"):
+        return True
+    for item in scan.get("fileAccesses") or []:
+        if not isinstance(item, dict):
+            continue
+        if _is_local_absolute_path(_clean(item.get("path"))):
+            return True
+    return False
 
 
 def _paper_signal_continuation_payload(
@@ -2085,7 +2195,7 @@ def _validate_continuation_method_admissibility(
         raise PromotionHostedPaperRewriteRequired(
             "paperSignal.continuation.method=stateless_recompute conflicts with "
             f"observed ML training/refit/update calls in the selected source: {joined}. "
-            "Use stateful_continuation and reread references/hosted-paper-rewrite.md."
+            "Use stateful_continuation and reread references/hosted-paper-contract.md."
         )
     if observed_fit_calls and continuation_method != "stateful_continuation":
         joined = ", ".join(_clean(item) for item in observed_fit_calls if _clean(item))
@@ -2095,18 +2205,6 @@ def _validate_continuation_method_admissibility(
             "Fallback methods are only available after attemptPolicy allows them."
         )
     if continuation_method == "stateful_continuation":
-        if source_facts.get("usesStateDir") is not True:
-            raise PromotionHostedPaperRewriteRequired(
-                "stateful_continuation requires get_paper_signal to use the hosted "
-                "state directory via context_runtime_paths(self.context).state."
-            )
-        if source_facts.get("writesState") is not True:
-            raise PromotionHostedPaperRewriteRequired(
-                "stateful_continuation requires get_paper_signal to write or save "
-                "strategy-owned state so future paper calls continue from the "
-                "latest model/cache/cursor. Reread the stateful continuation "
-                "section of references/hosted-paper-rewrite.md."
-            )
         if observed_fit_calls and not _has_ml_state_continuation_evidence(
             report, paper_signal
         ):
@@ -2118,7 +2216,7 @@ def _validate_continuation_method_admissibility(
                 "stateful_continuation design to evidence persisted fitted-object "
                 "or equivalent training state, not only cursor/cache state: "
                 f"{joined}. Reread the stateful continuation section of "
-                "references/hosted-paper-rewrite.md."
+                "references/hosted-paper-contract.md."
             )
 
 
@@ -2503,11 +2601,18 @@ def _default_behavior_equivalence(
 ) -> dict[str, Any]:
     return {
         "status": "passed",
-        "method": "agent_declared_hosted_paper_rewrite"
-        if mode == PROMOTION_MODE_AGENT_REFACTOR
+        "method": "agent_declared_hosted_paper_contract"
+        if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT
         else "source_hash_identity",
         "replacements": replacements,
     }
+
+
+def _build_contract_promotion_gate_report(
+    **kwargs: Any,
+) -> dict[str, Any]:
+    contract = kwargs.pop("contract", None)
+    return build_promotion_gate_report(contract=contract, **kwargs)
 
 
 def _report_continuation_method(report: dict[str, Any] | None) -> str:
@@ -2635,6 +2740,7 @@ def _run_edge_paper_run_one_smoke(
                 strategy_dir=strategy_dir,
                 runtime_dir=runtime_dir,
                 state_dir=state_dir,
+                trade_log_path=destination / "trade-log.csv",
                 workspace_dir=root,
             )
             context["engine"] = "strategy.strategy"
@@ -2643,6 +2749,12 @@ def _run_edge_paper_run_one_smoke(
             profile = _report_paper_execution_profile(report)
             if profile:
                 context["runtime"] = {"paperExecutionProfile": profile}
+            requires_validation_bootstrap = (
+                _report_continuation_method(report) == "stateful_continuation"
+            )
+            if requires_validation_bootstrap:
+                _clear_replay_initial_state(destination)
+                _clear_directory(state_dir)
             seed = _seed_paper_smoke_log(
                 destination / "trade-log.csv",
                 oracle_rows=oracle_rows,
@@ -2652,15 +2764,35 @@ def _run_edge_paper_run_one_smoke(
             if seed.get("status") == "failed":
                 return seed
             with _temporary_environ(runtime_env or {}), _temporary_sys_path(
-                [strategy_dir, strategy_dir.parent]
+                [strategy_dir.parent, strategy_dir]
             ):
+                bootstrap = {"required": False, "status": "skipped"}
+                if requires_validation_bootstrap:
+                    cls = _load_smoke_strategy_class(strategy_dir / "strategy.py")
+                    engine = cls(context)
+                    bootstrap = _run_paper_validation_state_bootstrap(
+                        engine,
+                        state_dir=state_dir,
+                        oracle_rows=oracle_rows,
+                        required=True,
+                    )
+                    if bootstrap.get("status") == "failed":
+                        return {
+                            "status": "failed",
+                            "reason": _clean(bootstrap.get("reason"))
+                            or "paper validation state bootstrap failed",
+                            "validationBootstrap": bootstrap,
+                        }
+                before_first = _snapshot_tree(state_dir)
                 run_started = time.monotonic()
                 first = paper_run_one(context, as_of=oracle_rows[-1]["asOf"])
                 first_elapsed = time.monotonic() - run_started
+                after_first = _snapshot_tree(state_dir)
                 comparisons = _paper_run_tail_comparisons(
                     Path(context["paper_log"]),
                     oracle_rows=oracle_rows,
                     elapsed_seconds=first_elapsed,
+                    state_changed=after_first != before_first,
                 )
                 failed = [
                     item
@@ -2682,7 +2814,7 @@ def _run_edge_paper_run_one_smoke(
                         ),
                         "result": _json_safe(first),
                     }
-                before_second = _snapshot_tree(state_dir)
+                before_second = after_first
                 second_started = time.monotonic()
                 second = paper_run_one(context, as_of=oracle_rows[-1]["asOf"])
                 second_elapsed = time.monotonic() - second_started
@@ -2701,6 +2833,26 @@ def _run_edge_paper_run_one_smoke(
                     ),
                 }
             latest_position = _finite_float(comparisons[-1].get("actualNextPosition"))
+            generated_initial_state_files = []
+            if requires_validation_bootstrap:
+                generated_initial_state_files = _materialize_replay_initial_state(
+                    state_dir,
+                    destination=destination,
+                )
+                if not generated_initial_state_files:
+                    return {
+                        "status": "failed",
+                        "reason": (
+                            "stateful_continuation replay produced no startup "
+                            "strategy state files to package"
+                        ),
+                        "tailConsistency": _tail_consistency_payload(
+                            oracle_rows,
+                            comparisons,
+                            status="passed",
+                        ),
+                        "validationBootstrap": bootstrap,
+                    }
             return {
                 "status": "passed",
                 "asOf": oracle_rows[-1]["asOf"],
@@ -2708,7 +2860,7 @@ def _run_edge_paper_run_one_smoke(
                 "firstElapsedSeconds": round(first_elapsed, 6),
                 "secondElapsedSeconds": round(second_elapsed, 6),
                 "elapsedSeconds": round(time.monotonic() - started_at, 6),
-                "stateChangedFirstCall": True,
+                "stateChangedFirstCall": after_first != before_first,
                 "stateChangedSecondCall": False,
                 "sameResult": second.get("n_rows") == 0,
                 "tailConsistency": _tail_consistency_payload(
@@ -2716,7 +2868,8 @@ def _run_edge_paper_run_one_smoke(
                     comparisons,
                     status="passed",
                 ),
-                "validationBootstrap": {"required": False, "status": "skipped"},
+                "validationBootstrap": bootstrap,
+                "generatedInitialStateFiles": generated_initial_state_files,
                 "warmStart": _warm_start_payload(
                     comparisons,
                     repeated_elapsed=second_elapsed,
@@ -2741,12 +2894,44 @@ def _seed_paper_smoke_log(
     paper_log_path: Path,
 ) -> dict[str, Any]:
     cutover_as_of = _clean(oracle_rows[0].get("validationCutoverAsOf")) if oracle_rows else ""
-    if not cutover_as_of:
-        return {
-            "status": "failed",
-            "reason": "paper_run_one smoke needs a cutover row before the tail holdout",
-        }
     frame = read_trade_log(source_trade_log)
+    trade_log_path.parent.mkdir(parents=True, exist_ok=True)
+    paper_log_path.parent.mkdir(parents=True, exist_ok=True)
+    if not cutover_as_of:
+        first_as_of = _clean(oracle_rows[0].get("asOf")) if oracle_rows else ""
+        if not first_as_of:
+            return {
+                "status": "failed",
+                "reason": "paper_run_one smoke needs at least one tail holdout row",
+            }
+        seed_date = (
+            pd.to_datetime(first_as_of, utc=True) - pd.Timedelta(days=1)
+        ).date().isoformat()
+        columns = list(frame.columns) or [
+            "date",
+            "asset_return",
+            "pnl",
+            "position",
+            "cum_return",
+            "source",
+            "next_position",
+        ]
+        seed_values = {column: 0 for column in columns}
+        seed_values["date"] = seed_date
+        if "decision_time" in seed_values:
+            seed_values["decision_time"] = seed_date
+        if "effective_time" in seed_values:
+            seed_values["effective_time"] = seed_date
+        if "source" in seed_values:
+            seed_values["source"] = "validation_cutover_seed"
+        if "position" in seed_values:
+            seed_values["position"] = 0
+        if "next_position" in seed_values:
+            seed_values["next_position"] = 0
+        seed = pd.DataFrame([seed_values], columns=columns)
+        seed.to_csv(trade_log_path, index=False)
+        seed.to_csv(paper_log_path, index=False)
+        return {"status": "passed", "cutoverAsOf": seed_date, "synthetic": True}
     dates = pd.to_datetime(frame["date"], utc=True, format="mixed")
     cutover = pd.to_datetime(cutover_as_of, utc=True)
     seed = frame[dates <= cutover].tail(1).copy()
@@ -2755,8 +2940,6 @@ def _seed_paper_smoke_log(
             "status": "failed",
             "reason": f"paper_run_one smoke could not find cutover row {cutover_as_of}",
         }
-    trade_log_path.parent.mkdir(parents=True, exist_ok=True)
-    paper_log_path.parent.mkdir(parents=True, exist_ok=True)
     seed.to_csv(trade_log_path, index=False)
     seed.to_csv(paper_log_path, index=False)
     return {"status": "passed", "cutoverAsOf": cutover_as_of}
@@ -2767,6 +2950,7 @@ def _paper_run_tail_comparisons(
     *,
     oracle_rows: list[dict[str, Any]],
     elapsed_seconds: float,
+    state_changed: bool,
 ) -> list[dict[str, Any]]:
     frame = read_trade_log(paper_log_path)
     by_date: dict[str, float | None] = {}
@@ -2788,7 +2972,7 @@ def _paper_run_tail_comparisons(
                 "actualNextPosition": actual,
                 "absDiff": abs(actual - expected) if actual is not None else None,
                 "elapsedSeconds": round(per_row_elapsed, 6),
-                "stateChanged": True,
+                "stateChanged": state_changed,
             }
         )
     return comparisons
@@ -2814,7 +2998,7 @@ def _fast_paper_validation(
     if requires_direct_signal and full_compute and continuation_method != "full_replay_fallback":
         return {
             "status": "failed",
-            "method": "static_fast_paper_signal_contract",
+            "method": "paper_signal_contract_static",
             "reason": (
                 "get_paper_signal calls compute_runtime_output, which reruns "
                 "the historical strategy path instead of using a live-paper fast path"
@@ -2824,13 +3008,15 @@ def _fast_paper_validation(
     if requires_direct_signal and not _source_overrides_get_paper_signal(source):
         return {
             "status": "failed",
-            "method": "static_fast_paper_signal_contract",
+            "method": "paper_signal_contract_static",
             "reason": "promoted source does not define get_paper_signal",
             **design_facts,
         }
+    source_overrides_signal = _source_overrides_get_paper_signal(source)
     details: dict[str, Any] = {
+        "paperExecution": "edge_paper_run_one",
         "paperSignal": "direct_get_paper_signal"
-        if requires_direct_signal
+        if source_overrides_signal
         else "edge_compiled_recompute",
         "fullRuntimeCompute": full_compute,
         **design_facts,
@@ -2838,7 +3024,7 @@ def _fast_paper_validation(
     profile = _report_paper_execution_profile(report)
     if profile:
         details["paperExecutionProfile"] = _json_safe(profile)
-    if mode == PROMOTION_MODE_AGENT_REFACTOR and report is not None:
+    if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT and report is not None:
         paper_signal = report.get("paperSignal")
         if isinstance(paper_signal, dict):
             details["incrementalReady"] = paper_signal.get("incrementalReady") is True
@@ -2857,7 +3043,7 @@ def _fast_paper_validation(
             if isinstance(evidence, dict):
                 details["agentEvidence"] = _json_safe(evidence)
 
-    smoke = _run_artifact_paper_signal_smoke(
+    smoke = _run_edge_paper_run_one_smoke(
         candidate,
         strategy_source_path=strategy_source_path,
         packaged_files=packaged_files,
@@ -2873,8 +3059,8 @@ def _fast_paper_validation(
     if smoke.get("status") != "passed":
         return {
             "status": "failed",
-            "method": "artifact_paper_signal_smoke",
-            "reason": _clean(smoke.get("reason")) or "paper signal smoke failed",
+            "method": "edge_paper_run_one_tail_smoke",
+            "reason": _clean(smoke.get("reason")) or "paper_run_one smoke failed",
             **details,
         }
     if continuation_method == "full_replay_fallback":
@@ -2893,262 +3079,9 @@ def _fast_paper_validation(
             }
     return {
         "status": "passed",
-        "method": "artifact_paper_signal_smoke",
+        "method": "edge_paper_run_one_tail_smoke",
         **details,
     }
-
-
-def _run_artifact_paper_signal_smoke(
-    candidate: Any,
-    *,
-    strategy_source_path: Path,
-    packaged_files: tuple[PromotionPackagedFile, ...],
-    destination: Path,
-    strategy_entrypoint: str,
-    runtime_env: dict[str, str] | None,
-    is_denylisted_source: Callable[[Path], bool],
-    report: dict[str, Any] | None,
-) -> dict[str, Any]:
-    source = strategy_source_path.read_text(encoding="utf-8", errors="replace")
-    if (
-        _report_continuation_method(report) == "stateless_recompute"
-        and not _source_overrides_get_paper_signal(source)
-    ):
-        return _run_edge_paper_run_one_smoke(
-            candidate,
-            strategy_source_path=strategy_source_path,
-            packaged_files=packaged_files,
-            destination=destination,
-            strategy_entrypoint=strategy_entrypoint,
-            runtime_env=runtime_env,
-            is_denylisted_source=is_denylisted_source,
-            report=report,
-        )
-
-    started_at = time.monotonic()
-    oracle_rows = _paper_tail_oracle_rows(destination / "trade-log.csv")
-    if not oracle_rows:
-        return {
-            "status": "failed",
-            "reason": (
-                "paper signal tail consistency oracle is unavailable; "
-                "trade-log.csv must contain date and next_position columns"
-            ),
-        }
-    requires_validation_bootstrap = (
-        _report_continuation_method(report) == "stateful_continuation"
-    )
-    if requires_validation_bootstrap:
-        _clear_replay_initial_state(destination)
-    try:
-        with tempfile.TemporaryDirectory(prefix="abel-paper-smoke-") as temp_name:
-            root = Path(temp_name)
-            strategy_dir = root / "strategy"
-            runtime_dir = root / "runtime"
-            state_dir = root / "state"
-            strategy_dir.mkdir(parents=True)
-            runtime_dir.mkdir(parents=True)
-            state_dir.mkdir(parents=True)
-            _stage_paper_smoke_files(
-                candidate,
-                strategy_source_path=strategy_source_path,
-                packaged_files=packaged_files,
-                strategy_dir=strategy_dir,
-                runtime_dir=runtime_dir,
-                state_dir=state_dir,
-                strategy_entrypoint=strategy_entrypoint,
-                is_denylisted_source=is_denylisted_source,
-            )
-            if requires_validation_bootstrap:
-                _clear_directory(state_dir)
-            context = _paper_smoke_context(
-                candidate,
-                strategy_dir=strategy_dir,
-                runtime_dir=runtime_dir,
-                state_dir=state_dir,
-                workspace_dir=root,
-            )
-            with _temporary_environ(runtime_env or {}), _temporary_sys_path(
-                [strategy_dir, strategy_dir.parent]
-            ):
-                cls = _load_smoke_strategy_class(strategy_dir / "strategy.py")
-                engine = cls(context)
-                bootstrap = _run_paper_validation_state_bootstrap(
-                    engine,
-                    state_dir=state_dir,
-                    oracle_rows=oracle_rows,
-                    required=requires_validation_bootstrap,
-                )
-                if bootstrap.get("status") == "failed":
-                    return {
-                        "status": "failed",
-                        "reason": _clean(bootstrap.get("reason"))
-                        or "paper validation state bootstrap failed",
-                        "validationBootstrap": bootstrap,
-                    }
-                before_state = _snapshot_tree(state_dir)
-                tail_comparisons: list[dict[str, Any]] = []
-                previous_state = before_state
-                latest_result: Any = None
-                latest_position: float | None = None
-                latest_elapsed = 0.0
-                for oracle in oracle_rows:
-                    call_started = time.monotonic()
-                    latest_result = engine.get_paper_signal(as_of=oracle["asOf"])
-                    latest_elapsed = time.monotonic() - call_started
-                    after_call_state = _snapshot_tree(state_dir)
-                    latest_position = _paper_smoke_next_position(latest_result)
-                    expected_position = float(oracle["expectedNextPosition"])
-                    abs_diff = (
-                        abs(latest_position - expected_position)
-                        if latest_position is not None
-                        else None
-                    )
-                    comparison = {
-                        "asOf": oracle["asOf"],
-                        "decisionIndex": oracle.get("decisionIndex"),
-                        "expectedNextPosition": expected_position,
-                        "actualNextPosition": latest_position,
-                        "absDiff": abs_diff,
-                        "elapsedSeconds": round(latest_elapsed, 6),
-                        "stateChanged": after_call_state != previous_state,
-                    }
-                    tail_comparisons.append(comparison)
-                    if latest_position is None:
-                        return {
-                            "status": "failed",
-                            "reason": (
-                                "get_paper_signal did not return a finite "
-                                "next_position for a tail consistency date"
-                            ),
-                            "tailConsistency": _tail_consistency_payload(
-                                oracle_rows,
-                                tail_comparisons,
-                                status="failed",
-                            ),
-                            "result": _json_safe(latest_result),
-                        }
-                    if abs_diff is None or abs_diff > PROMOTION_PAPER_TAIL_TOLERANCE:
-                        return {
-                            "status": "failed",
-                            "reason": (
-                                "get_paper_signal next_position diverged from "
-                                "the selected round trade-log tail"
-                            ),
-                            "tailConsistency": _tail_consistency_payload(
-                                oracle_rows,
-                                tail_comparisons,
-                                status="failed",
-                            ),
-                            "result": _json_safe(latest_result),
-                        }
-                    previous_state = after_call_state
-                after_first_state = previous_state
-                as_of = tail_comparisons[-1]["asOf"]
-                second_started = time.monotonic()
-                second = engine.get_paper_signal(as_of=as_of)
-                second_elapsed = time.monotonic() - second_started
-                after_second_state = _snapshot_tree(state_dir)
-
-            second_position = _paper_smoke_next_position(second)
-            warm_start = _warm_start_payload(
-                tail_comparisons,
-                repeated_elapsed=second_elapsed,
-                repeated_state_changed=after_second_state != after_first_state,
-            )
-            if (
-                second_position is None
-                or latest_position is None
-                or abs(second_position - latest_position) > PROMOTION_PAPER_TAIL_TOLERANCE
-            ):
-                return {
-                    "status": "failed",
-                    "reason": "get_paper_signal was not idempotent for the same as_of",
-                    "asOf": as_of,
-                    "firstNextPosition": latest_position,
-                    "secondNextPosition": second_position,
-                    "firstResult": _json_safe(latest_result),
-                    "secondResult": _json_safe(second),
-                    "tailConsistency": _tail_consistency_payload(
-                        oracle_rows,
-                        tail_comparisons,
-                        status="passed",
-                    ),
-                    "warmStart": warm_start,
-                }
-            if after_second_state != after_first_state:
-                return {
-                    "status": "failed",
-                    "reason": "strategy state changed on a repeated same-as_of smoke call",
-                    "asOf": as_of,
-                    "stateChangedFirstCall": after_first_state != before_state,
-                    "stateChangedSecondCall": True,
-                    "tailConsistency": _tail_consistency_payload(
-                        oracle_rows,
-                        tail_comparisons,
-                        status="passed",
-                    ),
-                    "warmStart": warm_start,
-                }
-
-            elapsed = time.monotonic() - started_at
-            warnings = []
-            max_tail_elapsed = max(
-                (float(item["elapsedSeconds"]) for item in tail_comparisons),
-                default=0.0,
-            )
-            if max(max_tail_elapsed, second_elapsed) > PROMOTION_PAPER_SMOKE_WARN_SECONDS:
-                warnings.append(
-                    "paper signal smoke is slow; agent should confirm this is acceptable "
-                    "for hosted daily paper or persist strategy state"
-                )
-            generated_initial_state_files = []
-            if requires_validation_bootstrap:
-                generated_initial_state_files = _materialize_replay_initial_state(
-                    state_dir,
-                    destination=destination,
-                )
-                if not generated_initial_state_files:
-                    return {
-                        "status": "failed",
-                        "reason": (
-                            "stateful_continuation replay produced no startup "
-                            "state files to package"
-                        ),
-                        "tailConsistency": _tail_consistency_payload(
-                            oracle_rows,
-                            tail_comparisons,
-                            status="passed",
-                        ),
-                        "warmStart": warm_start,
-                    }
-            return {
-                "status": "passed",
-                "asOf": as_of,
-                "nextPosition": latest_position,
-                "firstElapsedSeconds": round(latest_elapsed, 6),
-                "secondElapsedSeconds": round(second_elapsed, 6),
-                "elapsedSeconds": round(elapsed, 6),
-                "stateChangedFirstCall": after_first_state != before_state,
-                "stateChangedSecondCall": False,
-                "sameResult": _json_safe(latest_result) == _json_safe(second),
-                "tailConsistency": _tail_consistency_payload(
-                    oracle_rows,
-                    tail_comparisons,
-                    status="passed",
-                ),
-                "validationBootstrap": bootstrap,
-                "generatedInitialStateFiles": generated_initial_state_files,
-                "warmStart": warm_start,
-                "warnings": warnings,
-                "result": _json_safe(latest_result),
-            }
-    except Exception as exc:
-        return {
-            "status": "failed",
-            "reason": f"{exc.__class__.__name__}: {exc}",
-            "elapsedSeconds": round(time.monotonic() - started_at, 6),
-        }
 
 
 def _replay_initial_state_root(destination: Path) -> Path:
@@ -3171,8 +3104,14 @@ def _materialize_replay_initial_state(
         shutil.rmtree(target_root)
     target_root.mkdir(parents=True, exist_ok=True)
     entries: list[dict[str, Any]] = []
-    for source in sorted(path for path in state_dir.rglob("*") if path.is_file()):
+    strategy_state_root = state_dir / "strategy"
+    search_root = strategy_state_root if strategy_state_root.is_dir() else state_dir
+    for source in sorted(path for path in search_root.rglob("*") if path.is_file()):
         relative = source.relative_to(state_dir)
+        if relative.name in {"paper-log.csv", "trade-log.csv"}:
+            continue
+        if relative.parts and relative.parts[0] != "strategy":
+            continue
         artifact_path = f"runtime/initial-state/{relative.as_posix()}"
         _validate_packaged_artifact_path(
             artifact_path,
@@ -3339,6 +3278,7 @@ def _paper_smoke_context(
     strategy_dir: Path,
     runtime_dir: Path,
     state_dir: Path,
+    trade_log_path: Path,
     workspace_dir: Path,
 ) -> dict[str, Any]:
     dependencies = _load_json_object_if_exists(runtime_dir / "dependencies.json")
@@ -3354,20 +3294,28 @@ def _paper_smoke_context(
         for field in (requirements.get("fields") if isinstance(requirements.get("fields"), list) else ["close"])
     ]
     selected_inputs = _selected_input_symbols(dependencies.get("selected_inputs"))
+    feed_paths = _write_paper_smoke_price_feeds(
+        trade_log_path,
+        data_dir=workspace_dir / "data",
+        target_asset=target_asset,
+        selected_inputs=selected_inputs,
+    )
     feeds = {
-        "primary": _abel_bars_feed(
+        "primary": _csv_bars_feed(
             name="primary",
             symbol=target_asset,
             timeframe=timeframe,
             fields=fields,
+            path=feed_paths[target_asset],
         )
     }
     for symbol in selected_inputs:
-        feeds[symbol] = _abel_bars_feed(
+        feeds[symbol] = _csv_bars_feed(
             name=symbol,
             symbol=symbol,
             timeframe=timeframe,
             fields=fields,
+            path=feed_paths[symbol],
         )
     requested_start = _clean(dependencies.get("requested_start"))
     return {
@@ -3418,22 +3366,91 @@ def _paper_smoke_context(
     }
 
 
-def _abel_bars_feed(
+def _csv_bars_feed(
     *,
     name: str,
     symbol: str,
     timeframe: str,
     fields: list[str],
+    path: Path,
 ) -> dict[str, Any]:
     return {
         "name": name,
         "kind": "bars",
-        "adapter": "abel",
+        "adapter": "csv",
         "symbol": symbol,
         "timeframe": timeframe,
         "profile": "daily",
         "fields": fields,
+        "path": str(path),
     }
+
+
+def _write_paper_smoke_price_feeds(
+    trade_log_path: Path,
+    *,
+    data_dir: Path,
+    target_asset: str,
+    selected_inputs: list[str],
+) -> dict[str, Path]:
+    frame = read_trade_log(trade_log_path)
+    date_source = "date" if "date" in frame.columns else "decision_time"
+    if date_source not in frame.columns:
+        raise ValueError("paper_run_one smoke needs trade-log.csv date values for local CSV feeds")
+    dates = pd.to_datetime(frame[date_source], utc=True, format="mixed")
+    if dates.isna().any():
+        raise ValueError("paper_run_one smoke trade-log.csv contains invalid date values")
+    if "close" in frame.columns:
+        close = pd.to_numeric(frame["close"], errors="coerce")
+    else:
+        if "asset_return" in frame.columns:
+            returns = pd.to_numeric(frame["asset_return"], errors="coerce").fillna(0.0)
+        else:
+            returns = pd.Series([0.0] * len(frame), index=frame.index)
+        prices: list[float] = []
+        current = 100.0
+        for value in returns:
+            current *= 1.0 + float(value)
+            prices.append(current)
+        close = pd.Series(prices, index=frame.index)
+    if close.isna().any():
+        raise ValueError("paper_run_one smoke trade-log.csv close values are not numeric")
+
+    base = (
+        pd.DataFrame(
+            {
+                "timestamp": dates.dt.strftime("%Y-%m-%d"),
+                "close": close.astype(float),
+            }
+        )
+        .drop_duplicates(subset=["timestamp"], keep="last")
+        .sort_values("timestamp")
+    )
+    if base.empty:
+        raise ValueError("paper_run_one smoke local CSV feed would be empty")
+    if len(base) == 1:
+        first = pd.to_datetime(base.iloc[0]["timestamp"], utc=True)
+        seed = base.iloc[[0]].copy()
+        seed.loc[:, "timestamp"] = (
+            first - pd.Timedelta(days=1)
+        ).strftime("%Y-%m-%d")
+        base = pd.concat([seed, base], ignore_index=True)
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    symbols = [target_asset, *selected_inputs]
+    paths: dict[str, Path] = {}
+    for symbol in dict.fromkeys(symbols):
+        path = data_dir / f"{_safe_feed_filename(symbol)}.csv"
+        rows = base.copy()
+        rows["symbol"] = symbol
+        rows[["timestamp", "symbol", "close"]].to_csv(path, index=False)
+        paths[symbol] = path
+    return paths
+
+
+def _safe_feed_filename(symbol: str) -> str:
+    value = re.sub(r"[^A-Za-z0-9_.-]+", "_", _clean(symbol) or "asset")
+    return value.strip("._") or "asset"
 
 
 def _selected_input_symbols(value: Any) -> list[str]:
@@ -3654,15 +3671,6 @@ def _load_smoke_strategy_class(path: Path):
     return engine_cls
 
 
-def _paper_smoke_next_position(result: Any) -> float | None:
-    if not isinstance(result, dict):
-        return None
-    value = result.get("next_position")
-    if value is None:
-        value = result.get("nextPosition")
-    return _finite_float(value)
-
-
 def _finite_float(value: Any) -> float | None:
     try:
         parsed = float(value)
@@ -3775,7 +3783,7 @@ def _simple_patch_summary(
     source_path: Path,
     replacements: list[dict[str, str]],
     *,
-    scope: str = PROMOTION_HOSTED_REWRITE_SCOPE,
+    scope: str = PROMOTION_HOSTED_CONTRACT_SCOPE,
 ) -> str:
     lines = [
         f"source: {source_path}",
@@ -3789,18 +3797,18 @@ def _simple_patch_summary(
     return "\n".join(lines) + "\n"
 
 
-def _load_agent_refactor_report(path: Path) -> dict[str, Any]:
+def _load_agent_contract_report(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise RuntimeError(f"{PROMOTION_REFACTOR_REPORT_FILENAME} must be an object")
+        raise RuntimeError(f"{PROMOTION_CONTRACT_REPORT_FILENAME} must be an object")
     if payload.get("schema") != PROMOTION_AGENT_REPORT_SCHEMA:
         raise RuntimeError(
-            f"{PROMOTION_REFACTOR_REPORT_FILENAME} has unsupported schema"
+            f"{PROMOTION_CONTRACT_REPORT_FILENAME} has unsupported schema"
         )
-    if payload.get("kind") != PROMOTION_HOSTED_REWRITE_SCOPE:
+    if payload.get("kind") != PROMOTION_HOSTED_CONTRACT_SCOPE:
         raise RuntimeError(
-            f"{PROMOTION_REFACTOR_REPORT_FILENAME} kind must be "
-            f"{PROMOTION_HOSTED_REWRITE_SCOPE}"
+            f"{PROMOTION_CONTRACT_REPORT_FILENAME} kind must be "
+            f"{PROMOTION_HOSTED_CONTRACT_SCOPE}"
         )
     return payload
 

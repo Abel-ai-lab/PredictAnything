@@ -143,6 +143,14 @@ def _paper_signal(
     }
 
 
+def _source_edit(reason: str) -> dict:
+    return {
+        "changed": True,
+        "reason": reason,
+        "paths": ["engine.py"],
+    }
+
+
 def _seed_promoted_stateless_paper_artifact(
     destination: Path,
     *,
@@ -159,13 +167,18 @@ def _seed_promoted_stateless_paper_artifact(
         f"        return {{'next_position': {next_position!r}, 'date': str(as_of)}}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Test fixture already has hosted paper fast path.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": {
+                    "changed": True,
+                    "reason": "source_bug_fix",
+                    "paths": ["engine.py"],
+                },
                 "paths": {"packagedFiles": [], "initialStateFiles": []},
                 "paperSignal": _paper_signal(),
                 "limitations": [],
@@ -337,6 +350,7 @@ def _fake_artifact_export_runner(command, cwd=None, capture_output=None, text=No
         trade_log_path = Path(command[-1])
         trade_log_path.write_text(
             "date,asset_return,pnl,position,cum_return,source,next_position\n"
+            "2020-01-01,0,0,0,0,backfill,0\n"
             "2020-01-02,0,0,1,0,backfill,1\n",
             encoding="utf-8",
         )
@@ -1466,14 +1480,14 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
         "runtime/data_manifest.json",
         "edge/promotion-gate.json",
         "edge/promotion.patch",
-        "edge/refactor-report.json",
+        "edge/paper-contract-report.json",
     ]
     assert (
         manifest["source"]["selectionMode"]
         == "auto_best_validation_by_pass_rate"
     )
     assert manifest["source"]["selectionScope"] == "session"
-    assert manifest["promotion"]["mode"] == "agent_refactor"
+    assert manifest["promotion"]["mode"] == "agent_paper_contract"
     assert manifest["runtime"]["paperExecutionProfile"]["history"]["boundary"] == "fixed_lookback"
     assert manifest["runtime"]["paperExecutionProfile"]["history"]["lookbackBars"] == 1
 
@@ -1760,10 +1774,10 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
     )
 
     assert first_result["artifactExported"] is False
-    assert first_result["skipReason"] == "hosted_paper_rewrite_required"
+    assert first_result["skipReason"] == "hosted_paper_contract_required"
     request_path = Path(first_result["promotionReport"]["requestPath"])
     request = json.loads(request_path.read_text(encoding="utf-8"))
-    assert request["kind"] == "hosted_paper_rewrite"
+    assert request["kind"] == "hosted_paper_contract"
     assert any(signal["kind"] == "state_like_file" for signal in request["signals"])
     promoted_dir = request_path.parent
     (promoted_dir / "engine.py").write_text(
@@ -1788,13 +1802,14 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
         "        return {'next_position': 1.0, 'state_root': str(path.parent), 'date': str(as_of)}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Agent rewrote model access and packaged startup state.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": _source_edit("stateful_continuation"),
                 "paths": {
                     "packagedFiles": [],
                     "initialStateFiles": [
@@ -1837,12 +1852,12 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
     )
 
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
-    assert result["promotionMode"] == "agent_refactor"
+    assert result["promotionMode"] == "agent_paper_contract"
     assert manifest["runtime"]["state"]["bootstrap"] == {
         "mode": "copy_from_base",
         "path": "runtime/initial-state/",
     }
-    assert manifest["promotion"]["mode"] == "agent_refactor"
+    assert manifest["promotion"]["mode"] == "agent_paper_contract"
     assert manifest["promotion"]["gate"] == {
         "status": "passed",
         "evidencePath": "edge/promotion-gate.json",
@@ -1852,7 +1867,7 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
     assert "runtime/initial-state/strategy/paper_state.json" in file_paths
     assert "edge/promotion-gate.json" in file_paths
     assert "edge/promotion.patch" in file_paths
-    assert "edge/refactor-report.json" in file_paths
+    assert "edge/paper-contract-report.json" in file_paths
     promoted_engine = output_dir / "promoted" / "engine.py"
     assert 'ctx.state_dir / "strategy/model/latest.joblib"' in promoted_engine.read_text(
         encoding="utf-8"
@@ -1861,7 +1876,7 @@ def test_export_selected_strategy_artifact_agent_packages_initial_state(
     assert "--extra-source-map" in export_command
 
 
-def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_runtime_state(
+def test_export_selected_strategy_artifact_requires_hosted_contract_for_runtime_state(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
@@ -1890,13 +1905,13 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_runtime_s
     )
 
     assert result["artifactUploadSkipped"] is True
-    assert result["skipReason"] == "hosted_paper_rewrite_required"
+    assert result["skipReason"] == "hosted_paper_contract_required"
     report = result["promotionReport"]
-    assert report["mode"] == "hosted_paper_rewrite_required"
-    assert "hosted paper rewrite required" in report["reason"]
+    assert report["mode"] == "hosted_paper_contract_required"
+    assert "hosted paper contract required" in report["reason"]
     request = json.loads(Path(report["requestPath"]).read_text(encoding="utf-8"))
-    assert request["kind"] == "hosted_paper_rewrite"
-    assert request["scope"] == "hosted_paper_rewrite"
+    assert request["kind"] == "hosted_paper_contract"
+    assert request["scope"] == "hosted_paper_contract"
     assert any(signal["kind"] == "runtime_state_file" for signal in request["signals"])
     assert any(
         item["kind"] == "runtime_state_file"
@@ -1904,7 +1919,7 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_runtime_s
     )
 
 
-def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_ad_hoc_paths(
+def test_export_selected_strategy_artifact_requires_hosted_contract_for_ad_hoc_paths(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
@@ -1941,11 +1956,11 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_ad_hoc_pa
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
-    assert request["kind"] == "hosted_paper_rewrite"
+    assert request["kind"] == "hosted_paper_contract"
     assert any(signal["kind"] == "source_state_reference" for signal in request["signals"])
 
 
-def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_absolute_asset_path(
+def test_export_selected_strategy_artifact_requires_hosted_contract_for_absolute_asset_path(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("ETHUSD", "eth-v1", tmp_path / "research")
@@ -1983,12 +1998,12 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_absolute_
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "hosted_paper_rewrite_required"
+    assert result["skipReason"] == "hosted_paper_contract_required"
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
-    assert request["kind"] == "hosted_paper_rewrite"
-    assert request["scope"] == "hosted_paper_rewrite"
+    assert request["kind"] == "hosted_paper_contract"
+    assert request["scope"] == "hosted_paper_contract"
     assert request["facts"]["paperSignal"]["implemented"] is False
     assert any(
         signal["kind"] == "developer_local_absolute_path"
@@ -2049,13 +2064,14 @@ def test_export_selected_strategy_artifact_agent_packages_external_base_asset(
         "        return {'next_position': 1.0, 'date': date}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Agent packaged external replay log as read-only base asset.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": _source_edit("asset_path_normalization"),
                 "paths": {
                     "packagedFiles": [
                         {
@@ -2096,11 +2112,11 @@ def test_export_selected_strategy_artifact_agent_packages_external_base_asset(
     )
 
     assert result["artifactExported"] is True
-    assert result["promotionMode"] == "agent_refactor"
+    assert result["promotionMode"] == "agent_paper_contract"
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
     file_paths = [item["path"] for item in manifest["files"]]
     assert "strategy/assets/trade_log_dual_resonance.csv" in file_paths
-    assert "edge/refactor-report.json" in file_paths
+    assert "edge/paper-contract-report.json" in file_paths
     assert "edge/dependency-scan.json" not in file_paths
     assert "edge/packaging-plan.json" not in file_paths
     assert not (promoted_dir / "dependency-scan.json").exists()
@@ -2108,14 +2124,14 @@ def test_export_selected_strategy_artifact_agent_packages_external_base_asset(
     assert not legacy_replay_dir.exists()
     gate = json.loads((output_dir / "promotion-gate.json").read_text(encoding="utf-8"))
     paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
-    assert paper_gate["method"] == "artifact_paper_signal_smoke"
+    assert paper_gate["method"] == "edge_paper_run_one_tail_smoke"
     assert paper_gate["details"]["smoke"]["nextPosition"] == 1.0
     assert paper_gate["details"]["smoke"]["tailConsistency"]["status"] == "passed"
     assert paper_gate["details"]["smoke"]["tailConsistency"]["sampleSize"] == 1
     promoted_source = (output_dir / "promoted" / "engine.py").read_text(encoding="utf-8")
     assert str(external_asset) not in promoted_source
     artifact_report = json.loads(
-        (output_dir / "promoted" / "refactor-report.artifact.json").read_text(
+        (output_dir / "promoted" / "paper-contract-report.artifact.json").read_text(
             encoding="utf-8"
         )
     )
@@ -2124,7 +2140,7 @@ def test_export_selected_strategy_artifact_agent_packages_external_base_asset(
     assert "sourcePath" not in artifact_packaged_file
 
 
-def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_nonstandard_import(
+def test_export_selected_strategy_artifact_requires_hosted_contract_for_nonstandard_import(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("GNRC", "gnrc-v1", tmp_path / "research")
@@ -2158,11 +2174,11 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_nonstanda
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "hosted_paper_rewrite_required"
+    assert result["skipReason"] == "hosted_paper_contract_required"
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
-    assert request["kind"] == "hosted_paper_rewrite"
+    assert request["kind"] == "hosted_paper_contract"
     assert any(signal["kind"] == "nonstandard_import" for signal in request["signals"])
     imports = request["facts"]["imports"]
     assert {"module": "sklearn", "classification": "nonstandard"} in imports
@@ -2203,29 +2219,42 @@ def test_export_selected_strategy_artifact_agent_adds_stateful_paper_signal(
     )
     promoted_dir = Path(first_result["promotionReport"]["requestPath"]).parent
     (promoted_dir / "engine.py").write_text(
+        "import json\n"
         "from sklearn.ensemble import RandomForestClassifier\n"
         "from abel_edge.engine.base import StrategyEngine\n"
+        "from abel_edge.runtime_paths import context_runtime_paths\n"
         "class BranchEngine(StrategyEngine):\n"
+        "    def _state_path(self):\n"
+        "        return context_runtime_paths(self.context).state / 'strategy/paper_state.json'\n"
         "    def compute_decisions(self, ctx):\n"
         "        _ = RandomForestClassifier(n_estimators=2)\n"
         "        return ctx.decisions(1)\n"
+        "    def build_paper_initial_state(self, *, cutover_as_of=None):\n"
+        "        path = self._state_path()\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'cutover_as_of': str(cutover_as_of)}), encoding='utf-8')\n"
+        "        return {'cutover_as_of': str(cutover_as_of)}\n"
         "    def get_paper_signal(self, *, as_of=None):\n"
-        "        state_root = self.context['_runtime_paths']['state']\n"
-        "        return {'next_position': 1.0, 'date': str(as_of), 'state_root': state_root}\n",
+        "        path = self._state_path()\n"
+        "        path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        path.write_text(json.dumps({'last_as_of': str(as_of)}), encoding='utf-8')\n"
+        "        return {'next_position': 1.0, 'date': str(as_of), 'state_root': str(path.parent)}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Agent added stateful paper signal entrypoint.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": _source_edit("stateful_continuation"),
                 "paths": {
                     "packagedFiles": [],
                 },
                 "paperSignal": _paper_signal(
-                    design=_paper_design(uses_state=True),
+                    method="stateful_continuation",
+                    design=_paper_design(uses_state=True, cutover_state_required=True),
                     live_readiness="uses runtime state path and returns scalar audit fields",
                 ),
                 "limitations": [],
@@ -2243,17 +2272,11 @@ def test_export_selected_strategy_artifact_agent_adds_stateful_paper_signal(
     )
 
     assert result["artifactExported"] is True
-    assert result["promotionMode"] == "agent_refactor"
+    assert result["promotionMode"] == "agent_paper_contract"
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
     file_paths = [item["path"] for item in manifest["files"]]
-    assert "edge/refactor-report.json" in file_paths
-    assert "edge/dependency-scan.json" not in file_paths
-    assert "edge/packaging-plan.json" not in file_paths
-    gate = json.loads((output_dir / "promotion-gate.json").read_text(encoding="utf-8"))
-    paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
-    assert paper_gate["method"] == "artifact_paper_signal_smoke"
-    assert paper_gate["details"]["usesStateDir"] is True
-    assert paper_gate["details"]["smoke"]["tailConsistency"]["status"] == "passed"
+    assert "runtime/initial-state/strategy/paper_state.json" in file_paths
+    assert "edge/paper-contract-report.json" in file_paths
 
 
 def test_export_selected_strategy_artifact_ignores_legacy_state_intent(
@@ -2297,11 +2320,11 @@ def test_export_selected_strategy_artifact_ignores_legacy_state_intent(
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "hosted_paper_rewrite_required"
+    assert result["skipReason"] == "hosted_paper_contract_required"
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
-    assert request["kind"] == "hosted_paper_rewrite"
+    assert request["kind"] == "hosted_paper_contract"
     assert "stateIntentPath" not in request
     assert "requiredStateIntentTemplate" not in request
 
@@ -2435,13 +2458,14 @@ def test_export_selected_strategy_artifact_rejects_full_compute_paper_signal(
         "        return {'next_position': float(compiled.next_position[-1])}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Agent rewrote state path for hosted paper.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": _source_edit("stateful_continuation"),
                 "paths": {
                     "packagedFiles": [],
                     "initialStateFiles": [
@@ -2474,9 +2498,12 @@ def test_export_selected_strategy_artifact_rejects_full_compute_paper_signal(
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "hosted_paper_rewrite_required"
-    assert "gatePath" not in result["promotionReport"]
-    assert "stateful_continuation requires" in result["promotionReport"]["reason"]
+    assert result["skipReason"] == "hosted_paper_contract_required"
+    assert "gatePath" in result["promotionReport"]
+    gate = json.loads(Path(result["promotionReport"]["gatePath"]).read_text(encoding="utf-8"))
+    paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
+    assert paper_gate["method"] == "paper_signal_contract_static"
+    assert "compute_runtime_output" in paper_gate["details"]["reason"]
 
 
 def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
@@ -2538,13 +2565,14 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
         "        return {'next_position': 1.0, 'date': str(as_of)}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Agent added a paper signal that drifts from oracle.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": _source_edit("source_bug_fix"),
                 "paths": {"packagedFiles": []},
                 "paperSignal": _paper_signal(
                     live_readiness="intentionally mismatched for gate coverage",
@@ -2564,11 +2592,11 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
     )
 
     assert result["artifactExported"] is False
-    assert result["promotionMode"] == "hosted_paper_rewrite_required"
+    assert result["promotionMode"] == "hosted_paper_contract_required"
     gate = json.loads(Path(result["promotionReport"]["gatePath"]).read_text(encoding="utf-8"))
     paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
     assert paper_gate["status"] == "failed"
-    assert paper_gate["method"] == "artifact_paper_signal_smoke"
+    assert paper_gate["method"] == "edge_paper_run_one_tail_smoke"
     assert "diverged" in paper_gate["details"]["reason"]
     comparison = paper_gate["details"]["smoke"]["tailConsistency"]["comparisons"][0]
     assert comparison["expectedNextPosition"] == 0.0
@@ -2684,13 +2712,14 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
         "        return {'next_position': 1.0, 'date': str(as_of), 'state_root': str(path.parent)}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Agent added a matching but cold-start paper signal.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": _source_edit("stateful_continuation"),
                 "paths": {
                     "packagedFiles": [],
                     "initialStateFiles": [
@@ -2724,7 +2753,7 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
     )
 
     assert result["artifactExported"] is True
-    assert result["promotionMode"] == "agent_refactor"
+    assert result["promotionMode"] == "agent_paper_contract"
     gate = json.loads((output_dir / "promotion-gate.json").read_text(encoding="utf-8"))
     paper_gate = next(item for item in gate["gates"] if item["name"] == "paper_dry_run")
     assert paper_gate["status"] == "passed"
@@ -3149,7 +3178,7 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
         },
     }
 
-    request_path = promotion_helpers._write_hosted_paper_rewrite_request(
+    request_path = promotion_helpers._write_hosted_paper_contract_request(
         promoted_dir,
         branch=branch,
         source_path=source,
@@ -3172,12 +3201,12 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     assert request["requirements"]["statefulContinuationRequired"] is True
     assert request["requirements"]["continuationMethod"] == "stateful_continuation"
     assert request["requirements"]["observedTrainingCalls"] == ["model.fit"]
-    assert request["rewriteGuide"]["relativePath"] == "references/hosted-paper-rewrite.md"
+    assert request["contractGuide"]["relativePath"] == "references/hosted-paper-contract.md"
     assert request["facts"]["paperSignal"]["sourceTrainingCalls"] == ["model.fit"]
     assert request["facts"]["sourceScan"]["positiveFindings"]["observedFitCalls"] == [
         "model.fit"
     ]
-    assert request["validation"]["attemptPolicy"]["liveRewriteFailures"] == 0
+    assert request["validation"]["attemptPolicy"]["liveContractFailures"] == 0
     assert "acceptanceCriteria" not in request
     assert "agentQuestions" not in request
 
@@ -3199,7 +3228,7 @@ def test_hosted_paper_request_opens_full_replay_fallback_after_failures(
     failure = {"status": "failed", "failedGates": [{"name": "paper_dry_run"}]}
 
     for _ in range(3):
-        request_path = promotion_helpers._write_hosted_paper_rewrite_request(
+        request_path = promotion_helpers._write_hosted_paper_contract_request(
             promoted_dir,
             branch=branch,
             source_path=source,
@@ -3210,7 +3239,7 @@ def test_hosted_paper_request_opens_full_replay_fallback_after_failures(
 
     request = json.loads(request_path.read_text(encoding="utf-8"))
     policy = request["attemptPolicy"]
-    assert policy["liveRewriteFailures"] == 3
+    assert policy["liveContractFailures"] == 3
     assert policy["fullReplayFallbackEligible"] is True
     assert policy["notHostableAllowed"] is True
 
@@ -3535,7 +3564,7 @@ def test_paper_smoke_bootstraps_state_before_holdout_tail(
         "stateEnd"
     ] = "2020-01-04"
 
-    smoke = promotion_helpers._run_artifact_paper_signal_smoke(
+    smoke = promotion_helpers._run_edge_paper_run_one_smoke(
         candidate,
         strategy_source_path=promoted_source,
         packaged_files=(
@@ -3629,7 +3658,7 @@ def test_temporal_dependency_facts_surface_lookback_and_calendar_hints() -> None
     assert constants["REFIT_EVERY"] == "20"
 
 
-def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_stateful_branch(
+def test_export_selected_strategy_artifact_requires_hosted_contract_for_stateful_branch(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
@@ -3664,11 +3693,11 @@ def test_export_selected_strategy_artifact_requires_hosted_rewrite_for_stateful_
     )
 
     assert result["artifactExported"] is False
-    assert result["skipReason"] == "hosted_paper_rewrite_required"
+    assert result["skipReason"] == "hosted_paper_contract_required"
     request = json.loads(
         Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8")
     )
-    assert request["kind"] == "hosted_paper_rewrite"
+    assert request["kind"] == "hosted_paper_contract"
     assert any(signal["kind"] == "state_like_file" for signal in request["signals"])
 
 
@@ -3771,13 +3800,14 @@ def test_export_selected_strategy_artifact_uses_local_runtime_state_source(
         "        return {'next_position': 1.0, 'date': str(as_of)}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Agent packaged runtime state seed.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": _source_edit("stateful_continuation"),
                 "paths": {
                     "packagedFiles": [],
                     "initialStateFiles": [
@@ -3811,13 +3841,13 @@ def test_export_selected_strategy_artifact_uses_local_runtime_state_source(
 
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
     file_paths = [item["path"] for item in manifest["files"]]
-    assert result["promotionMode"] == "agent_refactor"
+    assert result["promotionMode"] == "agent_paper_contract"
     assert "runtime/initial-state/strategy/model/latest.joblib" in file_paths
     assert "runtime/initial-state/strategy/paper_state.json" in file_paths
     assert not any(path.startswith("strategy/.abel-runtime/") for path in file_paths)
 
 
-def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
+def test_export_selected_strategy_artifact_agent_paper_contracts_dynamic_state_path(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
@@ -3893,7 +3923,7 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
     )
 
     assert first_result["artifactExported"] is False
-    assert first_result["skipReason"] == "hosted_paper_rewrite_required"
+    assert first_result["skipReason"] == "hosted_paper_contract_required"
     request_path = Path(first_result["promotionReport"]["requestPath"])
     assert request_path.exists()
 
@@ -3922,13 +3952,14 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
         "        return {'next_position': 1.0, 'date': str(as_of)}\n",
         encoding="utf-8",
     )
-    (promoted_dir / "refactor-report.json").write_text(
+    (promoted_dir / "paper-contract-report.json").write_text(
         json.dumps(
             {
-                "schema": "abel-invest.agent-refactor-report/v1",
-                "kind": "hosted_paper_rewrite",
+                "schema": "abel-invest.agent-paper-contract-report/v1",
+                "kind": "hosted_paper_contract",
                 "summary": "Agent moved model paths onto ctx.state_dir.",
-                "scope": "hosted_paper_rewrite",
+                "scope": "hosted_paper_contract",
+                "sourceEdit": _source_edit("stateful_continuation"),
                 "paths": {
                     "packagedFiles": [],
                     "initialStateFiles": [
@@ -3976,10 +4007,10 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
 
     assert result["artifactExported"] is True
     assert result["skipReason"] == ""
-    assert result["promotionMode"] == "agent_refactor"
+    assert result["promotionMode"] == "agent_paper_contract"
     manifest = json.loads(Path(result["manifestPath"]).read_text(encoding="utf-8"))
-    assert manifest["promotion"]["mode"] == "agent_refactor"
-    assert manifest["promotion"]["refactor"]["kind"] == "hosted_paper_rewrite"
+    assert manifest["promotion"]["mode"] == "agent_paper_contract"
+    assert manifest["promotion"]["contract"]["kind"] == "hosted_paper_contract"
     assert manifest["promotion"]["gate"] == {
         "status": "passed",
         "evidencePath": "edge/promotion-gate.json",
@@ -3987,7 +4018,7 @@ def test_export_selected_strategy_artifact_agent_refactors_dynamic_state_path(
     file_paths = [item["path"] for item in manifest["files"]]
     assert "edge/promotion-gate.json" in file_paths
     assert "edge/promotion.patch" in file_paths
-    assert "edge/refactor-report.json" in file_paths
+    assert "edge/paper-contract-report.json" in file_paths
     assert "runtime/initial-state/strategy/model/latest.joblib" in file_paths
     assert "runtime/initial-state/strategy/model/feature_scaler.json" in file_paths
     assert "runtime/initial-state/strategy/paper_state.json" in file_paths
@@ -4374,7 +4405,7 @@ def test_visualize_session_uploads_strategy_artifact_by_default(
     assert "router admission continues asynchronously" in output
 
 
-def test_visualize_session_aborts_before_upload_when_agent_refactor_fails(
+def test_visualize_session_aborts_before_upload_when_agent_paper_contract_fails(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -4392,12 +4423,12 @@ def test_visualize_session_aborts_before_upload_when_agent_refactor_fails(
         lambda *args, **kwargs: {
             "artifactExported": False,
             "artifactUploadSkipped": True,
-            "skipReason": "hosted_paper_rewrite_required",
-            "promotionMode": "hosted_paper_rewrite_required",
+            "skipReason": "hosted_paper_contract_required",
+            "promotionMode": "hosted_paper_contract_required",
             "promotionReport": {
-                "mode": "hosted_paper_rewrite_required",
-                "reason": "dynamic state path requires refactor",
-                "requestPath": str(tmp_path / "refactor-request.json"),
+                "mode": "hosted_paper_contract_required",
+                "reason": "dynamic state path requires paper contract",
+                "requestPath": str(tmp_path / "paper-contract-request.json"),
             },
         },
     )
@@ -4412,7 +4443,7 @@ def test_visualize_session_aborts_before_upload_when_agent_refactor_fails(
         unexpected_post_session,
     )
 
-    with pytest.raises(RuntimeError, match="hosted paper rewrite"):
+    with pytest.raises(RuntimeError, match="hosted paper contract"):
         ni.upload_skill_dashboard_session(
             Namespace(
                 session=str(session),

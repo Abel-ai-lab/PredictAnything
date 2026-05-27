@@ -248,9 +248,10 @@ session visualization.
 
 Use `visualize-session --without-strategy-artifact` only when the user explicitly
 asks for a session view without strategy artifact upload. If the command emits a
-hosted paper `refactor-request.json`, read `references/hosted-paper-rewrite.md`
-and handle it in the current skill loop. Edit only the
-promoted copy, write `refactor-report.json`, and rerun the same command. Do not
+hosted paper `paper-contract-request.json`, read
+`references/hosted-paper-contract.md` and handle it in the current skill loop.
+Edit source only when `sourceEditPolicy` requires or genuinely allows it, write
+`paper-contract-report.json`, and rerun the same command. Do not
 start a separate agent process. The agent should not hand-assemble the payload
 or choose a router URL.
 

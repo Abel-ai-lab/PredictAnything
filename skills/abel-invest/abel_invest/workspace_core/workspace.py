@@ -447,10 +447,10 @@ session view automatically; when the exploration is mature enough for review,
 ask the user first. If the user agrees or explicitly asks to publish the session
 view, `visualize-session --session <session>` builds the view from the session
 folder and attaches the selected hostable validation strategy artifact when one
-is available. If the command emits a hosted paper `refactor-request.json`, edit
-only the promoted copy named there when the strategy needs stateful
-continuation; stateless strategies usually only need a paper history boundary
-declared in `refactor-report.json`. Rerun the same command afterward. Do not
+is available. If the command emits a hosted paper `paper-contract-request.json`,
+read its `contractGuide`, edit only when `sourceEditPolicy` says a source edit
+is required or genuinely allowed, and declare the paper history boundary in
+`paper-contract-report.json`. Rerun the same command afterward. Do not
 start a separate agent process. Use
 `--without-strategy-artifact` only for narrative-only views.
 This workspace is for alpha-managed strategy search, so do not create a

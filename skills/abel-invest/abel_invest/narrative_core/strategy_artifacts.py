@@ -28,13 +28,13 @@ from abel_invest.narrative_core.contracts.paths import (
 from abel_invest.narrative_core.io import _now, read_tsv_rows
 from abel_invest.narrative_core.promotion import (
     PROMOTION_GATE_FILENAME,
-    PROMOTION_HOSTED_REWRITE_SCOPE,
-    PROMOTION_MODE_AGENT_REFACTOR,
-    PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED,
+    PROMOTION_HOSTED_CONTRACT_SCOPE,
+    PROMOTION_MODE_AGENT_PAPER_CONTRACT,
+    PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED,
     PROMOTION_MODE_ZERO_CHANGE,
     PROMOTION_PATCH_FILENAME,
-    PROMOTION_REFACTOR_REPORT_FILENAME,
-    PROMOTION_REFACTOR_REQUEST_FILENAME,
+    PROMOTION_CONTRACT_REPORT_FILENAME,
+    PROMOTION_CONTRACT_REQUEST_FILENAME,
     PromotionHostedPaperRewriteRequired,
     PromotionResult,
     prepare_promotion,
@@ -139,7 +139,8 @@ STALE_STRATEGY_ARTIFACT_FILES = (
 )
 STALE_PROMOTED_GENERATED_FILES = (
     PROMOTION_PATCH_FILENAME,
-    "refactor-report.artifact.json",
+    "paper-contract-report.artifact.json",
+    "paper-contract-report.artifact.json",
 )
 
 
@@ -611,14 +612,14 @@ def _prepare_promotion_for_export(
             runtime_env=_runtime_env(candidate.branch),
         )
     except PromotionHostedPaperRewriteRequired as exc:
-        request_path = _promotion_refactor_request_path(destination)
+        request_path = _promotion_contract_request_path(destination)
         result = _artifact_skip_result(
-            PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED,
+            PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED,
             selection=selection,
         )
-        result["promotionMode"] = PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED
+        result["promotionMode"] = PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED
         result["promotionReport"] = {
-            "mode": PROMOTION_STATUS_HOSTED_PAPER_REWRITE_REQUIRED,
+            "mode": PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED,
             "reason": str(exc),
         }
         if request_path.is_file():
@@ -629,8 +630,8 @@ def _prepare_promotion_for_export(
         return result
 
 
-def _promotion_refactor_request_path(destination: Path) -> Path:
-    return destination / "promoted" / "refactor-request.json"
+def _promotion_contract_request_path(destination: Path) -> Path:
+    return destination / "promoted" / PROMOTION_CONTRACT_REQUEST_FILENAME
 
 
 def export_strategy_artifact_command(args) -> int:
@@ -845,7 +846,7 @@ def _cleanup_stale_strategy_artifact_outputs(
     elif legacy_session_artifact.exists():
         legacy_session_artifact.unlink()
 
-    active_refactor = _destination_has_active_agent_refactor(destination)
+    active_contract = _destination_has_active_agent_contract(destination)
     for name in STALE_STRATEGY_ARTIFACT_FILES:
         path = destination / name
         if path.is_file() or path.is_symlink():
@@ -853,7 +854,7 @@ def _cleanup_stale_strategy_artifact_outputs(
     promoted_dir = destination / "promoted"
     if not promoted_dir.exists():
         return
-    if not active_refactor:
+    if not active_contract:
         shutil.rmtree(promoted_dir)
         return
     for name in STALE_PROMOTED_GENERATED_FILES:
@@ -862,10 +863,10 @@ def _cleanup_stale_strategy_artifact_outputs(
             path.unlink()
 
 
-def _destination_has_active_agent_refactor(destination: Path) -> bool:
+def _destination_has_active_agent_contract(destination: Path) -> bool:
     promoted_dir = destination / "promoted"
     promoted_source = promoted_dir / "engine.py"
-    report = promoted_dir / PROMOTION_REFACTOR_REPORT_FILENAME
+    report = promoted_dir / PROMOTION_CONTRACT_REPORT_FILENAME
     if not promoted_source.is_file() or not report.is_file():
         return False
     gate_status = _promotion_gate_status(destination / PROMOTION_GATE_FILENAME)
@@ -1177,14 +1178,14 @@ def _manifest_promotion_payload(
             else None,
         },
     }
-    if mode == PROMOTION_MODE_AGENT_REFACTOR:
-        payload["refactor"] = {
-            "kind": PROMOTION_HOSTED_REWRITE_SCOPE,
-            "summary": promotion.report.get("refactorSummary")
+    if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
+        payload["contract"] = {
+            "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
+            "summary": promotion.report.get("contractSummary")
             if promotion is not None
-            else "Agent refactored the strategy for hosted paper.",
+            else "Agent declared the hosted paper contract.",
             "patchPath": f"edge/{PROMOTION_PATCH_FILENAME}",
-            "reportPath": f"edge/{PROMOTION_REFACTOR_REPORT_FILENAME}",
+            "reportPath": f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}",
         }
     return payload
 
@@ -1219,13 +1220,13 @@ def _required_artifact_source_files(
         files.append((f"edge/{PROMOTION_GATE_FILENAME}", promotion.gate_path))
         if promotion.patch_path is not None:
             files.append((f"edge/{PROMOTION_PATCH_FILENAME}", promotion.patch_path))
-        if promotion.mode == PROMOTION_MODE_AGENT_REFACTOR:
-            if promotion.refactor_report_path is None:
-                raise RuntimeError("agent_refactor promotion is missing refactor evidence")
+        if promotion.mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
+            if promotion.contract_report_path is None:
+                raise RuntimeError("agent_paper_contract promotion is missing contract evidence")
             files.append(
                 (
-                    f"edge/{PROMOTION_REFACTOR_REPORT_FILENAME}",
-                    promotion.refactor_report_path,
+                    f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}",
+                    promotion.contract_report_path,
                 )
             )
         for artifact_path, source_path in sorted(promotion.extra_source_map.items()):

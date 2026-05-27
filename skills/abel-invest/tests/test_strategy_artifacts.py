@@ -13,7 +13,7 @@ from abel_invest.narrative_core.promotion import (
     _paper_tail_selection_reason,
     _select_paper_tail_oracle_sample,
     _validate_agent_paper_signal_contract,
-    _write_hosted_paper_rewrite_request,
+    _write_hosted_paper_contract_request,
 )
 from abel_invest.narrative_core.strategy_artifact_upload import (
     render_strategy_artifact_upload_lines,
@@ -225,7 +225,7 @@ def test_artifact_export_cleanup_removes_legacy_and_completed_outputs(tmp_path):
         encoding="utf-8",
     )
     (promoted / "engine.py").write_text("class BranchEngine: pass\n", encoding="utf-8")
-    (promoted / "refactor-report.json").write_text("{}", encoding="utf-8")
+    (promoted / "paper-contract-report.json").write_text("{}", encoding="utf-8")
 
     _cleanup_stale_strategy_artifact_outputs(
         SimpleNamespace(session=session),
@@ -237,7 +237,7 @@ def test_artifact_export_cleanup_removes_legacy_and_completed_outputs(tmp_path):
     assert not promoted.exists()
 
 
-def test_artifact_export_cleanup_preserves_active_agent_refactor(tmp_path):
+def test_artifact_export_cleanup_preserves_active_agent_contract(tmp_path):
     session = tmp_path / "research" / "meta" / "session"
     session.mkdir(parents=True)
     destination = tmp_path / "artifact"
@@ -249,7 +249,7 @@ def test_artifact_export_cleanup_preserves_active_agent_refactor(tmp_path):
         encoding="utf-8",
     )
     (promoted / "engine.py").write_text("class BranchEngine: pass\n", encoding="utf-8")
-    (promoted / "refactor-report.json").write_text("{}", encoding="utf-8")
+    (promoted / "paper-contract-report.json").write_text("{}", encoding="utf-8")
     (promoted / "promotion.patch").write_text("old patch", encoding="utf-8")
 
     _cleanup_stale_strategy_artifact_outputs(
@@ -259,11 +259,11 @@ def test_artifact_export_cleanup_preserves_active_agent_refactor(tmp_path):
 
     assert not (destination / "artifact.zip").exists()
     assert (promoted / "engine.py").is_file()
-    assert (promoted / "refactor-report.json").is_file()
+    assert (promoted / "paper-contract-report.json").is_file()
     assert not (promoted / "promotion.patch").exists()
 
 
-def test_rewrite_request_is_slim_and_marks_training_stateful(tmp_path):
+def test_contract_request_is_slim_and_marks_training_stateful(tmp_path):
     branch = tmp_path / "branch"
     promoted = tmp_path / "artifact" / "promoted"
     promoted.mkdir(parents=True)
@@ -271,7 +271,7 @@ def test_rewrite_request_is_slim_and_marks_training_stateful(tmp_path):
     source = promoted / "engine.py"
     source.write_text("class BranchEngine: pass\n", encoding="utf-8")
 
-    request_path = _write_hosted_paper_rewrite_request(
+    request_path = _write_hosted_paper_contract_request(
         promoted,
         branch=branch,
         source_path=source,
@@ -291,7 +291,7 @@ def test_rewrite_request_is_slim_and_marks_training_stateful(tmp_path):
     payload = json.loads(request_path.read_text(encoding="utf-8"))
     assert payload["requirements"]["statefulContinuationRequired"] is True
     assert payload["requirements"]["continuationMethod"] == "stateful_continuation"
-    assert "rewriteGuide" in payload
+    assert "contractGuide" in payload
     assert "reportContract" not in payload
     assert "gateContract" not in payload
     assert "runtimeApiFacts" not in payload
@@ -340,9 +340,9 @@ def test_tail_oracle_sample_expands_to_recent_position_change():
 
 def test_ml_training_source_rejects_stateless_recompute_report():
     report = {
-        "schema": "abel-invest.agent-refactor-report/v1",
-        "kind": "hosted_paper_rewrite",
-        "scope": "hosted_paper_rewrite",
+        "schema": "abel-invest.agent-paper-contract-report/v1",
+        "kind": "hosted_paper_contract",
+        "scope": "hosted_paper_contract",
         "summary": "paper signal",
         "paths": {"packagedFiles": [], "initialStateFiles": []},
         "paperSignal": {
@@ -406,9 +406,9 @@ class BranchEngine:
 
 def _stateful_training_report(*, state_reason: str) -> dict:
     return {
-        "schema": "abel-invest.agent-refactor-report/v1",
-        "kind": "hosted_paper_rewrite",
-        "scope": "hosted_paper_rewrite",
+        "schema": "abel-invest.agent-paper-contract-report/v1",
+        "kind": "hosted_paper_contract",
+        "scope": "hosted_paper_contract",
         "summary": "stateful paper signal",
         "paths": {
             "packagedFiles": [],
@@ -516,7 +516,7 @@ def test_ml_training_stateful_accepts_fitted_object_state_evidence():
     )
 
 
-def test_rewrite_request_budget_can_open_fallback_before_third_live_failure(tmp_path):
+def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp_path):
     branch = tmp_path / "branch"
     promoted = tmp_path / "artifact" / "promoted"
     promoted.mkdir(parents=True)
@@ -528,7 +528,7 @@ def test_rewrite_request_budget_can_open_fallback_before_third_live_failure(tmp_
     }
     validation_failure = {"failedGates": [{"name": "paper_dry_run"}]}
 
-    request_path = _write_hosted_paper_rewrite_request(
+    request_path = _write_hosted_paper_contract_request(
         promoted,
         branch=branch,
         source_path=source,
@@ -536,10 +536,10 @@ def test_rewrite_request_budget_can_open_fallback_before_third_live_failure(tmp_
         signals=[],
     )
     payload = json.loads(request_path.read_text(encoding="utf-8"))
-    assert payload["attemptPolicy"]["rewriteRequestRefreshes"] == 1
+    assert payload["attemptPolicy"]["contractRequestRefreshes"] == 1
     assert payload["attemptPolicy"]["fullReplayFallbackEligible"] is False
 
-    _write_hosted_paper_rewrite_request(
+    _write_hosted_paper_contract_request(
         promoted,
         branch=branch,
         source_path=source,
@@ -547,7 +547,7 @@ def test_rewrite_request_budget_can_open_fallback_before_third_live_failure(tmp_
         signals=[],
         validation_failure=validation_failure,
     )
-    request_path = _write_hosted_paper_rewrite_request(
+    request_path = _write_hosted_paper_contract_request(
         promoted,
         branch=branch,
         source_path=source,
@@ -556,7 +556,7 @@ def test_rewrite_request_budget_can_open_fallback_before_third_live_failure(tmp_
         validation_failure=validation_failure,
     )
     payload = json.loads(request_path.read_text(encoding="utf-8"))
-    assert payload["attemptPolicy"]["liveRewriteFailures"] == 2
-    assert payload["attemptPolicy"]["rewriteRequestRefreshes"] == 3
+    assert payload["attemptPolicy"]["liveContractFailures"] == 2
+    assert payload["attemptPolicy"]["contractRequestRefreshes"] == 3
     assert payload["attemptPolicy"]["fullReplayFallbackEligible"] is True
-    assert payload["attemptPolicy"]["fallbackEligibilityReason"] == "rewrite_request_budget"
+    assert payload["attemptPolicy"]["fallbackEligibilityReason"] == "contract_request_budget"
