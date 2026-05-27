@@ -44,11 +44,22 @@ Visible layer:
 - challenge section
 - action / implication section
 
+Visible answer shapes:
+
+- candidate discovery: company/sector/asset names and tickers such as `TSLA`
+  are allowed when they are the candidates the user asked for; raw node ids such
+  as `TSLA.price` are not
+- direct graph read: answer the graph fact in human-readable form and translate
+  supporting nodes into company, sector, product, or economic-role labels
+- life investment decision: stay ticker-free and state what the graph cannot
+  see about the user's personal constraints
+
 Internal notes stay internal by default:
 - raw graph identifiers
 - raw market symbols used only as proxy anchors
 - graph paths and verb payload details
-- numeric prediction outputs
+- numeric model outputs
+- tool result references such as `turn6finance0`
 - temporary analysis or labeling notes
 
 Only expose these details when the user explicitly asks for trace, evidence details, debug output, reproducibility, raw payloads, or raw output.
@@ -60,16 +71,18 @@ If the user asked their question using a raw node id such as `TSLA.price`, treat
 
 ## Allowed Exceptions
 
-Ticker names are allowed in visible prose only when the user's question is explicitly about that named asset, for example:
+Ticker names are allowed in visible prose only when the user's question is explicitly about that named asset or asks for market candidates, for example:
 
 - "what drives NVDA"
 - "should I buy BTC"
 - "what happens to XOM if..."
+- "which stocks benefit from AI datacenter expansion?"
 
 Even then:
 
 - keep supporting mechanisms semantic where possible
-- keep raw node ids and prediction decimals out of normal visible prose
+- keep raw node ids and model decimals out of normal visible prose
+- keep strategy-validation claims out of Abel Ask; route those to Abel Invest
 - raw-output exceptions are only for explicit trace/debug/evidence/reproducibility/raw-payload/raw-output requests
 
 ## Guard Workflow
@@ -100,7 +113,8 @@ python scripts/render_guard.py \
 What the guard checks:
 
 - raw node ids like `NVDA.price`
-- signed prediction decimals like `-0.0013`
+- signed model decimals like `-0.0013`
+- tool result references like `turn6finance0`
 - explicit forbidden raw tickers from your shortlist
 
 ## Fast Self-Check

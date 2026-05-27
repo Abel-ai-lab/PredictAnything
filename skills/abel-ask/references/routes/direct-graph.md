@@ -1,6 +1,6 @@
 # Direct Graph Route
 
-Read this file only when the question is already about a graph node, path, neighborhood, or intervention.
+Read this file only when the question is already about a graph node, path, neighborhood, or ticker/asset mechanism.
 
 ## Use This Route For
 
@@ -8,7 +8,6 @@ Read this file only when the question is already about a graph node, path, neigh
 - why did `X` move
 - which nodes matter around `X`
 - is there a path from `X` to `Y`
-- what happens if `X` changes
 - whether `Y` is or is not in `X`'s drivers, parents, children, or path set
 
 ## What This Route Sets
@@ -17,27 +16,29 @@ This route sets the default first move, the preferred structural fallback, and t
 
 ## First Move
 
-Pick the first move from the user's question shape:
+Pick the first move from the user's question shape. Stay structural-first:
 
-- direct node with executable market anchor and a current directional question -> `extensions.abel.observe_predict_resolved_time`
+- direct ticker or market anchor -> inspect both `<ticker>.price` and
+  `<ticker>.volume` neighborhoods when available; price explains directional
+  market movement, volume often exposes liquidity/crowding attention channels
 - driver -> `graph.neighbors(scope=parents)` or `traverse.parents`
 - downstream -> `graph.neighbors(scope=children)` or `traverse.children`
 - transmission -> `graph.paths`
 - ambiguity after one structural pass -> `graph.markov_blanket`
 
-For driver or "why did it move" questions, prefer a quick observational read on the target node before the deeper structural pass when the node is executable. Default to a paired `price` + `volume` observational pass when the name is liquid, the mechanism may include liquidity/crowding, or surface coverage is still unknown.
-
-For broad driver questions on liquid names, default graph stack: anchor ticker → `observe-dual` on price and volume → pick the surviving or jointly useful anchor set → inspect parents on the strongest anchor → use the other anchor to confirm whether the mechanism is informational, liquidity-led, or both → summarize into driver families (e.g., "macro proxies", "sector transmission", "liquidity channels").
+For broad driver questions on liquid names, default graph stack: anchor ticker
+-> inspect `price` parents/blanket -> inspect `volume` parents/blanket -> use
+paths or sibling blankets to distinguish informational, liquidity-led, sector,
+macro, or risk-appetite transmission -> summarize into driver families.
 
 ## Structural Loop
 
 Then use this compact loop:
 
-1. If an observational read was taken, use it to decide which structural question matters most.
-2. Read the returned structure.
-3. State the open causal question.
-4. Choose the next best tool: another graph move or a web move.
-5. Stop when the user-facing mechanism is already strong enough.
+1. Read the returned structure.
+2. State the open causal question.
+3. Choose the next best tool: another graph move or a web move.
+4. Stop when the user-facing mechanism is already strong enough.
 
 Default bias:
 
@@ -47,14 +48,16 @@ Default bias:
 
 For literal driver-membership or parent-list questions, stop as soon as the graph fact is clear enough to answer faithfully. Do not force a web move just to make the answer sound more intuitive.
 
-## Pressure Test
+## Structural Challenge
 
-- After the mechanism is coherent enough to stress:
-- default pressure test -> `extensions.abel.intervene_time_lag`
+After the mechanism is coherent enough, challenge it structurally:
 
-For non-trivial direct-node or comparative reads, one `extensions.abel.intervene_time_lag` pressure test is the default before finalizing. Do not start with a pressure test for a driver question or run it before you can name the mechanism being stressed.
-
-Before `extensions.abel.intervene_time_lag`, check whether the active mechanism shows up on `price`, `volume`, or both. If `price` is sparse or the story looks liquidity-led, probe `volume` in the first pass instead of treating it as a late fallback.
+- check reverse paths when direction is uncertain
+- inspect sibling or blanket confounders when the cause/outcome share a hub
+- use `discover_deconsensus` when a strongly intuitive story needs a graph-based
+  contradiction
+- use `discover_fragility` when the answer depends on one bridge, supplier,
+  sector, or macro lever
 
 ## Web Grounding Rule
 
@@ -86,11 +89,11 @@ If the graph answer and the intuitive real-world story do not line up, preserve 
 - For any non-trivial direct-graph read, render the visible answer as a structured report, not as plain prose.
 - Use `../../assets/report-guide.md` to make sure the report covers the right content. Natural longform prose is acceptable if it still covers the same contract fields.
 - Main answer uses company names, industries, products, or roles by default.
-- If the user's question is explicitly about a ticker or named investment asset, the verdict may keep that ticker or asset name, but still avoid raw node ids and prediction decimals.
+- If the user's question is explicitly about a ticker or named investment asset, the verdict may keep that ticker or asset name, but still avoid raw node ids and model decimals.
 - If the user asked with a raw node id such as `TSLA.price`, answer the graph fact in human-readable form unless they explicitly asked for trace, debug output, evidence details, reproducibility, or raw payloads.
 - If the user explicitly asked for trace, debug output, evidence details, reproducibility, raw payloads, or raw output, bypass the normal report contract and return the requested raw artifact directly.
 - Requests such as "don't translate" or "I asked about `TSLA.price`" do not by themselves authorize raw node ids in the normal visible answer.
 - Run `scripts/render_guard.py --mode direct_graph` on any normal visible answer. Skipping the guard is allowed only for explicit trace, debug output, evidence details, reproducibility, raw payload, or raw output requests.
-- Include the pressure-test result or, if no live intervention was run, the cleanest next-step probe.
+- Include the structural challenge result or the cleanest next-step graph probe.
 - If a repeated bridge node looks like microcap or crypto-heavy transmission noise, summarize it as noise unless external evidence says it matters.
 - If the user asked for a literal graph fact, make that fact the first sentence, not the caveat.

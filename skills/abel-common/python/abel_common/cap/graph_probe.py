@@ -70,6 +70,13 @@ COMMANDS = {
     "verb",
     "route",
 }
+HIDDEN_COMMANDS = {
+    "observe",
+    "observe-dual",
+    "intervene-do",
+    "counterfactual-preview",
+    "intervene-time-lag",
+}
 
 SUPPORTED_NODE_SUFFIXES = {"price", "volume"}
 COMMON_CRYPTO_ALIASES = {
@@ -955,7 +962,7 @@ def _maybe_add_graph_version_retry_hint(result: dict[str, Any]) -> dict[str, Any
     return enriched
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(*, include_hidden: bool = False) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Probe Abel CAP server verbs as atomic operations."
     )
@@ -1043,23 +1050,24 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     methods.set_defaults(func=_cmd_methods)
 
-    observe = sub.add_parser(
-        "observe",
-        help="Call observe.predict.",
-        epilog=GLOBAL_ENVELOPE_HELP,
-    )
-    observe.add_argument("target_node")
-    observe.set_defaults(func=_cmd_observe)
+    if include_hidden:
+        observe = sub.add_parser(
+            "observe",
+            help="Call observe.predict.",
+            epilog=GLOBAL_ENVELOPE_HELP,
+        )
+        observe.add_argument("target_node")
+        observe.set_defaults(func=_cmd_observe)
 
-    observe_dual = sub.add_parser(
-        "observe-dual",
-        help=(
-            "Probe both <ticker>.price and <ticker>.volume with "
-            "extensions.abel.observe_predict_resolved_time and recommend the first-pass anchor."
-        ),
-    )
-    observe_dual.add_argument("target_node")
-    observe_dual.set_defaults(func=_cmd_observe_dual)
+        observe_dual = sub.add_parser(
+            "observe-dual",
+            help=(
+                "Probe both <ticker>.price and <ticker>.volume with "
+                "extensions.abel.observe_predict_resolved_time and recommend the first-pass anchor."
+            ),
+        )
+        observe_dual.add_argument("target_node")
+        observe_dual.set_defaults(func=_cmd_observe_dual)
 
     neighbors = sub.add_parser(
         "neighbors",
@@ -1130,20 +1138,21 @@ def _build_parser() -> argparse.ArgumentParser:
     graph_blanket.add_argument("--max-neighbors", type=int, default=10)
     graph_blanket.set_defaults(func=_cmd_markov_blanket)
 
-    intervene_do = sub.add_parser(
-        "intervene-do",
-        help="Check graph.paths, then call intervene.do when supported.",
-    )
-    intervene_do.add_argument("treatment_node")
-    intervene_do.add_argument("treatment_value", type=float)
-    intervene_do.add_argument("--outcome-node", required=True)
-    intervene_do.add_argument(
-        "--max-paths",
-        type=int,
-        default=3,
-        help="Maximum paths requested for the required structural check.",
-    )
-    intervene_do.set_defaults(func=_cmd_intervene_do)
+    if include_hidden:
+        intervene_do = sub.add_parser(
+            "intervene-do",
+            help="Check graph.paths, then call intervene.do when supported.",
+        )
+        intervene_do.add_argument("treatment_node")
+        intervene_do.add_argument("treatment_value", type=float)
+        intervene_do.add_argument("--outcome-node", required=True)
+        intervene_do.add_argument(
+            "--max-paths",
+            type=int,
+            default=3,
+            help="Maximum paths requested for the required structural check.",
+        )
+        intervene_do.set_defaults(func=_cmd_intervene_do)
 
     traverse_parents = sub.add_parser("traverse-parents", help="Call traverse.parents.")
     traverse_parents.add_argument("node_id")
@@ -1163,33 +1172,35 @@ def _build_parser() -> argparse.ArgumentParser:
     abel_blanket.add_argument("target_node")
     abel_blanket.set_defaults(func=_cmd_abel_markov_blanket)
 
-    cf_preview = sub.add_parser(
-        "counterfactual-preview", help="Call extensions.abel.counterfactual_preview."
-    )
-    cf_preview.add_argument("--intervene-node", required=True)
-    cf_preview.add_argument("--intervene-time", required=True)
-    cf_preview.add_argument("--observe-node", required=True)
-    cf_preview.add_argument("--observe-time", required=True)
-    cf_preview.add_argument("--intervene-new-value", required=True, type=float)
-    cf_preview.set_defaults(func=_cmd_counterfactual_preview)
+    if include_hidden:
+        cf_preview = sub.add_parser(
+            "counterfactual-preview",
+            help="Call extensions.abel.counterfactual_preview.",
+        )
+        cf_preview.add_argument("--intervene-node", required=True)
+        cf_preview.add_argument("--intervene-time", required=True)
+        cf_preview.add_argument("--observe-node", required=True)
+        cf_preview.add_argument("--observe-time", required=True)
+        cf_preview.add_argument("--intervene-new-value", required=True, type=float)
+        cf_preview.set_defaults(func=_cmd_counterfactual_preview)
 
-    time_lag = sub.add_parser(
-        "intervene-time-lag",
-        help=(
-            "Call extensions.abel.intervene_time_lag. Accepts the outcome "
-            "node as either the third positional argument or --outcome-node."
-        ),
-    )
-    time_lag.add_argument("treatment_node")
-    time_lag.add_argument("treatment_value", type=float)
-    time_lag.add_argument("outcome_node_positional", nargs="?", metavar="outcome_node")
-    time_lag.add_argument(
-        "--outcome-node",
-        help="Outcome node. Optional if supplied as the third positional argument.",
-    )
-    time_lag.add_argument("--horizon-steps", type=int, default=24)
-    time_lag.add_argument("--model", default="linear")
-    time_lag.set_defaults(func=_cmd_intervene_time_lag)
+        time_lag = sub.add_parser(
+            "intervene-time-lag",
+            help=(
+                "Call extensions.abel.intervene_time_lag. Accepts the outcome "
+                "node as either the third positional argument or --outcome-node."
+            ),
+        )
+        time_lag.add_argument("treatment_node")
+        time_lag.add_argument("treatment_value", type=float)
+        time_lag.add_argument("outcome_node_positional", nargs="?", metavar="outcome_node")
+        time_lag.add_argument(
+            "--outcome-node",
+            help="Outcome node. Optional if supplied as the third positional argument.",
+        )
+        time_lag.add_argument("--horizon-steps", type=int, default=24)
+        time_lag.add_argument("--model", default="linear")
+        time_lag.set_defaults(func=_cmd_intervene_time_lag)
 
     generic_verb = sub.add_parser(
         "verb", help="Call an arbitrary CAP verb with optional JSON params."
@@ -1249,8 +1260,9 @@ def _normalize_argv(argv: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = _build_parser()
     raw_argv = list(argv or sys.argv[1:])
+    include_hidden = any(token in HIDDEN_COMMANDS for token in raw_argv)
+    parser = _build_parser(include_hidden=include_hidden)
     try:
         argv = _normalize_argv(raw_argv)
     except ValueError as exc:

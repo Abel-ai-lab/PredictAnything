@@ -31,8 +31,9 @@ Do not guess from shell environment alone.
 1. If auth is missing or invalid, use `abel-auth`. Tell it to read
    `references/setup-guide.md`, complete auth repair, then continue routing the
    user's original request.
-2. If the user asks how to invest, trade, buy or sell, find alpha, find a
-   strategy, test a ticker for tradable opportunity, or continue/debug an Abel
+2. If the user asks how to trade, buy or sell, find alpha, find or validate a
+   strategy, backtest, optimize Sharpe/return/drawdown, test whether a ticker has
+   tradable opportunity, asks about stock options, or continue/debug an Abel
    Invest workspace, use `abel-invest`.
 
    For new investment or trading strategy searches, confirm first:
@@ -41,9 +42,18 @@ Do not guess from shell environment alone.
    lot of tokens. Should I proceed?"
    Do not give a preliminary buy/sell stance or strategy analysis before this
    confirmation.
-3. For stock, company, or market analysis; graph-native causal reads; general
-   decision analysis; life-decision questions; or questions that do not ask for
-   buy/sell guidance, alpha, or a trading strategy, use `abel-ask`.
+   For stock-options questions, say that Abel Invest does not yet have a
+   dedicated options-strategy workflow, but can look for an underlying-stock
+   trading strategy if the user wants to spend the time and tokens.
+3. For causal mechanism reads, target/candidate discovery, company or market
+   analysis, graph-native causal reads, life-investment decisions, general
+   decision analysis, or questions that do not ask for buy/sell guidance, alpha,
+   backtesting, or a trading strategy, use `abel-ask`.
+
+   `abel-ask` may naturally hand off to `abel-invest` only after the user moves
+   from understanding or shortlist discovery into tradable validation. Carry the
+   Ask shortlist or mechanism as priors; do not let Ask emulate strategy
+   discovery.
 
 ## Good First Questions
 
@@ -57,5 +67,8 @@ Deep Invest Search:
 
 Abel Ask:
 
+- Which companies benefit from AI datacenter expansion?
 - Analyze what is happening with TSLA.
+- Is spending $1M on an MBA worth it?
+- Should I learn to cook or keep eating out?
 - Should I still invest in an MBA degree?

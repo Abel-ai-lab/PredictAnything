@@ -2,7 +2,12 @@
 
 Read this file when the current unknown is better answered by external evidence than by another graph move.
 
-Search is a peer tool inside the loop, but not the dominant one. Graph structure stays primary. If web evidence suggests a more intuitive narrative than the graph result, do NOT overwrite the graph answer — state the L2 graph finding first, then label the web evidence as explanation, validation, or unresolved tension. Web narratives are L0; graph observations are L2. L2 takes precedence in the verdict.
+Search is a peer tool inside the loop, but not the dominant one. Graph structure
+stays primary when coverage is clear. If web evidence suggests a more intuitive
+narrative than the graph result, do not overwrite the graph answer. State the
+structural graph finding first, then label the web evidence as explanation,
+validation, or unresolved tension. In graph-sparse areas, web evidence can be
+primary, but its lower confidence must be visible.
 
 ## Source Hierarchy
 

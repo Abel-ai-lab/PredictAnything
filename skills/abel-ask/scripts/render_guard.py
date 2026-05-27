@@ -10,6 +10,7 @@ from pathlib import Path
 
 NODE_ID_RE = re.compile(r"\b[A-Z0-9][A-Z0-9-]{0,11}\.(?:price|volume)\b")
 SIGNED_DECIMAL_RE = re.compile(r"(?<!\w)[+-](?:\d+\.\d{3,}|0\.\d{3,})\b")
+TOOL_REF_RE = re.compile(r"\bturn\d+[A-Za-z_]*\d+\b")
 
 
 def _read_text(path: str | None) -> str:
@@ -47,6 +48,7 @@ def main() -> int:
     violations: list[tuple[str, str, int, int]] = []
     violations.extend(_iter_matches(NODE_ID_RE, text, "raw_node_id"))
     violations.extend(_iter_matches(SIGNED_DECIMAL_RE, text, "signed_prediction_decimal"))
+    violations.extend(_iter_matches(TOOL_REF_RE, text, "tool_result_reference"))
 
     if args.mode == "proxy_routed":
         for token in args.forbid_token:

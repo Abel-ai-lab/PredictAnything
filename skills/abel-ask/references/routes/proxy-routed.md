@@ -5,38 +5,63 @@ Read this file only after `SKILL.md` has already fixed:
 - the request is `proxy_routed`
 - auth is available
 - the decision horizon is not in structural-only mode
-- L0 hypotheses already exist
+- initial mechanisms already exist
 
 This file is the active workflow for `proxy_routed` reads.
 
-## Step 3: Screen + Discover (L0.5)
+`proxy_routed` is an execution route, not a product intent. Candidate discovery,
+life-investment decisions, and general causal reads often use this route because
+the user did not start with a graph-ready node.
+
+## Screen + Discover
 
 ### 3a. Structural screening
 
-Map mechanisms to executable anchors (manual -> narrative CAP when helpful -> `query_node` -> capillary discovery). After `query_node`, inspect `node_kind` before choosing the next verb.
+Map mechanisms to graph or market anchors in this order:
 
-When the prompt is broad-theme, shortlist-first, or still anchor-sparse, narrative CAP is not optional seasoning; it is the first scout pass. Run `narrative_cap_probe.py query-node` after query rewrite, or `narrative_cap_probe.py narrate` when the candidate is already concrete, before you expand into `graph.paths`, `discover_*`, or broad web search. Escalate to `search_prepare` only when you need session or graph handles for a deeper follow-up. Treat `explain_outcome`, `focus_execution`, `predict`, and `what_if` as advanced follow-ons, not default first-pass tools.
+1. Write the mechanism in plain language.
+2. Identify the economic function you need to represent.
+3. Use narrative CAP when it helps find candidate anchors, especially for broad
+   themes.
+4. Use `query_node` when the anchor is fuzzy or theme-first.
+5. Inspect the returned `node_kind` before choosing graph calls.
+
+When the prompt is broad-theme, shortlist-first, or still anchor-sparse,
+narrative CAP is a useful scout but its graph coverage may be limited. Run
+`narrative_cap_probe.py query-node` after query rewrite, or
+`narrative_cap_probe.py narrate` when the candidate is already concrete, when it
+is likely to produce better anchors than guessing. If coverage is thin, say so
+internally and continue with graph plus web; do not advertise narrative coverage
+as complete.
 
 If the narrative scout yields no usable anchors after one rewrite, record that as a failed scout leg and then continue with graph plus web. Do not describe the answer as narrative-assisted unless at least one real narrative CAP call happened.
 
 If the query is theme-first and contains ticker-like tokens, rewrite it before relying on provider resolution. `AI`, `CAT`, and similar strings can overfit to exact symbols instead of the intended theme.
 
-- `asset` -> keep the current observe / `graph.neighbors` / `graph.paths` / intervene flow
-- `macro` -> use the canonical macro node id directly for `node_description` and any macro-capable structural surface; for `graph.paths` and similar checks, prefer direct `verb` calls instead of asset-only probe shortcuts that normalize to `<ticker>.price|volume`
-- if the next surface is still asset-only, say so explicitly and choose a proxy route intentionally instead of silently coercing the macro node
+Anchor handling:
+
+- `asset`: inspect structural surfaces around `price` and, when liquidity or
+  attention matters, `volume`; use descriptions, neighbors, paths, and blankets
+- `macro`: use the canonical macro node id directly for `node_description` and
+  macro-capable structural surfaces; do not coerce it into an asset price node
+- unknown or non-market concept: use narrative scout, web facts, and economic
+  function mapping to choose a proxy anchor explicitly
 
 For each structurally executable mapping:
 
 - `graph.paths` between cause and outcome proxy
 - Rank: dist <= 2 = strong, 3-4 = plausible, no path = narrative-only unless later graph support appears
 
-Structural connection does not equal causal transmission. Many dist=2 paths are shared macro exposure, not intervention-ready mechanism.
+Structural connection does not equal causal transmission. Many dist=2 paths are
+shared macro exposure, not action-ready mechanism.
 
-### 3b. Capillary discovery (when observe returns 503)
+### 3b. Capillary discovery
 
-1. `graph.neighbors` on the failed node -> observe neighbors
-2. If no observable neighbors -> `query_node` for the economic function
-3. If still nothing -> use world knowledge (what companies' revenue is this asset?)
+1. If the obvious anchor is sparse, inspect neighbors, blanket, or paths around
+   adjacent economic functions.
+2. If no usable graph anchor appears, use `query_node` for the economic function.
+3. If still nothing, use world knowledge and web evidence to identify proxy
+   companies, industries, macro series, or activities.
 4. All three fail -> declare sparse for this dimension
 
 Do not declare graph-sparse before this sequence is exhausted.
@@ -66,37 +91,37 @@ Also fire:
 
 ### 3e. Graph-initiated discovery
 
-Ask: "Graph, what do YOU see that L0 did not propose?" Run `discover_consensus` with `direction="in"` on the outcome. New upstream nodes are graph-generated mechanisms.
+Ask: "Graph, what do you see that the initial mechanisms missed?" Run
+`discover_consensus` with `direction="in"` on the outcome. New upstream nodes
+are graph-generated mechanisms.
 
 ### 3f. Surprise check + revision
 
-Compare graph results against L0 hypotheses. If graph contradicts or extends them, revise L0 in one sentence. Max 2 rounds.
+Compare graph results against the initial mechanisms. If graph contradicts or
+extends them, revise the mechanism set in one sentence. Max 2 rounds.
 
-If the graph only confirms L0, actively search for graph evidence against the strongest conviction. If a contradiction appears, that contradiction is the deep insight.
+If the graph only confirms the obvious story, actively search for graph evidence
+against the strongest conviction. If a contradiction appears, that contradiction
+is the deep insight.
 
-## Step 4: Observe + Verify (L1 + L2)
+## Step 4: Graph Support Scoring
 
-### 4a. L1 Observe
+Rank each mechanism, candidate, or decision dimension by structural support:
 
-Run `observe_predict_resolved_time` on the key nodes.
+- direct path strength and direction
+- blanket proximity
+- parent/child membership
+- consensus/deconsensus support
+- fragility or single-point dependency
+- graph-sparse status
+- freshness/web support when the graph alone cannot carry the mechanism
 
-- Driver cross-check: are observe's top drivers consistent with the working mechanism?
-- Multi-node coherence: does the chain move in the expected direction?
+Bucket results into:
 
-### 4b. L2 Intervene
-
-Intervene only along real graph-supported edges, not hand-waved industry links.
-
-From the structural pass, identify blanket parents of the outcome. Intervene on the most relevant blanket parent and measure the outcome.
-
-- Report effect size, transmission speed, and breadth
-- Match `horizon_steps` to the user's decision window
-- If the first intervention is inconclusive, widen in tiers using `references/probe-usage.md`
-- If no meaningful target exists, skip and say why
-
-### 4c. Signal aggregation
-
-Aggregate observations into one directional signal per dimension. Do not carry raw prediction decimals into the verdict layer.
+- `graph-supported`
+- `weakly connected`
+- `narrative/web-only`
+- `graph-sparse`
 
 ## Stop Rules
 
