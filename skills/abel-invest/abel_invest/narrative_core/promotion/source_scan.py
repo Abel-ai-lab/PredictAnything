@@ -8,6 +8,7 @@ stateful; the promotion agent still owns source understanding.
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from typing import Any
 
@@ -96,6 +97,20 @@ TEMPORAL_CALL_SUFFIXES = (
     ".rolling",
     ".shift",
 )
+FINITE_HISTORY_CALL_KINDS = {
+    "pct_change",
+    "rolling",
+    "shift",
+}
+ORIGIN_ANCHORED_HISTORY_CALL_KINDS = {
+    "cummax",
+    "cummin",
+    "cumprod",
+    "cumsum",
+    "ewm",
+    "expanding",
+    "rank",
+}
 FULL_RUNTIME_COMPUTE_CALL_LEAF_NAMES = {
     "compute_decisions",
     "compute_runtime_output",
@@ -382,12 +397,96 @@ def source_temporal_dependency_facts(source: str, tree: ast.AST | None) -> dict[
         "calendarHints": calendar_hints[:40],
         "parameterHints": parameter_hints[:40],
         "constantHints": constant_hints[:40],
+        "historyBoundaryCandidates": history_boundary_candidates(
+            lookback_hints=lookback_hints,
+            calendar_hints=calendar_hints,
+            parameter_hints=parameter_hints,
+            constant_hints=constant_hints,
+        ),
         "interpretation": (
             "Facts only. The agent decides the temporal dependency contract; "
             "calendar hints such as range/modulo/iloc often mean row-index "
             "chronology must be anchored to the selected backtest window."
         ),
     }
+
+
+def history_boundary_candidates(
+    *,
+    lookback_hints: list[dict[str, Any]],
+    calendar_hints: list[dict[str, Any]],
+    parameter_hints: list[dict[str, Any]],
+    constant_hints: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Return candidate facts, not a final paper history boundary."""
+
+    finite_evidence = [
+        _history_hint_label(item)
+        for item in lookback_hints
+        if _clean(item.get("kind")) in FINITE_HISTORY_CALL_KINDS
+    ]
+    origin_risks = [
+        _history_hint_label(item)
+        for item in lookback_hints
+        if _clean(item.get("kind")) in ORIGIN_ANCHORED_HISTORY_CALL_KINDS
+    ]
+    origin_risks.extend(_history_hint_label(item) for item in calendar_hints)
+    suggested_bars = _suggested_finite_history_bars(parameter_hints, constant_hints)
+    fixed_candidate = bool(finite_evidence) and not origin_risks
+    return {
+        "fixedLookback": {
+            "candidate": fixed_candidate,
+            "confidence": "medium" if fixed_candidate else "low",
+            "suggestedBars": suggested_bars if fixed_candidate else None,
+            "evidence": finite_evidence[:12],
+            "risks": origin_risks[:12],
+            "note": (
+                "Candidate facts only. Choose fixed_lookback only after source "
+                "reading confirms the signal depends on finite recent history."
+            ),
+        },
+        "originAnchored": {
+            "candidate": True,
+            "evidence": origin_risks[:12],
+            "reason": (
+                "Use when source semantics depend on expanding/cumulative/ranked "
+                "history, absolute row ordinals, fitted calendars, or when finite "
+                "history is not established by source reading."
+            ),
+        },
+    }
+
+
+def _history_hint_label(item: dict[str, Any]) -> str:
+    kind = _clean(item.get("kind")) or "hint"
+    expression = _clean(item.get("expression"))
+    line = item.get("line")
+    suffix = f" line {line}" if line else ""
+    return f"{kind}: {expression}{suffix}" if expression else f"{kind}{suffix}"
+
+
+def _suggested_finite_history_bars(
+    parameter_hints: list[dict[str, Any]],
+    constant_hints: list[dict[str, Any]],
+) -> int | None:
+    numbers: list[int] = []
+    for item in [*parameter_hints, *constant_hints]:
+        name = _clean(item.get("name")).lower()
+        expression = _clean(item.get("expression")).lower()
+        if not any(part in f"{name} {expression}" for part in TEMPORAL_CONSTANT_NAME_PARTS):
+            continue
+        number = _positive_int_from_text(_clean(item.get("value")))
+        if number is not None:
+            numbers.append(number)
+    return max(numbers) if numbers else None
+
+
+def _positive_int_from_text(value: str) -> int | None:
+    matches = re.findall(r"\d+", value)
+    if not matches:
+        return None
+    number = max(int(item) for item in matches)
+    return number if number > 0 else None
 
 
 def source_scan_observations(

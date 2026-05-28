@@ -458,7 +458,13 @@ session view automatically; when the exploration is mature enough for review,
 ask the user first. If the user agrees or explicitly asks to publish the session
 view, `visualize-session --session <session>` builds the view from the session
 folder and attaches the selected hostable validation strategy artifact when one
-is available. If the command emits a hosted paper `paper-contract-request.json`,
+is available. If the user asks only for a local strategy artifact export or a
+promotion validation probe, use
+`export-strategy-artifact --session <session>`. If the user explicitly names a
+branch or round, use `promote-strategy --branch <branch> --round <round>`.
+Do not manually walk `results.tsv` or branch folders to choose the best
+session strategy; session-level commands let the CLI select it. If the command
+emits a hosted paper `paper-contract-request.json`,
 read the request first and use its `reportTemplate`; open `contractGuide` when
 stateful continuation, source edits, or gate diagnosis need deeper guidance.
 Edit only when `sourceEditPolicy` says a source edit is required or genuinely

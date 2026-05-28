@@ -246,6 +246,14 @@ drawdown, and validation pass-rate. Research validation gates and hosted-paper
 promotion gates are separate; a missing strategy artifact should not block
 session visualization.
 
+Use the entrypoint that matches the user's request. For session visualization
+or upload, keep using `visualize-session --session <session>` so the default
+strategy artifact export/upload path stays attached. For local artifact export
+or validation probes, use `export-strategy-artifact --session <session>`. For a
+user-specified branch/round, use `promote-strategy --branch <branch> --round
+<round>`. Do not manually traverse `results.tsv` or branch directories to choose
+the best session strategy; the session-level commands own that selection.
+
 Use `visualize-session --without-strategy-artifact` only when the user explicitly
 asks for a session view without strategy artifact upload. If the command emits a
 hosted paper `paper-contract-request.json`, read the request first and use its

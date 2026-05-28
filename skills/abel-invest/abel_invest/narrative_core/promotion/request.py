@@ -42,17 +42,53 @@ def _hosted_paper_contract_guide_reference() -> dict[str, Any]:
 
 def _hosted_paper_contract_scaffold_references(
     requirements: dict[str, Any],
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     if not requirements.get("statefulContinuationRequired"):
         return []
     return [
         {
             "name": "stateful_continuation_paper_state_store",
-            "guideSection": "Stateful PaperStateStore Scaffold",
             "when": "requirements.statefulContinuationRequired=true",
             "purpose": (
-                "Adapt this scaffold so build_paper_initial_state and "
-                "get_paper_signal share the same PaperStateStore state file."
+                "Minimal interface shape for strategy-owned hosted paper state. "
+                "Adapt the helper methods to the selected strategy semantics."
+            ),
+            "statePath": "strategy/paper_state.pkl",
+            "interfaces": [
+                "PaperStateStore.from_context(self.context, 'strategy/paper_state.pkl')",
+                "build_paper_initial_state(self, *, cutover_as_of=None)",
+                "get_paper_signal(self, *, as_of=None)",
+                "store.is_current(state, as_of)",
+                "store.mark_current(state, as_of)",
+                "store.signal(next_position=..., payload=state, as_of=as_of)",
+            ],
+            "code": (
+                "from abel_edge.paper_state import PaperStateStore\n\n"
+                "STATE_SCHEMA = 'my-strategy.paper-state/v1'\n\n"
+                "def _paper_store(self):\n"
+                "    return PaperStateStore.from_context(self.context, 'strategy/paper_state.pkl')\n\n"
+                "def build_paper_initial_state(self, *, cutover_as_of=None):\n"
+                "    store = self._paper_store()\n"
+                "    state = self._build_state_through(cutover_as_of)\n"
+                "    state['schema'] = STATE_SCHEMA\n"
+                "    state = store.mark_current(state, cutover_as_of)\n"
+                "    store.save(state)\n"
+                "    return store.summary(state, as_of=cutover_as_of)\n\n"
+                "def get_paper_signal(self, *, as_of=None):\n"
+                "    store = self._paper_store()\n"
+                "    state = store.load(default={})\n"
+                "    if store.is_current(state, as_of):\n"
+                "        return store.signal(next_position=state['next_position'], payload=state, as_of=as_of)\n"
+                "    state = self._advance_paper_state(state, as_of=as_of)\n"
+                "    state = store.mark_current(state, as_of)\n"
+                "    store.save(state)\n"
+                "    return store.signal(next_position=state['next_position'], payload=state, as_of=as_of)\n"
+            ),
+            "gateHandoff": (
+                "Promotion calls build_paper_initial_state for the validation cutover, "
+                "then replays the tail with Edge paper_run_one. If parity passes, the "
+                "state produced by that replay is packaged as runtime/initial-state/**. "
+                "Do not hand-build final startup state or encode expected positions."
             ),
         }
     ]
@@ -97,6 +133,9 @@ def _hosted_paper_contract_requirements(
             "method that preserves the strategy semantics."
         )
     return {
+        "expectedAction": "implement_stateful_continuation"
+        if stateful_required
+        else "write_profile_report_only",
         "continuationMethod": continuation_method,
         "statefulContinuationRequired": stateful_required,
         "sourceEditPolicy": source_edit_policy,
@@ -348,9 +387,9 @@ def _hosted_paper_contract_work_order_task(requirements: dict[str, Any]) -> str:
         )
     return (
         "Declare the hosted live-paper contract for this selected strategy. "
-        "If source inspection confirms the compact facts, preserve sourcePath and "
-        "write only paper-contract-report.json with stateless_recompute plus a "
-        "history boundary."
+        "Preserve sourcePath by default, read the source, choose the paper history "
+        "boundary from source semantics, and write only paper-contract-report.json "
+        "unless sourceEditPolicy shows a genuine allowed edit."
     )
 
 def _hosted_paper_contract_work_order_facts(
@@ -391,6 +430,13 @@ def _hosted_paper_contract_work_order_facts(
             "backtestWindow": _json_safe(facts.get("backtestWindow") or {}),
             "validationOracle": _compact_validation_oracle(validation_oracle),
             "temporalHints": _compact_temporal_dependency_hints(temporal),
+            "decisionRule": (
+                "Harness boundary candidates are observations, not answers. Read "
+                "sourcePath before choosing history.boundary. Use fixed_lookback "
+                "only when source semantics are finite-window; use origin_anchored "
+                "for expanding/cumulative/ranked history, absolute row ordinals, "
+                "fitted calendars, or unresolved history needs."
+            ),
         },
         "assetPolicy": validation_oracle.get("assetPolicy")
         or (
@@ -446,6 +492,7 @@ def _compact_temporal_dependency_hints(temporal: dict[str, Any]) -> dict[str, An
         "usesRank",
         "usesAbsoluteIndex",
         "retrainCadence",
+        "historyBoundaryCandidates",
     ):
         value = temporal.get(key)
         if value not in (None, [], {}, ""):
@@ -485,10 +532,13 @@ def _hosted_paper_contract_report_template(
             },
             "design": {
                 "history": {
-                    "boundary": "fixed_lookback_or_origin_anchored",
+                    "boundary": "",
                     "lookbackBars": None,
                     "origin": "",
-                    "reason": "Fill in the minimum history requirement.",
+                    "reason": (
+                        "Choose after reading sourcePath; do not copy harness "
+                        "historyBoundaryCandidates blindly."
+                    ),
                 },
                 "state": {
                     "usesPersistentState": stateful_required,

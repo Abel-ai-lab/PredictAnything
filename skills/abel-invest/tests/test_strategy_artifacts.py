@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -305,21 +306,64 @@ def test_contract_request_is_slim_and_marks_training_stateful(tmp_path):
     payload = json.loads(request_path.read_text(encoding="utf-8"))
     assert payload["requirements"]["statefulContinuationRequired"] is True
     assert payload["requirements"]["continuationMethod"] == "stateful_continuation"
-    assert payload["scaffolds"] == [
-        {
-            "guideSection": "Stateful PaperStateStore Scaffold",
-            "name": "stateful_continuation_paper_state_store",
-            "purpose": (
-                "Adapt this scaffold so build_paper_initial_state and "
-                "get_paper_signal share the same PaperStateStore state file."
-            ),
-            "when": "requirements.statefulContinuationRequired=true",
-        }
-    ]
+    assert payload["requirements"]["expectedAction"] == "implement_stateful_continuation"
+    scaffold = payload["scaffolds"][0]
+    assert scaffold["name"] == "stateful_continuation_paper_state_store"
+    assert scaffold["statePath"] == "strategy/paper_state.pkl"
+    assert "build_paper_initial_state" in scaffold["code"]
+    assert "get_paper_signal" in scaffold["code"]
+    assert "PaperStateStore.from_context" in scaffold["code"]
+    assert "runtime/initial-state/**" in scaffold["gateHandoff"]
     assert "contractGuide" in payload
     assert "reportContract" not in payload
     assert "gateContract" not in payload
     assert "runtimeApiFacts" not in payload
+
+
+def test_stateless_contract_request_requires_agent_boundary_choice(tmp_path):
+    branch = tmp_path / "branch"
+    promoted = tmp_path / "artifact" / "promoted"
+    promoted.mkdir(parents=True)
+    branch.mkdir()
+    source = promoted / "engine.py"
+    source.write_text("class BranchEngine: pass\n", encoding="utf-8")
+    dependency_scan = {
+        "temporalDependencies": {
+            "historyBoundaryCandidates": {
+                "fixedLookback": {
+                    "candidate": True,
+                    "confidence": "medium",
+                    "suggestedBars": 40,
+                    "evidence": ["rolling: series.rolling(window=40) line 7"],
+                    "risks": [],
+                },
+                "originAnchored": {"candidate": True, "evidence": []},
+            }
+        }
+    }
+
+    request_path = _write_hosted_paper_contract_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan=dependency_scan,
+        signals=[],
+    )
+
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    assert payload["requirements"]["expectedAction"] == "write_profile_report_only"
+    assert payload["requirements"]["sourceEditPolicy"]["required"] is False
+    assert payload["reportTemplate"]["sourceEdit"]["changed"] is False
+    history = payload["reportTemplate"]["paperSignal"]["design"]["history"]
+    assert history["boundary"] == ""
+    assert "Choose after reading sourcePath" in history["reason"]
+    candidates = payload["facts"]["historyProfile"]["temporalHints"][
+        "historyBoundaryCandidates"
+    ]
+    assert candidates["fixedLookback"]["suggestedBars"] == 40
+    assert "observations, not answers" in payload["facts"]["historyProfile"][
+        "decisionRule"
+    ]
 
 
 def test_tail_oracle_sample_uses_dynamic_holdout_window():
@@ -672,6 +716,24 @@ def test_paper_signal_full_runtime_path_follows_top_level_helper():
         "paper_runtime",
         "compute_signals",
     ]
+
+
+def test_temporal_scan_emits_boundary_candidates_not_answers():
+    source = (
+        "class BranchEngine:\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        momentum = ctx.target.close.pct_change(20)\n"
+        "        smooth = momentum.rolling(window=40).mean()\n"
+        "        return smooth.shift(1)\n"
+    )
+
+    facts = source_scan.source_temporal_dependency_facts(source, ast.parse(source))
+    candidates = facts["historyBoundaryCandidates"]
+
+    assert candidates["fixedLookback"]["candidate"] is True
+    assert candidates["fixedLookback"]["suggestedBars"] == 40
+    assert candidates["originAnchored"]["candidate"] is True
+    assert "Candidate facts only" in candidates["fixedLookback"]["note"]
 
 
 def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp_path):
