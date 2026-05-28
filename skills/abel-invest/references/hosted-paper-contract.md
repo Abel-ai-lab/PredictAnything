@@ -23,7 +23,9 @@ absence. Read the source and report semantic dependencies the scan missed.
 ## Loop
 
 1. Read `paper-contract-request.json`.
-2. Open the request's `contractGuide`.
+2. Use the request's compact facts and `reportTemplate` first. Open the
+   request's `contractGuide` when stateful continuation, source edits, or a
+   refreshed gate failure need deeper guidance.
 3. Choose one continuation method: `stateless_recompute`,
    `stateful_continuation`, `full_replay_fallback`, or `not_hostable`.
 4. Follow `requirements.sourceEditPolicy`:

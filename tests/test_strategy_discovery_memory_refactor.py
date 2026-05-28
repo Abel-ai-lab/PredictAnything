@@ -1950,9 +1950,12 @@ def test_export_selected_strategy_artifact_requires_hosted_contract_for_runtime_
     assert request["kind"] == "hosted_paper_contract"
     assert request["scope"] == "hosted_paper_contract"
     assert any(signal["kind"] == "runtime_state_file" for signal in request["signals"])
+    full_facts = json.loads(
+        Path(request["factSidecars"]["fullFactsPath"]).read_text(encoding="utf-8")
+    )
     assert any(
         item["kind"] == "runtime_state_file"
-        for item in request["facts"]["stateDependencies"]
+        for item in full_facts["stateDependencies"]
     )
 
 
@@ -2041,7 +2044,7 @@ def test_export_selected_strategy_artifact_requires_hosted_contract_for_absolute
     )
     assert request["kind"] == "hosted_paper_contract"
     assert request["scope"] == "hosted_paper_contract"
-    assert request["facts"]["paperSignal"]["implemented"] is False
+    assert request["facts"]["strategyProfile"]["getPaperSignalImplemented"] is False
     assert any(
         signal["kind"] == "developer_local_absolute_path"
         for signal in request["signals"]
@@ -2217,7 +2220,10 @@ def test_export_selected_strategy_artifact_requires_hosted_contract_for_nonstand
     )
     assert request["kind"] == "hosted_paper_contract"
     assert any(signal["kind"] == "nonstandard_import" for signal in request["signals"])
-    imports = request["facts"]["imports"]
+    full_facts = json.loads(
+        Path(request["factSidecars"]["fullFactsPath"]).read_text(encoding="utf-8")
+    )
+    imports = full_facts["imports"]
     assert {"module": "sklearn", "classification": "nonstandard"} in imports
 
 
@@ -2668,8 +2674,8 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(
-        promotion_helpers,
+    monkeypatch.setitem(
+        promotion_helpers._run_edge_paper_run_one_smoke.__globals__,
         "PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS",
         0.0,
     )
@@ -3252,8 +3258,8 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     assert request["requirements"]["continuationMethod"] == "stateful_continuation"
     assert request["requirements"]["observedTrainingCalls"] == ["model.fit"]
     assert request["contractGuide"]["relativePath"] == "references/hosted-paper-contract.md"
-    assert request["facts"]["paperSignal"]["sourceTrainingCalls"] == ["model.fit"]
-    assert request["facts"]["sourceScan"]["positiveFindings"]["observedFitCalls"] == [
+    assert request["facts"]["strategyProfile"]["observedTrainingCalls"] == ["model.fit"]
+    assert request["facts"]["sourceScan"]["observedFitCalls"] == [
         "model.fit"
     ]
     assert request["validation"]["attemptPolicy"]["liveContractFailures"] == 0
@@ -3661,12 +3667,16 @@ def test_paper_smoke_timeout_returns_compact_diagnosis(
         _time.sleep(1)
         return {"status": "passed"}
 
-    monkeypatch.setattr(
-        promotion_helpers,
+    monkeypatch.setitem(
+        promotion_helpers._run_edge_paper_run_one_smoke.__globals__,
         "_run_edge_paper_run_one_smoke_unbounded",
         slow_smoke,
     )
-    monkeypatch.setattr(promotion_helpers, "PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setitem(
+        promotion_helpers._run_edge_paper_run_one_smoke.__globals__,
+        "PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS",
+        0.01,
+    )
 
     smoke = promotion_helpers._run_edge_paper_run_one_smoke(
         object(),

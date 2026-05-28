@@ -581,19 +581,38 @@ def _export_strategy_artifact_candidate(
     )
 
     return {
+        "status": "exported",
+        "nextAction": "done",
         "artifactExported": True,
         "artifactUploadSkipped": False,
         "skipReason": "",
         "selectedBranchId": candidate.branch_id,
         "selectedRoundId": candidate.round_id,
+        "selection": _selection_payload(candidate),
         "manifestPath": str(manifest_path),
         "artifactPath": str(artifact_path),
         "tradeLogPath": str(trade_log_path),
         "artifactSha256": artifact_result.get("artifactSha256", ""),
         "artifactBytes": artifact_result.get("artifactBytes", 0),
         "fileCount": artifact_result.get("fileCount", 0),
+        "artifact": {
+            "path": str(artifact_path),
+            "sha256": artifact_result.get("artifactSha256", ""),
+            "bytes": artifact_result.get("artifactBytes", 0),
+            "fileCount": artifact_result.get("fileCount", 0),
+        },
         "promotionMode": promotion.mode,
         "promotionReport": promotion.report,
+        "promotion": _promotion_completion_payload(promotion),
+        "validation": _promotion_validation_payload(promotion),
+        "paths": {
+            "manifest": str(manifest_path),
+            "tradeLog": str(trade_log_path),
+            "gate": str(promotion.gate_path),
+            "trace": str(destination / PROMOTION_TAIL_TRACE_FILENAME)
+            if (destination / PROMOTION_TAIL_TRACE_FILENAME).is_file()
+            else "",
+        },
     }
 
 
@@ -625,9 +644,22 @@ def _prepare_promotion_for_export(
         }
         if request_path.is_file():
             result["promotionReport"]["requestPath"] = str(request_path)
+            request_payload = _load_json_object(request_path)
+            result["requestPath"] = str(request_path)
+            result["sourcePath"] = _clean(request_payload.get("sourcePath"))
+            output = (
+                request_payload.get("output")
+                if isinstance(request_payload.get("output"), dict)
+                else {}
+            )
+            result["reportPath"] = _clean(output.get("reportPath"))
+            result["rerunCommand"] = _promotion_rerun_command(candidate)
         gate_path = destination / PROMOTION_GATE_FILENAME
         if gate_path.is_file():
             result["promotionReport"]["gatePath"] = str(gate_path)
+            result["gatePath"] = str(gate_path)
+            result["failureSummary"] = _gate_failure_summary(gate_path)
+            result["nextAction"] = "fix_paper_contract_and_rerun"
         return result
 
 
@@ -808,7 +840,9 @@ def _artifact_skip_result(
     selected_branch_id: str | None = None,
     selected_round_id: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    selected = selection.selected if selection else None
+    action_required = skip_reason == PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED
+    result = {
         "artifactExported": False,
         "artifactUploadSkipped": True,
         "skipReason": skip_reason,
@@ -817,6 +851,121 @@ def _artifact_skip_result(
         "selectedRoundId": (selection.selected_round_id if selection else None)
         or selected_round_id,
     }
+    if action_required:
+        result["status"] = "action_required"
+        result["nextAction"] = "write_paper_contract_report"
+        result["selection"] = _selection_payload(selected) if selected is not None else {}
+    return result
+
+
+def _selection_payload(candidate: StrategyArtifactCandidate | None) -> dict[str, Any]:
+    if candidate is None:
+        return {}
+    mode = (
+        "auto_best"
+        if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS
+        else "explicit"
+    )
+    return {
+        "mode": mode,
+        "rawMode": candidate.selection_mode,
+        "scope": candidate.selection_scope,
+        "branchId": candidate.branch_id,
+        "roundId": candidate.round_id,
+        "rank": candidate.selection_rank,
+        "rule": SELECTION_RULE_AUTO_BEST_PASS if mode == "auto_best" else "",
+        "reason": SELECTION_REASON_AUTO_BEST_PASS if mode == "auto_best" else "",
+    }
+
+
+def _promotion_rerun_command(candidate: StrategyArtifactCandidate) -> str:
+    if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS:
+        return f"abel-invest export-strategy-artifact --session {candidate.session}"
+    command = f"abel-invest promote-strategy --branch {candidate.branch}"
+    if candidate.round_id:
+        command += f" --round {candidate.round_id}"
+    return command
+
+
+def _promotion_completion_payload(promotion: PromotionResult) -> dict[str, Any]:
+    report = promotion.report if isinstance(promotion.report, dict) else {}
+    return {
+        "mode": promotion.mode,
+        "sourceEdit": {
+            "changed": bool(
+                report.get("replacementCount") or report.get("contractReplacementCount")
+            )
+        },
+        "continuationMethod": _promotion_continuation_method(report),
+        "paperExecutionProfile": promotion.paper_execution_profile or {},
+        "initialStateFileCount": report.get("initialStateFileCount", 0),
+        "packagedFileCount": report.get("packagedFileCount", 0),
+    }
+
+
+def _promotion_validation_payload(promotion: PromotionResult) -> dict[str, Any]:
+    gate = _load_json_object(promotion.gate_path)
+    paper_gate = _paper_dry_run_gate(gate)
+    smoke = (
+        paper_gate.get("details", {}).get("smoke")
+        if isinstance(paper_gate.get("details"), dict)
+        else {}
+    )
+    tail = smoke.get("tailConsistency") if isinstance(smoke, dict) else {}
+    return {
+        "gateStatus": _clean(gate.get("status")) or "unknown",
+        "paperDryRun": _clean(paper_gate.get("status")) or "unknown",
+        "tailParity": {
+            "status": _clean(tail.get("status")) if isinstance(tail, dict) else "",
+            "mismatchCount": tail.get("mismatchCount")
+            if isinstance(tail, dict)
+            else None,
+            "comparisonCount": tail.get("comparisonCount")
+            if isinstance(tail, dict)
+            else None,
+        },
+        "smokeElapsedSeconds": smoke.get("elapsedSeconds")
+        if isinstance(smoke, dict)
+        else None,
+        "idempotent": smoke.get("sameResult") if isinstance(smoke, dict) else None,
+        "generatedInitialStateFileCount": smoke.get("generatedInitialStateFileCount")
+        if isinstance(smoke, dict)
+        else 0,
+    }
+
+
+def _gate_failure_summary(gate_path: Path) -> dict[str, Any]:
+    gate = _load_json_object(gate_path)
+    failed = []
+    for item in gate.get("gates") if isinstance(gate.get("gates"), list) else []:
+        if not isinstance(item, dict) or item.get("status") == "passed":
+            continue
+        details = item.get("details") if isinstance(item.get("details"), dict) else {}
+        failed.append(
+            {
+                "name": _clean(item.get("name")),
+                "status": _clean(item.get("status")),
+                "method": _clean(item.get("method")),
+                "reason": _clean(details.get("reason") or item.get("reason")),
+            }
+        )
+    return {"status": _clean(gate.get("status")), "failedGates": failed}
+
+
+def _paper_dry_run_gate(gate: dict[str, Any]) -> dict[str, Any]:
+    for item in gate.get("gates") if isinstance(gate.get("gates"), list) else []:
+        if isinstance(item, dict) and item.get("name") == "paper_dry_run":
+            return item
+    return {}
+
+
+def _promotion_continuation_method(report: dict[str, Any]) -> str:
+    profile = report.get("paperExecutionProfile")
+    if not isinstance(profile, dict):
+        return ""
+    # The report keeps the canonical profile, but method lives in the gate
+    # details. The top-level mode remains the stable completion signal here.
+    return _clean(report.get("continuationMethod"))
 
 
 def _artifact_output_dir(

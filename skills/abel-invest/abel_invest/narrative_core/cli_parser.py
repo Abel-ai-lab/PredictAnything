@@ -363,9 +363,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     export_strategy_artifact = sub.add_parser(
         "export-strategy-artifact",
-        help="Export the best ranked hostable strategy artifact for a session without uploading it",
+        help=(
+            "Export the CLI-selected best hostable validation strategy artifact "
+            "for a session without uploading it"
+        ),
     )
-    export_strategy_artifact.add_argument("--session", required=True)
+    export_strategy_artifact.add_argument(
+        "--session",
+        required=True,
+        help=(
+            "Session directory. The CLI selects the best hostable validation "
+            "strategy when no explicit branch/round is provided."
+        ),
+    )
     export_strategy_artifact.add_argument(
         "--output-dir",
         default=None,

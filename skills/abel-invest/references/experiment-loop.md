@@ -248,12 +248,13 @@ session visualization.
 
 Use `visualize-session --without-strategy-artifact` only when the user explicitly
 asks for a session view without strategy artifact upload. If the command emits a
-hosted paper `paper-contract-request.json`, read
-`references/hosted-paper-contract.md` and handle it in the current skill loop.
-Edit source only when `sourceEditPolicy` requires or genuinely allows it, write
-`paper-contract-report.json`, and rerun the same command. Do not
-start a separate agent process. The agent should not hand-assemble the payload
-or choose a router URL.
+hosted paper `paper-contract-request.json`, read the request first and use its
+`reportTemplate`. Open `references/hosted-paper-contract.md` when the request
+requires stateful continuation, source edits, or deeper gate diagnosis. Edit
+source only when `sourceEditPolicy` requires or genuinely allows it, write
+`paper-contract-report.json`, and rerun the same command. Do not start a
+separate agent process. The agent should not hand-assemble the payload or choose
+a router URL.
 
 Default router base URL: `https://api.abel.ai/router/`.
 `abel-auth` is the canonical owner for API key setup. Maintainers should update

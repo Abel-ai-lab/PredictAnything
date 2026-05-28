@@ -448,10 +448,11 @@ ask the user first. If the user agrees or explicitly asks to publish the session
 view, `visualize-session --session <session>` builds the view from the session
 folder and attaches the selected hostable validation strategy artifact when one
 is available. If the command emits a hosted paper `paper-contract-request.json`,
-read its `contractGuide`, edit only when `sourceEditPolicy` says a source edit
-is required or genuinely allowed, and declare the paper history boundary in
-`paper-contract-report.json`. Rerun the same command afterward. Do not
-start a separate agent process. Use
+read the request first and use its `reportTemplate`; open `contractGuide` when
+stateful continuation, source edits, or gate diagnosis need deeper guidance.
+Edit only when `sourceEditPolicy` says a source edit is required or genuinely
+allowed, and declare the paper history boundary in `paper-contract-report.json`.
+Rerun the same command afterward. Do not start a separate agent process. Use
 `--without-strategy-artifact` only for narrative-only views.
 This workspace is for alpha-managed strategy search, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
