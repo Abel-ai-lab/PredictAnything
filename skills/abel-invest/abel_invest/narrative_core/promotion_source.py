@@ -96,6 +96,12 @@ TEMPORAL_CALL_SUFFIXES = (
     ".rolling",
     ".shift",
 )
+FULL_RUNTIME_COMPUTE_CALL_LEAF_NAMES = {
+    "compute_decisions",
+    "compute_runtime_output",
+    "compute_signals",
+    "get_latest_signal",
+}
 
 
 def source_overrides_get_paper_signal(source: str) -> bool:
@@ -137,24 +143,79 @@ def paper_signal_design_facts(source: str) -> dict[str, Any]:
 
 
 def paper_signal_uses_full_runtime_compute(source: str) -> bool:
+    return bool(paper_signal_full_runtime_compute_path(source))
+
+
+def paper_signal_full_runtime_compute_path(source: str) -> list[str]:
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return False
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return []
+    top_level_functions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    paper_class: ast.ClassDef | None = None
+    paper_function: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            top_level_functions[node.name] = node
+        if not isinstance(node, ast.ClassDef):
             continue
-        if node.name != "get_paper_signal":
+        class_functions = {
+            item.name: item
+            for item in node.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        function = class_functions.get("get_paper_signal")
+        if function is None:
             continue
-        for child in ast.walk(node):
+        paper_class = node
+        paper_function = function
+        break
+    if paper_class is None or paper_function is None:
+        return []
+    class_functions = {
+        item.name: item
+        for item in paper_class.body
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+    def call_path(
+        function: ast.FunctionDef | ast.AsyncFunctionDef,
+        label: str,
+        path: list[str],
+        visited: set[str],
+    ) -> list[str]:
+        if label in visited:
+            return []
+        visited = {*visited, label}
+        for child in ast.walk(function):
             if not isinstance(child, ast.Call):
                 continue
             callee = call_name(child.func)
-            if callee == "compute_runtime_output" or callee.endswith(
-                ".compute_runtime_output"
-            ):
-                return True
-    return False
+            leaf = callee.rsplit(".", 1)[-1]
+            if leaf in FULL_RUNTIME_COMPUTE_CALL_LEAF_NAMES:
+                return [*path, label, leaf]
+            helper = None
+            helper_label = ""
+            if callee.startswith("self."):
+                helper_name = callee.rsplit(".", 1)[-1]
+                helper = class_functions.get(helper_name)
+                helper_label = f"{paper_class.name}.{helper_name}"
+            elif "." not in callee:
+                helper = top_level_functions.get(callee)
+                helper_label = callee
+            if helper is None or not helper_label:
+                continue
+            found = call_path(helper, helper_label, [*path, label], visited)
+            if found:
+                return found
+        return []
+
+    return call_path(
+        paper_function,
+        f"{paper_class.name}.get_paper_signal",
+        [],
+        set(),
+    )
 
 
 def source_import_facts(tree: ast.AST | None) -> list[dict[str, str]]:

@@ -14,8 +14,10 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import sys
 import tempfile
+import threading
 import time
 from typing import Any, Callable
 
@@ -36,6 +38,9 @@ from .promotion_paper_trace import (
 
 _call_name = promotion_source.call_name
 _paper_signal_design_facts = promotion_source.paper_signal_design_facts
+_paper_signal_full_runtime_compute_path = (
+    promotion_source.paper_signal_full_runtime_compute_path
+)
 _paper_signal_uses_full_runtime_compute = (
     promotion_source.paper_signal_uses_full_runtime_compute
 )
@@ -70,7 +75,8 @@ PROMOTION_AGENT_REQUEST_SCHEMA = "abel-invest.agent-paper-contract-request/v1"
 PROMOTION_HOSTED_CONTRACT_SCOPE = "hosted_paper_contract"
 PROMOTION_PAPER_SMOKE_WARN_SECONDS = 5.0
 PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS = 5.0
-PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS = 150.0
+PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS = 120.0
+PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS = PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS
 PROMOTION_LIVE_CONTRACT_FAILURES_BEFORE_FALLBACK = 3
 PROMOTION_LIVE_READINESS_CONFLICT_PHRASES = (
     "after the packaged log",
@@ -570,6 +576,7 @@ def _collect_hosted_paper_dependency_scan(
         "paperSignal": {
             "implemented": _source_overrides_get_paper_signal(source),
             "fullRuntimeCompute": _paper_signal_uses_full_runtime_compute(source),
+            "fullRuntimeComputePath": _paper_signal_full_runtime_compute_path(source),
             **_paper_signal_design_facts(source),
         },
         "absolutePathLiterals": absolute_literals,
@@ -618,11 +625,17 @@ def _hosted_paper_contract_signals(scan: dict[str, Any]) -> list[dict[str, str]]
             reason="stateful continuation must implement hosted paper signal path",
         )
     elif paper_signal.get("fullRuntimeCompute") is True:
+        full_compute_path = paper_signal.get("fullRuntimeComputePath")
+        value = (
+            " -> ".join(str(item) for item in full_compute_path)
+            if isinstance(full_compute_path, list) and full_compute_path
+            else "compute_runtime_output"
+        )
         _append_hosted_contract_signal(
             signals,
             seen,
             kind="paper_signal_full_recompute",
-            value="compute_runtime_output",
+            value=value,
             reason=(
                 "get_paper_signal must not wrap full historical strategy compute; "
                 "stateful/direct paper code must use a live-paper fast path"
@@ -997,7 +1010,7 @@ def _hosted_paper_contract_requirements(
             "Edit sourcePath only when sourceEditPolicy.required is true or when a listed allowed reason is genuinely needed.",
             "Do not package selected-round trade-log.csv, gate answers, or promotion outputs as live strategy assets or startup state.",
             "Do not choose full_replay_fallback or not_hostable unless fallback.fullReplayFallbackEligible is true.",
-            "full_replay_fallback must pass tail parity and the hosted paper fallback timeout.",
+            "full_replay_fallback must pass tail parity and the 120s hosted paper timeout.",
         ],
     }
 
@@ -1238,6 +1251,8 @@ def _promotion_gate_failure_request_payload(
                 "firstElapsedSeconds",
                 "secondElapsedSeconds",
                 "warnings",
+                "timeoutSeconds",
+                "diagnosis",
             ):
                 if key in smoke:
                     compact_smoke[key] = _json_safe(smoke[key])
@@ -2377,7 +2392,82 @@ def _paper_smoke_max_call_elapsed(smoke: dict[str, Any]) -> float:
     return max(values, default=0.0)
 
 
+class _PaperSmokeTimeout(BaseException):
+    pass
+
+
+@contextmanager
+def _paper_smoke_timeout(seconds: float):
+    if (
+        seconds <= 0
+        or not hasattr(signal, "SIGALRM")
+        or threading.current_thread() is not threading.main_thread()
+    ):
+        yield
+        return
+
+    def _raise_timeout(signum, frame):  # noqa: ARG001
+        raise _PaperSmokeTimeout
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    previous_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        if previous_timer[0] > 0:
+            signal.setitimer(signal.ITIMER_REAL, *previous_timer)
+
+
 def _run_edge_paper_run_one_smoke(
+    candidate: Any,
+    *,
+    strategy_source_path: Path,
+    packaged_files: tuple[PromotionPackagedFile, ...],
+    destination: Path,
+    strategy_entrypoint: str,
+    runtime_env: dict[str, str] | None,
+    is_denylisted_source: Callable[[Path], bool],
+    report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    started_at = time.monotonic()
+    try:
+        with _paper_smoke_timeout(PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS):
+            return _run_edge_paper_run_one_smoke_unbounded(
+                candidate,
+                strategy_source_path=strategy_source_path,
+                packaged_files=packaged_files,
+                destination=destination,
+                strategy_entrypoint=strategy_entrypoint,
+                runtime_env=runtime_env,
+                is_denylisted_source=is_denylisted_source,
+                report=report,
+            )
+    except _PaperSmokeTimeout:
+        return {
+            "status": "failed",
+            "reason": (
+                "paper_run_one tail smoke timed out after "
+                f"{PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS:g}s"
+            ),
+            "timeoutSeconds": PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS,
+            "elapsedSeconds": round(time.monotonic() - started_at, 6),
+            "diagnosis": {
+                "likelyCause": (
+                    "get_paper_signal performs full replay or repeated refit "
+                    "during daily paper smoke"
+                ),
+                "check": (
+                    "inspect the get_paper_signal call path and avoid "
+                    "compute_runtime_output from the daily path"
+                ),
+            },
+        }
+
+
+def _run_edge_paper_run_one_smoke_unbounded(
     candidate: Any,
     *,
     strategy_source_path: Path,
@@ -2651,17 +2741,26 @@ def _fast_paper_validation(
     is_denylisted_source: Callable[[Path], bool],
 ) -> dict[str, Any]:
     full_compute = _paper_signal_uses_full_runtime_compute(source)
+    full_compute_path = _paper_signal_full_runtime_compute_path(source)
     continuation_method = _report_continuation_method(report)
     design_facts = _paper_signal_design_facts(source)
     requires_direct_signal = continuation_method != "stateless_recompute"
     if requires_direct_signal and full_compute and continuation_method != "full_replay_fallback":
+        path_text = (
+            " -> ".join(full_compute_path)
+            if full_compute_path
+            else "get_paper_signal -> compute_runtime_output"
+        )
         return {
             "status": "failed",
             "method": "paper_signal_contract_static",
             "reason": (
-                "get_paper_signal calls compute_runtime_output, which reruns "
-                "the historical strategy path instead of using a live-paper fast path"
+                "get_paper_signal reaches full historical runtime compute via "
+                f"{path_text}. Move historical replay/bootstrap into "
+                "build_paper_initial_state and make get_paper_signal load or "
+                "advance PaperStateStore state only."
             ),
+            "fullRuntimeComputePath": full_compute_path,
             **design_facts,
         }
     if requires_direct_signal and not _source_overrides_get_paper_signal(source):
@@ -2678,6 +2777,7 @@ def _fast_paper_validation(
         if source_overrides_signal
         else "edge_compiled_recompute",
         "fullRuntimeCompute": full_compute,
+        "fullRuntimeComputePath": full_compute_path,
         **design_facts,
     }
     profile = _report_paper_execution_profile(report)
@@ -2729,7 +2829,7 @@ def _fast_paper_validation(
                 "status": "failed",
                 "method": "full_replay_fallback_performance",
                 "reason": (
-                    "full_replay_fallback exceeded the hosted paper fallback "
+                    "full_replay_fallback exceeded the hosted paper "
                     f"limit of {PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS:g}s "
                     "for a single paper signal call"
                 ),

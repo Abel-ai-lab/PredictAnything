@@ -3651,6 +3651,40 @@ def test_paper_smoke_bootstraps_state_before_holdout_tail(
     assert smoke["stateChangedSecondCall"] is False
 
 
+def test_paper_smoke_timeout_returns_compact_diagnosis(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import time as _time
+
+    def slow_smoke(*args, **kwargs):
+        _time.sleep(1)
+        return {"status": "passed"}
+
+    monkeypatch.setattr(
+        promotion_helpers,
+        "_run_edge_paper_run_one_smoke_unbounded",
+        slow_smoke,
+    )
+    monkeypatch.setattr(promotion_helpers, "PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS", 0.01)
+
+    smoke = promotion_helpers._run_edge_paper_run_one_smoke(
+        object(),
+        strategy_source_path=tmp_path / "engine.py",
+        packaged_files=(),
+        destination=tmp_path,
+        strategy_entrypoint="strategy.py",
+        runtime_env={},
+        is_denylisted_source=lambda path: False,
+        report={},
+    )
+
+    assert smoke["status"] == "failed"
+    assert smoke["timeoutSeconds"] == 0.01
+    assert "timed out" in smoke["reason"]
+    assert "compute_runtime_output" in smoke["diagnosis"]["check"]
+
+
 def test_paper_signal_design_facts_detects_runtime_path_helper_state() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"

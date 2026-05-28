@@ -145,6 +145,8 @@ def _paper_smoke_gate_summary(
         "stateChangedSecondCall",
         "sameResult",
         "warnings",
+        "timeoutSeconds",
+        "diagnosis",
     ):
         if key in smoke:
             summary[key] = _json_safe(smoke[key])

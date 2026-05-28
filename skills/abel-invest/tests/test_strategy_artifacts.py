@@ -14,6 +14,7 @@ from abel_invest.narrative_core.promotion import (
     _validate_agent_paper_signal_contract,
     _write_hosted_paper_contract_request,
 )
+from abel_invest.narrative_core import promotion_source
 from abel_invest.narrative_core.promotion_tail import (
     paper_tail_position_change_count,
     paper_tail_selection_reason,
@@ -633,6 +634,42 @@ def test_ml_training_stateful_accepts_fitted_object_state_evidence():
     )
 
 
+def test_paper_signal_full_runtime_path_follows_self_helper():
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def _paper_runtime_output(self, *, as_of=None):\n"
+        "        return self.compute_runtime_output(end=as_of)\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        compiled = self._paper_runtime_output(as_of=as_of)\n"
+        "        return {'next_position': float(compiled.next_position[-1])}\n"
+    )
+
+    assert promotion_source.paper_signal_full_runtime_compute_path(source) == [
+        "BranchEngine.get_paper_signal",
+        "BranchEngine._paper_runtime_output",
+        "compute_runtime_output",
+    ]
+    assert promotion_source.paper_signal_uses_full_runtime_compute(source) is True
+
+
+def test_paper_signal_full_runtime_path_follows_top_level_helper():
+    source = (
+        "def paper_runtime(engine, as_of=None):\n"
+        "    return engine.compute_signals()\n"
+        "class BranchEngine:\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        positions, dates, prices = paper_runtime(self, as_of=as_of)\n"
+        "        return {'next_position': float(positions[-1])}\n"
+    )
+
+    assert promotion_source.paper_signal_full_runtime_compute_path(source) == [
+        "BranchEngine.get_paper_signal",
+        "paper_runtime",
+        "compute_signals",
+    ]
+
+
 def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp_path):
     branch = tmp_path / "branch"
     promoted = tmp_path / "artifact" / "promoted"
@@ -682,7 +719,7 @@ def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp
         payload["requirements"]["continuationMethod"]
         == "stateful_continuation_or_full_replay_fallback"
     )
-    assert payload["requirements"]["fallback"]["fullReplayFallbackMaxSeconds"] == 150.0
+    assert payload["requirements"]["fallback"]["fullReplayFallbackMaxSeconds"] == 120.0
     assert "full_replay_fallback" in payload["requirements"]["sourceEditPolicy"][
         "allowedReasons"
     ]
