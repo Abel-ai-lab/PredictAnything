@@ -465,8 +465,9 @@ branch or round, use `promote-strategy --branch <branch> --round <round>`.
 Do not manually walk `results.tsv` or branch folders to choose the best
 session strategy; session-level commands let the CLI select it. If the command
 emits a hosted paper `paper-contract-request.json`,
-read the request first and use its `reportTemplate`; open `contractGuide` when
-stateful continuation, source edits, or gate diagnosis need deeper guidance.
+read the request first and use its `reportTemplate`; when `contractGuide` is
+needed, open its `referencePath` from the active Abel Invest skill, not from the
+workspace or CLI package path.
 Edit only when `sourceEditPolicy` says a source edit is required or genuinely
 allowed, and declare the paper history boundary in `paper-contract-report.json`.
 Rerun the same command afterward. Do not start a separate agent process. Use

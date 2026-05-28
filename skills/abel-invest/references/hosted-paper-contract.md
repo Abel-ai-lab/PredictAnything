@@ -107,9 +107,9 @@ Choose one runtime shape:
 - `stateless_recompute`: paper execution computes the current signal from legal
   market data, immutable assets, source parameters, and an explicit history
   boundary. It writes no strategy state and normally does not need source edits.
-- `stateful_continuation`: the strategy builds strategy-owned cutover state,
-  advances it through paper dates, and persists the advanced state. Use this
-  for fitted objects and walking-forward training.
+- `stateful_continuation`: the strategy builds minimal strategy-owned cutover
+  state, advances it through paper dates, and persists the advanced state. Use
+  this for fitted objects and walking-forward training.
 - `full_replay_fallback`: last-resort fallback only when the request says it is
   eligible. It may call the original full path and must pass the fallback
   performance gate. If that cannot pass, report the export as failed rather than
@@ -144,9 +144,16 @@ def build_paper_initial_state(self, *, cutover_as_of=None) -> dict:
     ...
 ```
 
-The hook builds state valid through `cutover_as_of` using the same state schema
-that `get_paper_signal` consumes. It may return JSON-serializable state or write
-files under `paths.state / "strategy"`.
+The hook constructs the minimal state valid through `cutover_as_of` using the
+same state schema that `get_paper_signal` consumes. It may return
+JSON-serializable state or write files under `paths.state / "strategy"`.
+
+Prefer constructing the still-live cutover state directly from source semantics:
+current fitted models/scalers, retrain anchors, feature caches, cursors, and
+last emitted position. Do not default to replaying the full selected backtest
+history. A bounded suffix replay is acceptable when it is the smallest reliable
+way to reconstruct equivalent state; origin-to-cutover replay is a last resort
+and must still fit the hosted paper timeout.
 
 Future `get_paper_signal(as_of=...)` calls should load that state, advance only
 the rows/dates after the stored cursor, refit only when the original strategy's
@@ -154,9 +161,9 @@ continuation calendar says a refit is due, and persist the updated state. Do
 not cold-start the whole training path on every paper call.
 
 The gate calls the bootstrap hook for the validation cutover, then uses Edge
-`paper_run_one(...)` for holdout tail replay with prepared market data from the
+`paper_run_one(...)` for holdout tail advance with prepared market data from the
 selected branch dependencies/cache. If parity and idempotence pass, the
-strategy-owned state produced by that replay is packaged as
+strategy-owned state produced by that advance is packaged as
 `runtime/initial-state/**`. Do not hand-build final startup files for normal
 stateful continuation, and do not encode expected positions or gate answers in
 state.
@@ -183,7 +190,7 @@ class BranchEngine(StrategyEngine):
 
     def build_paper_initial_state(self, *, cutover_as_of=None):
         store = self._paper_store()
-        state = self._build_state_through(cutover_as_of)
+        state = self._build_cutover_state(cutover_as_of)
         state["schema"] = STATE_SCHEMA
         state["last_as_of"] = store.as_of_key(cutover_as_of)
         store.save(state)
@@ -209,11 +216,13 @@ class BranchEngine(StrategyEngine):
         )
 ```
 
-`_build_state_through(...)` should replay only what is needed to create
+`_build_cutover_state(...)` should construct only what is needed to create
 cutover state that matches the selected research strategy through
-`cutover_as_of`. `_advance_paper_state(...)` should process only dates after the
-stored cursor and should refit only when the original strategy's continuation
-calendar says a refit is due.
+`cutover_as_of`. For example, if the source refits every N rows, build the
+model/scaler for the last active retrain anchor at cutover instead of refitting
+every earlier anchor. `_advance_paper_state(...)` should process only dates
+after the stored cursor and should refit only when the original strategy's
+continuation calendar says a refit is due.
 
 ## Report
 
@@ -280,7 +289,7 @@ Write `paper-contract-report.json` with this shape:
 If the strategy has immutable external assets, add a top-level `paths` object
 with `packagedFiles` copied under `strategy/**`. For normal
 `stateful_continuation`, do not list manual `initialStateFiles`; let the gate
-package the replayed strategy state after parity passes.
+package the advanced strategy state after parity passes.
 
 Set `paperSignal.incrementalReady=true` only when future hosted paper days can
 continue beyond the selected research result.

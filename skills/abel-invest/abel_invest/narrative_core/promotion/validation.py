@@ -394,7 +394,8 @@ def _validate_continuation_method_admissibility(
         raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.method=stateless_recompute conflicts with "
             f"observed ML training/refit/update calls in the selected source: {joined}. "
-            "Use stateful_continuation and reread references/hosted-paper-contract.md."
+            "Use stateful_continuation and reread the active Abel Invest skill "
+            "reference named by contractGuide.referencePath."
         )
     if (
         observed_fit_calls

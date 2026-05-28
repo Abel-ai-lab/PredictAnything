@@ -76,8 +76,8 @@ Always start by resolving workspace state before strategy work.
   source edits, `paper-contract-report.json`, packaged strategy assets, or hosted
   paper state:
   read the emitted `paper-contract-request.json` first; read
-  `references/hosted-paper-contract.md` when the request requires stateful
-  continuation, source edits, or deeper gate diagnosis.
+  `contractGuide.referencePath` from this active skill when the request requires
+  stateful continuation, source edits, or deeper gate diagnosis.
 - Explaining why the workflow is data-led, graph-informed, or evidence-boundary oriented:
   optionally read `references/methodology.md`.
 - Choosing concrete constructions while writing the engine:
@@ -247,10 +247,10 @@ Visualization and promotion:
 - If visualization or artifact export emits a hosted paper
   `paper-contract-request.json`, handle it in this same skill loop. Read the
   request first and use its `reportTemplate`. Read
-  `references/hosted-paper-contract.md` only when the request calls for
-  stateful continuation, source edits, or deeper gate diagnosis. Edit only the
-  promoted copy when the request's source-edit policy requires it, write the requested
-  `paper-contract-report.json`, and rerun the same command.
+  `contractGuide.referencePath` from this active skill only when the request
+  calls for stateful continuation, source edits, or deeper gate diagnosis. Edit
+  only the promoted copy when the request's source-edit policy requires it,
+  write the requested `paper-contract-report.json`, and rerun the same command.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`
   owns API key setup; do not ask for a router URL unless the user is testing a
   non-default router.

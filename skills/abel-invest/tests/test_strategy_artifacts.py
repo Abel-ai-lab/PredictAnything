@@ -312,10 +312,16 @@ def test_contract_request_is_slim_and_marks_training_stateful(tmp_path):
     assert scaffold["name"] == "stateful_continuation_paper_state_store"
     assert scaffold["statePath"] == "strategy/paper_state.pkl"
     assert "build_paper_initial_state" in scaffold["code"]
+    assert "_build_cutover_state" in scaffold["code"]
+    assert "_build_state_through" not in scaffold["code"]
     assert "get_paper_signal" in scaffold["code"]
     assert "PaperStateStore.from_context" in scaffold["code"]
     assert "runtime/initial-state/**" in scaffold["gateHandoff"]
     assert "contractGuide" in payload
+    assert "path" not in payload["contractGuide"]
+    assert payload["contractGuide"]["type"] == "skill_reference"
+    assert payload["contractGuide"]["skill"] == "abel-invest"
+    assert payload["contractGuide"]["referencePath"] == "references/hosted-paper-contract.md"
     assert "reportContract" not in payload
     assert "gateContract" not in payload
     assert "runtimeApiFacts" not in payload

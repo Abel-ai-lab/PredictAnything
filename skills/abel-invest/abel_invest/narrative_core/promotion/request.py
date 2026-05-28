@@ -29,14 +29,14 @@ from .utils import _clean, _date_part, _finite_float, _json_safe
 _source_scan_observations = source_scan.source_scan_observations
 
 def _hosted_paper_contract_guide_reference() -> dict[str, Any]:
-    guide_path = Path(__file__).resolve().parents[2] / "references" / "hosted-paper-contract.md"
     return {
-        "path": str(guide_path),
-        "relativePath": "references/hosted-paper-contract.md",
+        "type": "skill_reference",
+        "skill": "abel-invest",
+        "referencePath": "references/hosted-paper-contract.md",
         "instruction": (
-            "Use this Markdown guide when stateful continuation, source edits, "
-            "or gate diagnosis need deeper guidance. The request is the normal "
-            "work order."
+            "Open this reference from the active Abel Invest skill when "
+            "stateful continuation, source edits, or gate diagnosis need "
+            "deeper guidance. The request is the normal work order."
         ),
     }
 
@@ -51,7 +51,9 @@ def _hosted_paper_contract_scaffold_references(
             "when": "requirements.statefulContinuationRequired=true",
             "purpose": (
                 "Minimal interface shape for strategy-owned hosted paper state. "
-                "Adapt the helper methods to the selected strategy semantics."
+                "Adapt the helper methods to the selected strategy semantics; "
+                "build_paper_initial_state should construct minimal cutover "
+                "state, not default to full-history replay."
             ),
             "statePath": "strategy/paper_state.pkl",
             "interfaces": [
@@ -69,7 +71,7 @@ def _hosted_paper_contract_scaffold_references(
                 "    return PaperStateStore.from_context(self.context, 'strategy/paper_state.pkl')\n\n"
                 "def build_paper_initial_state(self, *, cutover_as_of=None):\n"
                 "    store = self._paper_store()\n"
-                "    state = self._build_state_through(cutover_as_of)\n"
+                "    state = self._build_cutover_state(cutover_as_of)\n"
                 "    state['schema'] = STATE_SCHEMA\n"
                 "    state = store.mark_current(state, cutover_as_of)\n"
                 "    store.save(state)\n"
@@ -86,8 +88,8 @@ def _hosted_paper_contract_scaffold_references(
             ),
             "gateHandoff": (
                 "Promotion calls build_paper_initial_state for the validation cutover, "
-                "then replays the tail with Edge paper_run_one. If parity passes, the "
-                "state produced by that replay is packaged as runtime/initial-state/**. "
+                "then advances the tail with Edge paper_run_one. If parity passes, the "
+                "state produced by that advance is packaged as runtime/initial-state/**. "
                 "Do not hand-build final startup state or encode expected positions."
             ),
         }
@@ -371,9 +373,10 @@ def _write_hosted_paper_contract_request(
     ):
         guide = _hosted_paper_contract_guide_reference()
         guide["instruction"] = (
-            "Use this guide only when stateful continuation, source edits, or a "
-            "gate failure require deeper details. Clear stateless cases should be "
-            "solvable from this request and sourcePath."
+            "Open this reference from the active Abel Invest skill only when "
+            "stateful continuation, source edits, or a gate failure require "
+            "deeper details. Clear stateless cases should be solvable from "
+            "this request and sourcePath."
         )
         request_payload["contractGuide"] = guide
     if facts_sidecar is not None:
