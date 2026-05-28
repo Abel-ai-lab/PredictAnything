@@ -49,7 +49,6 @@ from .report import (
     _report_continuation_method,
     _report_has_hosted_paper_contract,
     _report_paper_execution_profile,
-    _report_replacements,
     _write_artifact_contract_report,
 )
 from .request import (
@@ -106,7 +105,6 @@ def prepare_promotion(
     patch_path = None
     contract_report_path = None
     mode = PROMOTION_MODE_ZERO_CHANGE
-    contract_replacements: list[dict[str, str]] = []
     contract_summary = ""
     packaged_files: tuple[PromotionPackagedFile, ...] = ()
     contract_report: dict[str, Any] | None = None
@@ -116,7 +114,6 @@ def prepare_promotion(
     if agent_contract_ready:
         promoted_text = promoted_source.read_text(encoding="utf-8")
         contract_report = _load_agent_contract_report(existing_contract_report)
-        contract_replacements = _report_replacements(contract_report)
         if not _report_has_hosted_paper_contract(contract_report):
             raise PromotionHostedPaperContractRequired(
                 "hosted paper contract report must use hosted_paper_contract scope"
@@ -155,16 +152,16 @@ def prepare_promotion(
         strategy_source_path = promoted_source
         contract_report_path = artifact_contract_report_path
 
-    replacements = contract_replacements
-    if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
+    source_changed = promoted_text != original_text
+    if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT and source_changed:
         patch_path = promoted_dir / PROMOTION_PATCH_FILENAME
         patch_path.write_text(
-            _simple_patch_summary(
+            _source_edit_summary(
                 candidate.strategy_source_path,
-                replacements,
                 scope=_clean(contract_report.get("scope"))
                 if contract_report is not None
                 else "agent_paper_contract",
+                report=contract_report,
             ),
             encoding="utf-8",
         )
@@ -172,19 +169,19 @@ def prepare_promotion(
 
     original_sha = sha256_file(candidate.strategy_source_path)
     promoted_sha = sha256_file(strategy_source_path)
-    contract_payload = (
-        {
+    if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
+        contract_payload = {
             "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
             "summary": contract_summary,
-            "patchPath": f"edge/{PROMOTION_PATCH_FILENAME}",
             "reportPath": f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}",
         }
-        if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT
-        else None
-    )
+        if patch_path is not None:
+            contract_payload["patchPath"] = f"edge/{PROMOTION_PATCH_FILENAME}"
+    else:
+        contract_payload = None
     behavior_equivalence = _default_behavior_equivalence(
         mode=mode,
-        replacements=replacements,
+        source_changed=source_changed,
     )
     paper_dry_run = _fast_paper_validation(
         mode=mode,
@@ -306,8 +303,7 @@ def prepare_promotion(
                 ]
             ),
             "packagedFileCount": len(packaged_files),
-            "replacementCount": len(replacements),
-            "contractReplacementCount": len(contract_replacements),
+            "sourceChanged": source_changed,
             "contractSummary": contract_summary,
             "patchPath": str(patch_path) if patch_path is not None else "",
             "contractReportPath": str(contract_report_path)
@@ -321,14 +317,14 @@ def prepare_promotion(
 def _default_behavior_equivalence(
     *,
     mode: str,
-    replacements: list[dict[str, str]],
+    source_changed: bool,
 ) -> dict[str, Any]:
     return {
         "status": "passed",
         "method": "agent_declared_hosted_paper_contract"
         if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT
         else "source_hash_identity",
-        "replacements": replacements,
+        "sourceChanged": source_changed,
     }
 
 
@@ -336,19 +332,24 @@ def _default_behavior_equivalence(
 
 
 
-def _simple_patch_summary(
+def _source_edit_summary(
     source_path: Path,
-    replacements: list[dict[str, str]],
     *,
     scope: str = PROMOTION_HOSTED_CONTRACT_SCOPE,
+    report: dict[str, Any] | None = None,
 ) -> str:
+    source_edit = report.get("sourceEdit") if isinstance(report, dict) else None
+    paths = source_edit.get("paths") if isinstance(source_edit, dict) else []
     lines = [
         f"source: {source_path}",
         f"scope: {scope}",
-        "replacements:",
+        "sourceEdit:",
     ]
-    for replacement in replacements:
-        reason = replacement.get("reason")
-        suffix = f" ({reason})" if reason else ""
-        lines.append(f"- {replacement['path']} -> {replacement['replacement']}{suffix}")
+    if isinstance(source_edit, dict):
+        lines.append(f"- reason: {_clean(source_edit.get('reason'))}")
+    if isinstance(paths, list) and paths:
+        for path in paths:
+            lines.append(f"- path: {path}")
+    else:
+        lines.append("- path: engine.py")
     return "\n".join(lines) + "\n"

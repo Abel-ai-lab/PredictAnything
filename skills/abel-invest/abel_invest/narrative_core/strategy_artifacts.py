@@ -1329,14 +1329,16 @@ def _manifest_promotion_payload(
         },
     }
     if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
-        payload["contract"] = {
+        contract = {
             "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
             "summary": promotion.report.get("contractSummary")
             if promotion is not None
             else "Agent declared the hosted paper contract.",
-            "patchPath": f"edge/{PROMOTION_PATCH_FILENAME}",
             "reportPath": f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}",
         }
+        if promotion is not None and promotion.patch_path is not None:
+            contract["patchPath"] = f"edge/{PROMOTION_PATCH_FILENAME}"
+        payload["contract"] = contract
     return payload
 
 

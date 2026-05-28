@@ -96,6 +96,9 @@ def tail_parity_failure_diagnosis(
             "validationCutoverAsOf",
             "holdoutStartDecisionIndex",
             "selectionReason",
+            "nearbyComparisons",
+            "previousRowsMatched",
+            "mismatchAtWindowEnd",
         )
         if key in summary
     }
@@ -211,7 +214,22 @@ def _tail_consistency_summary(tail: dict[str, Any]) -> dict[str, Any]:
         1 for item in comparison_rows if item.get("stateChanged") is True
     )
     if mismatches:
-        summary["firstMismatch"] = _tail_mismatch_summary(mismatches[0])
+        first = mismatches[0]
+        mismatch_index = comparison_rows.index(first)
+        summary["firstMismatch"] = _tail_mismatch_summary(first)
+        summary["nearbyComparisons"] = [
+            _tail_mismatch_summary(item)
+            for item in comparison_rows[
+                max(0, mismatch_index - 2) : min(
+                    len(comparison_rows),
+                    mismatch_index + 3,
+                )
+            ]
+        ]
+        summary["previousRowsMatched"] = not any(
+            item in mismatches for item in comparison_rows[:mismatch_index]
+        )
+        summary["mismatchAtWindowEnd"] = mismatch_index == len(comparison_rows) - 1
     return summary
 
 

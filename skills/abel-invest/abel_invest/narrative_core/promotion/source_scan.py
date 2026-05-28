@@ -432,11 +432,11 @@ def history_boundary_candidates(
     ]
     origin_risks.extend(_history_hint_label(item) for item in calendar_hints)
     suggested_bars = _suggested_finite_history_bars(parameter_hints, constant_hints)
-    fixed_candidate = bool(finite_evidence) and not origin_risks
+    fixed_candidate = bool(finite_evidence)
     return {
         "fixedLookback": {
             "candidate": fixed_candidate,
-            "confidence": "medium" if fixed_candidate else "low",
+            "confidence": "medium" if fixed_candidate and not origin_risks else "low",
             "suggestedBars": suggested_bars if fixed_candidate else None,
             "evidence": finite_evidence[:12],
             "risks": origin_risks[:12],
@@ -471,14 +471,33 @@ def _suggested_finite_history_bars(
 ) -> int | None:
     numbers: list[int] = []
     for item in [*parameter_hints, *constant_hints]:
-        name = _clean(item.get("name")).lower()
-        expression = _clean(item.get("expression")).lower()
-        if not any(part in f"{name} {expression}" for part in TEMPORAL_CONSTANT_NAME_PARTS):
+        if not _is_suggested_lookback_hint(item):
             continue
         number = _positive_int_from_text(_clean(item.get("value")))
         if number is not None:
             numbers.append(number)
     return max(numbers) if numbers else None
+
+
+def _is_suggested_lookback_hint(item: dict[str, Any]) -> bool:
+    name = _clean(item.get("name")).lower()
+    expression = _clean(item.get("expression")).lower()
+    text = f"{name} {expression}"
+    if name.startswith("min_") or "min_period" in text or "min_row" in text:
+        return False
+    return any(
+        part in text
+        for part in (
+            "bars",
+            "lag",
+            "lookback",
+            "period",
+            "span",
+            "train_window",
+            "window",
+            "windows",
+        )
+    )
 
 
 def _positive_int_from_text(value: str) -> int | None:

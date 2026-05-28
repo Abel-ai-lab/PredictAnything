@@ -24,7 +24,7 @@ from .facts import (
     _scan_has_external_file_dependency,
 )
 from . import source_scan
-from .utils import _clean, _finite_float, _json_safe
+from .utils import _clean, _date_part, _finite_float, _json_safe
 
 _source_scan_observations = source_scan.source_scan_observations
 
@@ -108,6 +108,7 @@ def _hosted_paper_contract_requirements(
         stateful_required=stateful_required,
         fallback_allowed=fallback_allowed,
     )
+    fallback_payload = _fallback_payload(attempt_policy, expanded=fallback_allowed)
     if training_observed and fallback_allowed:
         continuation_method = "stateful_continuation_or_full_replay_fallback"
         reason = (
@@ -141,19 +142,39 @@ def _hosted_paper_contract_requirements(
         "sourceEditPolicy": source_edit_policy,
         "reason": reason,
         "observedTrainingCalls": training_calls,
-        "fallback": {
-            "fullReplayFallbackEligible": bool(
-                attempt_policy.get("fullReplayFallbackEligible")
-            ),
-            "notHostableAllowed": bool(attempt_policy.get("notHostableAllowed")),
-            "liveContractFailures": _nonnegative_int(
-                attempt_policy.get("liveContractFailures")
-            ),
+        "fallback": fallback_payload,
+        "hardBoundaries": [
+            "Do not edit the original research branch source.",
+            "Edit sourcePath only when sourceEditPolicy.required is true or when a listed allowed reason is genuinely needed.",
+            "Do not package selected-round trade-log.csv, gate answers, or promotion outputs as live strategy assets or startup state.",
+            "Do not choose full_replay_fallback unless fallback.fullReplayFallbackEligible is true.",
+        ],
+    }
+
+
+def _fallback_payload(
+    attempt_policy: dict[str, Any],
+    *,
+    expanded: bool,
+) -> dict[str, Any]:
+    eligible = bool(attempt_policy.get("fullReplayFallbackEligible"))
+    payload: dict[str, Any] = {
+        "fullReplayFallbackEligible": eligible,
+        "liveContractFailures": _nonnegative_int(
+            attempt_policy.get("liveContractFailures")
+        ),
+        "contractRequestRefreshes": _nonnegative_int(
+            attempt_policy.get("contractRequestRefreshes")
+        ),
+    }
+    if not expanded:
+        payload["status"] = "unavailable"
+        return payload
+    payload.update(
+        {
+            "status": "available",
             "fallbackAfterFailures": _nonnegative_int(
                 attempt_policy.get("fallbackAfterFailures")
-            ),
-            "contractRequestRefreshes": _nonnegative_int(
-                attempt_policy.get("contractRequestRefreshes")
             ),
             "fallbackAfterRequestRefreshes": _nonnegative_int(
                 attempt_policy.get("fallbackAfterRequestRefreshes")
@@ -165,15 +186,9 @@ def _hosted_paper_contract_requirements(
                 attempt_policy.get("fullReplayFallbackMaxSeconds")
             )
             or PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS,
-        },
-        "hardBoundaries": [
-            "Do not edit the original research branch source.",
-            "Edit sourcePath only when sourceEditPolicy.required is true or when a listed allowed reason is genuinely needed.",
-            "Do not package selected-round trade-log.csv, gate answers, or promotion outputs as live strategy assets or startup state.",
-            "Do not choose full_replay_fallback or not_hostable unless fallback.fullReplayFallbackEligible is true.",
-            "full_replay_fallback must pass tail parity and the 120s hosted paper timeout.",
-        ],
-    }
+        }
+    )
+    return payload
 
 def _source_edit_policy(
     dependency_scan: dict[str, Any],
@@ -229,14 +244,13 @@ def _contract_attempt_policy(
         "liveContractFailures": failures,
         "contractRequestRefreshes": request_refreshes,
         "fullReplayFallbackEligible": eligible,
-        "notHostableAllowed": eligible,
         "fallbackAfterFailures": PROMOTION_LIVE_CONTRACT_FAILURES_BEFORE_FALLBACK,
         "fallbackAfterRequestRefreshes": PROMOTION_CONTRACT_REQUESTS_BEFORE_FALLBACK,
         "fallbackEligibilityReason": eligibility_reason,
         "fullReplayFallbackMaxSeconds": PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS,
         "rule": (
             "Use stateless_recompute or stateful_continuation first. "
-            "full_replay_fallback and not_hostable are only available after "
+            "full_replay_fallback is only available after "
             "enough complete live contract failures or contract request refreshes."
         ),
     }
@@ -315,49 +329,62 @@ def _write_hosted_paper_contract_request(
         attempt_policy=attempt_policy,
     )
     scaffolds = _hosted_paper_contract_scaffold_references(requirements)
-    facts_sidecar = _write_hosted_paper_contract_facts_sidecar(
-        promoted_dir,
-        facts=facts,
+    facts_sidecar = (
+        _write_hosted_paper_contract_facts_sidecar(promoted_dir, facts=facts)
+        if _should_write_facts_sidecar(
+            facts,
+            validation_failure=validation_failure,
+        )
+        else None
     )
     compact_facts = _hosted_paper_contract_work_order_facts(facts)
-    guide = _hosted_paper_contract_guide_reference()
-    guide["instruction"] = (
-        "Use this guide only when stateful continuation, source edits, or a "
-        "gate failure require deeper details. Clear stateless cases should be "
-        "solvable from this request and sourcePath."
-    )
     request_payload = {
         "schema": PROMOTION_AGENT_REQUEST_SCHEMA,
         "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
         "scope": PROMOTION_HOSTED_CONTRACT_SCOPE,
         "sourcePath": str(source_path),
         "branchPath": str(branch),
+        "selection": _request_selection_payload(branch, promoted_dir),
         "output": {
             "artifactDir": str(promoted_dir.parent),
             "promotedDir": str(promoted_dir),
             "reportPath": str(promoted_dir / PROMOTION_CONTRACT_REPORT_FILENAME),
         },
-        "contractGuide": guide,
+        "rerun": {
+            "instruction": "Write paper-contract-report.json, then rerun the same export, visualize, or promote command.",
+        },
         "task": _hosted_paper_contract_work_order_task(requirements),
         "requirements": requirements,
         "signals": signals,
         "facts": compact_facts,
-        "factSidecars": {
+        "reportTemplate": _hosted_paper_contract_report_template(
+            requirements,
+            cutover_end=cutover_end,
+            data_history_start=_scan_data_history_start(facts),
+        ),
+        "validation": validation_payload,
+        "selectedRoundCutoverEnd": cutover_end,
+    }
+    if _should_include_contract_guide(
+        requirements,
+        validation_failure=validation_failure,
+    ):
+        guide = _hosted_paper_contract_guide_reference()
+        guide["instruction"] = (
+            "Use this guide only when stateful continuation, source edits, or a "
+            "gate failure require deeper details. Clear stateless cases should be "
+            "solvable from this request and sourcePath."
+        )
+        request_payload["contractGuide"] = guide
+    if facts_sidecar is not None:
+        request_payload["factSidecars"] = {
             "fullFactsPath": str(facts_sidecar),
             "fullFactsRelativePath": PROMOTION_CONTRACT_FACTS_FILENAME,
             "usage": (
                 "Optional debugging evidence. Start from this request; inspect "
                 "the sidecar only when sourcePath plus compact facts are insufficient."
             ),
-        },
-        "reportTemplate": _hosted_paper_contract_report_template(
-            requirements,
-            cutover_end=cutover_end,
-        ),
-        "attemptPolicy": attempt_policy,
-        "validation": validation_payload,
-        "selectedRoundCutoverEnd": cutover_end,
-    }
+        }
     if scaffolds:
         request_payload["scaffolds"] = scaffolds
     request_path.write_text(
@@ -365,6 +392,58 @@ def _write_hosted_paper_contract_request(
         encoding="utf-8",
     )
     return request_path
+
+
+def _should_include_contract_guide(
+    requirements: dict[str, Any],
+    *,
+    validation_failure: dict[str, Any] | None,
+) -> bool:
+    if validation_failure is not None or requirements.get("statefulContinuationRequired"):
+        return True
+    source_edit_policy = requirements.get("sourceEditPolicy")
+    return isinstance(source_edit_policy, dict) and bool(source_edit_policy.get("expected"))
+
+
+def _should_write_facts_sidecar(
+    facts: dict[str, Any],
+    *,
+    validation_failure: dict[str, Any] | None,
+) -> bool:
+    if validation_failure is not None or _scan_has_external_file_dependency(facts):
+        return True
+    if facts.get("stateDependencies"):
+        return True
+    imports = facts.get("imports") if isinstance(facts.get("imports"), list) else []
+    return any(
+        isinstance(item, dict)
+        and item.get("classification") not in {"stdlib", "allowed_runtime"}
+        for item in imports
+    )
+
+
+def _request_selection_payload(branch: Path, promoted_dir: Path) -> dict[str, str]:
+    round_dir = promoted_dir.parent
+    return {
+        "branchId": branch.name,
+        "roundId": round_dir.name,
+        "mode": "selected_strategy",
+    }
+
+
+def _scan_data_history_start(facts: dict[str, Any]) -> str:
+    backtest_window = facts.get("backtestWindow")
+    if not isinstance(backtest_window, dict):
+        return ""
+    effective = backtest_window.get("effectiveWindow")
+    if isinstance(effective, dict):
+        value = _date_part(_clean(effective.get("start")))
+        if value:
+            return value
+    requested = backtest_window.get("requestedWindow")
+    if isinstance(requested, dict):
+        return _date_part(_clean(requested.get("start")))
+    return ""
 
 def _write_hosted_paper_contract_facts_sidecar(
     promoted_dir: Path,
@@ -434,8 +513,9 @@ def _hosted_paper_contract_work_order_facts(
                 "Harness boundary candidates are observations, not answers. Read "
                 "sourcePath before choosing history.boundary. Use fixed_lookback "
                 "only when source semantics are finite-window; use origin_anchored "
-                "for expanding/cumulative/ranked history, absolute row ordinals, "
-                "fitted calendars, or unresolved history needs."
+                "for expanding/cumulative/ranked history, row-index dependencies "
+                "that affect the emitted as_of decision, fitted calendars, or "
+                "unresolved history needs."
             ),
         },
         "assetPolicy": validation_oracle.get("assetPolicy")
@@ -503,6 +583,7 @@ def _hosted_paper_contract_report_template(
     requirements: dict[str, Any],
     *,
     cutover_end: str,
+    data_history_start: str = "",
 ) -> dict[str, Any]:
     stateful_required = requirements.get("statefulContinuationRequired") is True
     continuation_method = (
@@ -513,6 +594,58 @@ def _hosted_paper_contract_report_template(
         if isinstance(requirements.get("sourceEditPolicy"), dict)
         else {}
     )
+    paper_signal: dict[str, Any] = {
+        "implemented": True,
+        "incrementalReady": True,
+        "continuation": {
+            "method": continuation_method,
+            "reason": "Fill in why this execution shape preserves semantics.",
+            "futureDailyFlow": "Fill in how one future as_of call runs.",
+        },
+        "design": {
+            "history": {
+                "boundary": "",
+                "lookbackBars": None,
+                "origin": "",
+                "reason": (
+                    "Choose after reading sourcePath; do not copy harness "
+                    "historyBoundaryCandidates blindly."
+                ),
+            },
+            "state": {
+                "usesPersistentState": stateful_required,
+                "stateFiles": [] if not stateful_required else ["strategy/..."],
+                "reason": "No strategy-owned state is needed."
+                if not stateful_required
+                else "",
+            },
+        },
+        "evidence": {
+            "observations": ["Fill in the source fact you verified."],
+            "whySufficient": "Fill in why these observations support the method.",
+        },
+    }
+    if stateful_required:
+        paper_signal["design"].update(
+            {
+                "calendar": {
+                    "usesAbsoluteDecisionOrdinal": False,
+                    "origin": "",
+                    "reason": "",
+                },
+                "cutover": {
+                    "requiresStartupState": True,
+                    "mode": "minimal_cutover_state",
+                    "bootstrapHook": "build_paper_initial_state",
+                    "dataHistoryStart": data_history_start,
+                    "stateEnd": cutover_end,
+                    "reason": "",
+                },
+                "dailyStep": {
+                    "reason": "Fill in what is loaded, advanced, or recomputed each paper day."
+                },
+            }
+        )
     return {
         "schema": PROMOTION_AGENT_REPORT_SCHEMA,
         "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
@@ -522,52 +655,5 @@ def _hosted_paper_contract_report_template(
             "reason": source_edit_policy.get("reason") or "",
             "paths": ["engine.py"] if source_edit_policy.get("required") else [],
         },
-        "paperSignal": {
-            "implemented": True,
-            "incrementalReady": True,
-            "continuation": {
-                "method": continuation_method,
-                "reason": "Fill in why this execution shape preserves semantics.",
-                "futureDailyFlow": "Fill in how one future as_of call advances.",
-            },
-            "design": {
-                "history": {
-                    "boundary": "",
-                    "lookbackBars": None,
-                    "origin": "",
-                    "reason": (
-                        "Choose after reading sourcePath; do not copy harness "
-                        "historyBoundaryCandidates blindly."
-                    ),
-                },
-                "state": {
-                    "usesPersistentState": stateful_required,
-                    "stateFiles": [] if not stateful_required else ["strategy/..."],
-                    "reason": "",
-                },
-                "calendar": {
-                    "usesAbsoluteDecisionOrdinal": False,
-                    "origin": "",
-                    "reason": "",
-                },
-                "cutover": {
-                    "requiresStartupState": stateful_required,
-                    "mode": "minimal_cutover_state" if stateful_required else "none",
-                    "bootstrapHook": "build_paper_initial_state"
-                    if stateful_required
-                    else "",
-                    "dataHistoryStart": "",
-                    "stateEnd": cutover_end if stateful_required else "",
-                    "reason": "",
-                },
-                "dailyStep": {
-                    "reason": "Fill in what is recomputed or loaded each paper day."
-                },
-            },
-            "evidence": {
-                "observations": ["Fill in the source fact you verified."],
-                "semanticChecks": [],
-                "whySufficient": "Fill in why these checks are sufficient.",
-            },
-        },
+        "paperSignal": paper_signal,
     }

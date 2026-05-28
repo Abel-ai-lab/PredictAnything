@@ -3045,7 +3045,7 @@ def test_contract_report_allows_strategy_owned_initial_state(
     )
 
 
-def test_contract_report_rejects_incremental_ready_contradiction() -> None:
+def test_contract_report_does_not_gate_on_live_readiness_prose() -> None:
     source = (
         "from abel_edge.engine.base import StrategyEngine\n"
         "class BranchEngine(StrategyEngine):\n"
@@ -3059,15 +3059,11 @@ def test_contract_report_rejects_incremental_ready_contradiction() -> None:
         "limitations": [],
     }
 
-    with pytest.raises(
-        promotion_helpers.PromotionHostedPaperContractRequired,
-        match="incrementalReady=true conflicts",
-    ):
-        promotion_helpers._validate_agent_paper_signal_contract(
-            report,
-            source,
-            require_paper_signal=True,
-        )
+    promotion_helpers._validate_agent_paper_signal_contract(
+        report,
+        source,
+        require_paper_signal=True,
+    )
 
 
 def test_contract_report_allows_negated_replay_language() -> None:
@@ -3294,10 +3290,10 @@ def test_hosted_paper_request_opens_full_replay_fallback_after_failures(
         )
 
     request = json.loads(request_path.read_text(encoding="utf-8"))
-    policy = request["attemptPolicy"]
+    policy = request["validation"]["attemptPolicy"]
     assert policy["liveContractFailures"] == 3
     assert policy["fullReplayFallbackEligible"] is True
-    assert policy["notHostableAllowed"] is True
+    assert request["requirements"]["fallback"]["status"] == "available"
 
 
 def test_contract_report_rejects_full_replay_fallback_before_policy_allows() -> None:

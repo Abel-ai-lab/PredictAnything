@@ -50,6 +50,9 @@ def _promotion_gate_failure_request_payload(
             ):
                 if key in smoke:
                     compact_smoke[key] = _json_safe(smoke[key])
+            state_lifecycle = _state_lifecycle_summary(smoke)
+            if state_lifecycle:
+                compact_smoke["stateLifecycle"] = state_lifecycle
             if compact_smoke:
                 failure["smoke"] = _json_safe(compact_smoke)
                 failure["oraclePolicy"] = (
@@ -65,6 +68,26 @@ def _promotion_gate_failure_request_payload(
     if selected_round_cutover_end:
         payload["selectedRoundCutoverEnd"] = selected_round_cutover_end
     return payload
+
+
+def _state_lifecycle_summary(smoke: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    bootstrap = smoke.get("validationBootstrap")
+    if isinstance(bootstrap, dict):
+        for key in ("required", "status", "method", "cutoverAsOf", "stateChanged"):
+            if key in bootstrap:
+                summary[f"bootstrap{key[:1].upper()}{key[1:]}"] = _json_safe(
+                    bootstrap[key]
+                )
+    for key in (
+        "stateChangedFirstCall",
+        "stateChangedSecondCall",
+        "sameResult",
+        "generatedInitialStateFileCount",
+    ):
+        if key in smoke:
+            summary[key] = _json_safe(smoke[key])
+    return summary
 def _build_contract_promotion_gate_report(
     **kwargs: Any,
 ) -> dict[str, Any]:

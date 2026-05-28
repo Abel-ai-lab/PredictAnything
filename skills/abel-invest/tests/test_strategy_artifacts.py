@@ -543,10 +543,8 @@ def test_ml_training_source_rejects_stateless_recompute_report():
             },
             "evidence": {
                 "observations": ["source read"],
-                "semanticChecks": [],
                 "whySufficient": "same formula",
             },
-            "liveReadiness": "continues from market data",
         },
     }
     source = """
@@ -619,13 +617,9 @@ def _stateful_training_report(*, state_reason: str) -> dict:
             },
             "evidence": {
                 "observations": ["source read"],
-                "semanticChecks": ["cutover state validity checked"],
                 "whySufficient": "same state schema is used by bootstrap and paper",
             },
-            "liveReadiness": "future calls load state and continue",
         },
-        "limitations": [],
-        "replacements": [],
     }
 
 
@@ -649,29 +643,11 @@ class BranchEngine:
 """
 
 
-def test_ml_training_stateful_rejects_cursor_only_state_report():
-    with pytest.raises(PromotionHostedPaperContractRequired, match="fitted-object"):
-        _validate_agent_paper_signal_contract(
-            _stateful_training_report(
-                state_reason=(
-                    "paper state stores last as_of, last next_position, and row cursor"
-                )
-            ),
-            _stateful_source(),
-            require_paper_signal=True,
-            source_dependency_scan={
-                "sourceScan": {
-                    "positiveFindings": {"observedFitCalls": ["model.fit"]}
-                }
-            },
-        )
-
-
-def test_ml_training_stateful_accepts_fitted_object_state_evidence():
+def test_ml_training_stateful_contract_does_not_gate_on_prose_keywords():
     _validate_agent_paper_signal_contract(
         _stateful_training_report(
             state_reason=(
-                "paper state stores fitted model, scaler, last fit index, and row cursor"
+                "paper state stores last as_of, last next_position, and row cursor"
             )
         ),
         _stateful_source(),
@@ -736,6 +712,41 @@ def test_temporal_scan_emits_boundary_candidates_not_answers():
     assert "Candidate facts only" in candidates["fixedLookback"]["note"]
 
 
+def test_temporal_scan_keeps_fixed_candidate_with_positional_risk():
+    source = (
+        "class BranchEngine:\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        signal = ctx.target.close.rolling(window=40).mean()\n"
+        "        signal.iloc[0] = 0.0\n"
+        "        return signal\n"
+    )
+
+    facts = source_scan.source_temporal_dependency_facts(source, ast.parse(source))
+    candidates = facts["historyBoundaryCandidates"]
+
+    assert candidates["fixedLookback"]["candidate"] is True
+    assert candidates["fixedLookback"]["confidence"] == "low"
+    assert candidates["fixedLookback"]["suggestedBars"] == 40
+    assert any("positionalIndexing" in item for item in candidates["fixedLookback"]["risks"])
+    assert candidates["originAnchored"]["candidate"] is True
+
+
+def test_temporal_scan_does_not_suggest_lookback_from_min_periods_only():
+    source = (
+        "class BranchEngine:\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        window = self.window\n"
+        "        return ctx.target.close.rolling(window=window, min_periods=max(1, window // 2)).mean()\n"
+    )
+
+    facts = source_scan.source_temporal_dependency_facts(source, ast.parse(source))
+    candidates = facts["historyBoundaryCandidates"]
+
+    assert candidates["fixedLookback"]["candidate"] is True
+    assert candidates["fixedLookback"]["suggestedBars"] is None
+    assert any("min_periods" in item["expression"] for item in facts["parameterHints"])
+
+
 def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp_path):
     branch = tmp_path / "branch"
     promoted = tmp_path / "artifact" / "promoted"
@@ -756,8 +767,9 @@ def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp
         signals=[],
     )
     payload = json.loads(request_path.read_text(encoding="utf-8"))
-    assert payload["attemptPolicy"]["contractRequestRefreshes"] == 1
-    assert payload["attemptPolicy"]["fullReplayFallbackEligible"] is False
+    policy = payload["validation"]["attemptPolicy"]
+    assert policy["contractRequestRefreshes"] == 1
+    assert policy["fullReplayFallbackEligible"] is False
 
     _write_hosted_paper_contract_request(
         promoted,
@@ -776,10 +788,11 @@ def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp
         validation_failure=validation_failure,
     )
     payload = json.loads(request_path.read_text(encoding="utf-8"))
-    assert payload["attemptPolicy"]["liveContractFailures"] == 2
-    assert payload["attemptPolicy"]["contractRequestRefreshes"] == 3
-    assert payload["attemptPolicy"]["fullReplayFallbackEligible"] is True
-    assert payload["attemptPolicy"]["fallbackEligibilityReason"] == "contract_request_budget"
+    policy = payload["validation"]["attemptPolicy"]
+    assert policy["liveContractFailures"] == 2
+    assert policy["contractRequestRefreshes"] == 3
+    assert policy["fullReplayFallbackEligible"] is True
+    assert policy["fallbackEligibilityReason"] == "contract_request_budget"
     assert payload["requirements"]["statefulContinuationRequired"] is False
     assert (
         payload["requirements"]["continuationMethod"]

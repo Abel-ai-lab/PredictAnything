@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from . import source_scan
 from .constants import (
     PROMOTION_CONTINUATION_METHODS,
-    PROMOTION_LIVE_READINESS_CONFLICT_PHRASES,
-    PROMOTION_ML_STATE_EVIDENCE_TERMS,
     PROMOTION_RECONSTRUCTION_MODES,
 )
 from .facts import (
@@ -23,7 +20,7 @@ from .report import (
     _paper_signal_design_payload,
     _paper_signal_evidence_payload,
 )
-from .utils import _clean, _date_part, _json_safe
+from .utils import _clean, _date_part
 
 _paper_signal_design_facts = source_scan.paper_signal_design_facts
 _source_overrides_get_paper_signal = source_scan.source_overrides_get_paper_signal
@@ -54,16 +51,10 @@ def _validate_agent_paper_signal_contract(
     continuation = _paper_signal_continuation_payload(paper_signal)
     continuation_method = _clean(continuation.get("method")) if continuation else ""
     if require_paper_signal and incremental_ready is not True:
-        if continuation_method == "not_hostable":
-            raise PromotionHostedPaperContractRequired(
-                "paper contract report declares paperSignal.continuation.method=not_hostable; "
-                "promotion cannot export a continuing hosted paper artifact"
-            )
         raise PromotionHostedPaperContractRequired(
             "hosted paper contract must set paperSignal.incrementalReady=true"
         )
     if incremental_ready is True:
-        _validate_live_readiness_claim(report)
         _validate_paper_signal_continuation_contract(paper_signal)
         if (
             continuation_method == "full_replay_fallback"
@@ -171,12 +162,7 @@ def _validate_paper_signal_continuation_contract(
         raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.method must be one of "
             "stateless_recompute, stateful_continuation, "
-            "full_replay_fallback, or not_hostable"
-        )
-    if method == "not_hostable":
-        raise PromotionHostedPaperContractRequired(
-            "paperSignal.incrementalReady=true conflicts with "
-            "paperSignal.continuation.method=not_hostable"
+            "or full_replay_fallback"
         )
     if not _clean(continuation.get("reason")):
         raise PromotionHostedPaperContractRequired(
@@ -221,7 +207,11 @@ def _validate_paper_signal_design_contract(
             "lookback/history requirement"
         )
     boundary = _clean(history.get("boundary"))
-    if boundary and boundary not in {
+    if not boundary:
+        raise PromotionHostedPaperContractRequired(
+            "paperSignal.design.history.boundary must be declared"
+        )
+    if boundary not in {
         "fixed_lookback",
         "origin_anchored",
         "state_only",
@@ -249,22 +239,36 @@ def _validate_paper_signal_design_contract(
         )
 
     calendar = design.get("calendar")
-    if not isinstance(calendar, dict) or not isinstance(
-        calendar.get("usesAbsoluteDecisionOrdinal"), bool
-    ):
-        raise PromotionHostedPaperContractRequired(
-            "paperSignal.design.calendar.usesAbsoluteDecisionOrdinal "
-            "must be true or false"
-        )
-    if calendar.get("usesAbsoluteDecisionOrdinal") is True and not _clean(
-        calendar.get("origin")
-    ):
-        raise PromotionHostedPaperContractRequired(
-            "paperSignal.design.calendar.origin is required when "
-            "absolute decision ordinals are used"
-        )
+    if continuation_method != "stateless_recompute":
+        if not isinstance(calendar, dict) or not isinstance(
+            calendar.get("usesAbsoluteDecisionOrdinal"), bool
+        ):
+            raise PromotionHostedPaperContractRequired(
+                "paperSignal.design.calendar.usesAbsoluteDecisionOrdinal "
+                "must be true or false"
+            )
+        if calendar.get("usesAbsoluteDecisionOrdinal") is True and not _clean(
+            calendar.get("origin")
+        ):
+            raise PromotionHostedPaperContractRequired(
+                "paperSignal.design.calendar.origin is required when "
+                "absolute decision ordinals are used"
+            )
 
     cutover = design.get("cutover")
+    if continuation_method == "stateless_recompute":
+        if isinstance(cutover, dict) and cutover.get("requiresStartupState") is True:
+            raise PromotionHostedPaperContractRequired(
+                "paperSignal.continuation.method=stateless_recompute must not "
+                "require startup cutover state"
+            )
+        daily_step = design.get("dailyStep")
+        if isinstance(daily_step, dict) and not _clean(daily_step.get("reason")):
+            raise PromotionHostedPaperContractRequired(
+                "paperSignal.design.dailyStep.reason must explain one future as_of call"
+            )
+        return
+
     if not isinstance(cutover, dict) or not isinstance(
         cutover.get("requiresStartupState"), bool
     ):
@@ -316,12 +320,6 @@ def _validate_paper_signal_design_contract(
                 "be valid through the selected research result before future paper "
                 "continues"
             )
-    if continuation_method == "stateless_recompute" and required:
-        raise PromotionHostedPaperContractRequired(
-            "paperSignal.continuation.method=stateless_recompute must not "
-            "require startup cutover state; use stateful_continuation when "
-            "startup state is required"
-        )
     if continuation_method == "stateful_continuation":
         if not required or mode != "minimal_cutover_state":
             raise PromotionHostedPaperContractRequired(
@@ -372,47 +370,11 @@ def _validate_paper_signal_evidence_contract(
             "paperSignal.evidence.observations must include at least one "
             "source or local evidence fact supporting the continuation design"
         )
-    if not isinstance(evidence.get("semanticChecks", []), list):
-        raise PromotionHostedPaperContractRequired(
-            "paperSignal.evidence.semanticChecks must be a list"
-        )
     if not _clean(evidence.get("whySufficient")):
         raise PromotionHostedPaperContractRequired(
             "paperSignal.evidence.whySufficient must explain why the evidence "
             "supports the chosen continuation method"
         )
-    if continuation_method == "stateful_continuation":
-        checks = " ".join(
-            _clean(item).lower() for item in evidence.get("semanticChecks") or []
-        )
-        if "state" not in checks and "cutover" not in checks:
-            raise PromotionHostedPaperContractRequired(
-                "paperSignal.continuation.method=stateful_continuation requires "
-                "paperSignal.evidence.semanticChecks to support cutover state validity"
-            )
-
-def _ml_state_evidence_text(report: dict[str, Any], paper_signal: dict[str, Any]) -> str:
-    snippets: list[Any] = []
-    design = _paper_signal_design_payload(paper_signal)
-    if isinstance(design, dict):
-        for key in ("state", "cutover", "dailyStep"):
-            value = design.get(key)
-            if isinstance(value, dict):
-                snippets.append(value.get("reason"))
-    paths = report.get("paths")
-    if isinstance(paths, dict):
-        for item in paths.get("initialStateFiles") or []:
-            if isinstance(item, dict):
-                snippets.append(item.get("purpose"))
-    snippets.append(paper_signal.get("liveReadiness"))
-    return json.dumps(_json_safe(snippets), sort_keys=True).lower()
-
-def _has_ml_state_continuation_evidence(
-    report: dict[str, Any],
-    paper_signal: dict[str, Any],
-) -> bool:
-    text = _ml_state_evidence_text(report, paper_signal)
-    return any(term in text for term in PROMOTION_ML_STATE_EVIDENCE_TERMS)
 
 def _validate_continuation_method_admissibility(
     report: dict[str, Any],
@@ -451,103 +413,3 @@ def _validate_continuation_method_admissibility(
             "full_replay_fallback is allowed but must pass tail parity and the "
             "hosted paper performance limit."
         )
-    if continuation_method == "stateful_continuation":
-        if observed_fit_calls and not _has_ml_state_continuation_evidence(
-            report, paper_signal
-        ):
-            joined = ", ".join(
-                _clean(item) for item in observed_fit_calls if _clean(item)
-            )
-            raise PromotionHostedPaperContractRequired(
-                "observed ML training/refit/update calls require the "
-                "stateful_continuation design to evidence persisted fitted-object "
-                "or equivalent training state, not only cursor/cache state: "
-                f"{joined}. Reread the stateful continuation section of "
-                "references/hosted-paper-contract.md."
-            )
-
-def _validate_live_readiness_claim(report: dict[str, Any]) -> None:
-    snippets = _live_readiness_text_snippets(report)
-    conflicts: list[str] = []
-    for snippet in snippets:
-        lowered = snippet.lower()
-        if _live_readiness_conflict_phrase(lowered) is not None:
-            conflicts.append(snippet)
-    if not conflicts:
-        return
-    sample = "; ".join(conflicts[:3])
-    raise PromotionHostedPaperContractRequired(
-        "paperSignal.incrementalReady=true conflicts with report text that "
-        f"describes finite replay, research evidence, or not-continuing readiness: {sample}"
-    )
-
-def _live_readiness_conflict_phrase(lowered_snippet: str) -> str | None:
-    for phrase in PROMOTION_LIVE_READINESS_CONFLICT_PHRASES:
-        start = lowered_snippet.find(phrase)
-        while start >= 0:
-            if not _conflict_occurrence_is_negated(lowered_snippet, start, phrase):
-                return phrase
-            start = lowered_snippet.find(phrase, start + len(phrase))
-    return None
-
-def _conflict_occurrence_is_negated(text: str, start: int, phrase: str) -> bool:
-    if phrase.startswith(("no ", "not ", "cannot ", "can't ")):
-        return False
-    sentence_start = max(
-        text.rfind(".", 0, start),
-        text.rfind(";", 0, start),
-        text.rfind("\n", 0, start),
-    )
-    prefix = text[sentence_start + 1 : start]
-    return any(
-        marker in prefix
-        for marker in (
-            "not a ",
-            "not an ",
-            "not ",
-            "never ",
-            "without ",
-        )
-    )
-
-def _live_readiness_text_snippets(report: dict[str, Any]) -> list[str]:
-    snippets: list[str] = []
-    paper_signal = report.get("paperSignal")
-    if isinstance(paper_signal, dict):
-        for key in ("liveReadiness", "notes"):
-            value = _clean(paper_signal.get(key))
-            if value:
-                snippets.append(value)
-    limitations = report.get("limitations")
-    if isinstance(limitations, list):
-        for item in limitations:
-            snippets.extend(_string_leaf_values(item))
-    paths = report.get("paths")
-    if isinstance(paths, dict):
-        for key in ("packagedFiles", "initialStateFiles"):
-            entries = paths.get(key)
-            if not isinstance(entries, list):
-                continue
-            for item in entries:
-                if isinstance(item, dict):
-                    for field in ("purpose", "notes", "reason"):
-                        value = _clean(item.get(field))
-                        if value:
-                            snippets.append(value)
-    return snippets
-
-def _string_leaf_values(value: Any) -> list[str]:
-    if isinstance(value, str):
-        cleaned = _clean(value)
-        return [cleaned] if cleaned else []
-    if isinstance(value, dict):
-        snippets: list[str] = []
-        for item in value.values():
-            snippets.extend(_string_leaf_values(item))
-        return snippets
-    if isinstance(value, list):
-        snippets = []
-        for item in value:
-            snippets.extend(_string_leaf_values(item))
-        return snippets
-    return []

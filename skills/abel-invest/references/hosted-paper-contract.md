@@ -27,7 +27,8 @@ absence. Read the source and report semantic dependencies the scan missed.
    request's `contractGuide` when stateful continuation, source edits, or a
    refreshed gate failure need deeper guidance.
 3. Choose one continuation method: `stateless_recompute`,
-   `stateful_continuation`, `full_replay_fallback`, or `not_hostable`.
+   `stateful_continuation`, or `full_replay_fallback` when the request says
+   fallback is eligible.
 4. Follow `requirements.sourceEditPolicy`:
    - if `expected=false` and `required=false`, preserve `sourcePath` unless an
      allowed reason is genuinely needed;
@@ -111,9 +112,8 @@ Choose one runtime shape:
   for fitted objects and walking-forward training.
 - `full_replay_fallback`: last-resort fallback only when the request says it is
   eligible. It may call the original full path and must pass the fallback
-  performance gate.
-- `not_hostable`: non-uploadable failure result. Use only when the request says
-  fallback is eligible and full replay cannot safely run.
+  performance gate. If that cannot pass, report the export as failed rather than
+  uploading a hosted paper artifact.
 
 Any fitted object that participates in the signal makes the strategy stateful:
 models, scalers, encoders, calibrators, feature selectors, online learners, and
@@ -230,10 +230,6 @@ Write `paper-contract-report.json` with this shape:
     "reason": "none",
     "paths": []
   },
-  "paths": {
-    "packagedFiles": [],
-    "initialStateFiles": []
-  },
   "paperSignal": {
     "implemented": true,
     "incrementalReady": true,
@@ -253,8 +249,6 @@ Write `paper-contract-report.json` with this shape:
       "state": {
         "usesPersistentState": false,
         "stateFiles": [],
-        "schema": null,
-        "validThrough": null,
         "reason": "what survives across paper calls"
       },
       "calendar": {
@@ -277,21 +271,16 @@ Write `paper-contract-report.json` with this shape:
     },
     "evidence": {
       "observations": ["source or local evidence facts supporting the method"],
-      "agentOverrides": [],
-      "semanticChecks": [],
       "whySufficient": "why evidence supports this method"
-    },
-    "liveReadiness": "how future hosted paper days continue"
-  },
-  "limitations": [],
-  "replacements": []
+    }
+  }
 }
 ```
 
-`packagedFiles` are immutable files copied under `strategy/**`. For normal
-`stateful_continuation`, leave `initialStateFiles` empty and let the gate
-package the replayed strategy state. Only list `initialStateFiles` for unusual
-manual startup assets that cannot be produced by the replay hook.
+If the strategy has immutable external assets, add a top-level `paths` object
+with `packagedFiles` copied under `strategy/**`. For normal
+`stateful_continuation`, do not list manual `initialStateFiles`; let the gate
+package the replayed strategy state after parity passes.
 
 Set `paperSignal.incrementalReady=true` only when future hosted paper days can
 continue beyond the selected research result.

@@ -5,7 +5,6 @@ from __future__ import annotations
 from .constants import *  # noqa: F403
 from .models import (
     PromotionHostedPaperContractRequired,
-    PromotionHostedPaperRewriteRequired,
     PromotionPackagedFile,
     PromotionResult,
 )
@@ -30,7 +29,6 @@ from .validation import _validate_agent_paper_signal_contract
 
 __all__ = [
     "PromotionHostedPaperContractRequired",
-    "PromotionHostedPaperRewriteRequired",
     "PromotionPackagedFile",
     "PromotionResult",
     "prepare_promotion",

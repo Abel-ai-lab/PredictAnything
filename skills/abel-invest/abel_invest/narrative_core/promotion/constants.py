@@ -26,22 +26,6 @@ PROMOTION_PAPER_SMOKE_MAX_TRAINING_SECONDS = 5.0
 PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS = 120.0
 PROMOTION_FULL_REPLAY_FALLBACK_MAX_SECONDS = PROMOTION_HOSTED_PAPER_TIMEOUT_SECONDS
 PROMOTION_LIVE_CONTRACT_FAILURES_BEFORE_FALLBACK = 3
-PROMOTION_LIVE_READINESS_CONFLICT_PHRASES = (
-    "after the packaged log",
-    "can only replay",
-    "cannot produce future",
-    "can't produce future",
-    "edge output",
-    "finite historical",
-    "finite replay",
-    "historical replay",
-    "no future signal",
-    "not continuing",
-    "not hostable",
-    "not safely hostable",
-    "promotion output",
-    "research evidence",
-)
 PROMOTION_INITIAL_STATE_ORACLE_PHRASES = (
     "expectednextposition",
     "selected round",
@@ -71,34 +55,8 @@ PROMOTION_CONTINUATION_METHODS = {
     "stateless_recompute",
     "stateful_continuation",
     "full_replay_fallback",
-    "not_hostable",
 }
 PROMOTION_CONTRACT_REQUESTS_BEFORE_FALLBACK = 3
-PROMOTION_ML_STATE_EVIDENCE_TERMS = (
-    "calibrator",
-    "checkpoint",
-    "coef",
-    "coefficient",
-    "coefficients",
-    "encoder",
-    "estimator",
-    "feature selector",
-    "fit index",
-    "fitted",
-    "forest",
-    "last fit",
-    "learner",
-    "model",
-    "models",
-    "parameter",
-    "parameters",
-    "rf state",
-    "scaler",
-    "scalers",
-    "training state",
-    "transformer",
-    "weights",
-)
 STATE_SELF_CHECK_FILE_SUFFIXES = {
     ".joblib",
     ".npy",

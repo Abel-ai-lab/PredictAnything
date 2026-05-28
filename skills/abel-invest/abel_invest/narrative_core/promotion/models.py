@@ -43,7 +43,3 @@ class PromotionResult:
 
 class PromotionHostedPaperContractRequired(RuntimeError):
     """Raised when promotion needs a hosted paper contract before publishing."""
-
-
-# Backward-compatible alias for older internal imports.
-PromotionHostedPaperRewriteRequired = PromotionHostedPaperContractRequired

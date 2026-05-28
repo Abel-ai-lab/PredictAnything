@@ -124,25 +124,6 @@ def _load_agent_contract_report(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _report_replacements(report: dict[str, Any]) -> list[dict[str, str]]:
-    raw_replacements = report.get("replacements")
-    if not isinstance(raw_replacements, list):
-        return []
-    replacements: list[dict[str, str]] = []
-    for item in raw_replacements:
-        if not isinstance(item, dict):
-            continue
-        path = _clean(item.get("path"))
-        replacement = _clean(item.get("replacement"))
-        if path and replacement:
-            payload = {"path": path, "replacement": replacement}
-            reason = _clean(item.get("reason"))
-            if reason:
-                payload["reason"] = reason
-            replacements.append(payload)
-    return replacements
-
-
 def _write_artifact_contract_report(
     promoted_dir: Path,
     report: dict[str, Any],

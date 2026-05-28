@@ -475,11 +475,6 @@ def _fast_paper_validation(
         paper_signal = report.get("paperSignal")
         if isinstance(paper_signal, dict):
             details["incrementalReady"] = paper_signal.get("incrementalReady") is True
-            live_readiness = _clean(
-                paper_signal.get("liveReadiness") or paper_signal.get("notes")
-            )
-            if live_readiness:
-                details["agentLiveReadiness"] = live_readiness
             design = _paper_signal_design_payload(paper_signal)
             if isinstance(design, dict):
                 details["agentDesign"] = _json_safe(design)

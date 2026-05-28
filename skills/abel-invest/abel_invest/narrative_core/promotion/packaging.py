@@ -116,7 +116,7 @@ def _validate_packaged_research_evidence_sources(
         "generated research evidence or export output cannot be packaged as a live "
         "strategy asset "
         f"while paperSignal.incrementalReady=true: {sample}. Package the original "
-        "external dependency instead, or use the fallback/not_hostable path only "
+        "external dependency instead, or use the fallback path only "
         "when attemptPolicy allows it."
     )
 
