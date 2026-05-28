@@ -6,7 +6,12 @@ import json
 from typing import Any
 
 from . import source_scan
-from .constants import *  # noqa: F403
+from .constants import (
+    PROMOTION_CONTINUATION_METHODS,
+    PROMOTION_LIVE_READINESS_CONFLICT_PHRASES,
+    PROMOTION_ML_STATE_EVIDENCE_TERMS,
+    PROMOTION_RECONSTRUCTION_MODES,
+)
 from .facts import (
     _candidate_cutover_end,
     _observed_source_training_calls,

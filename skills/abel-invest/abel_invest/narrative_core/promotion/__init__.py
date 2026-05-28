@@ -34,6 +34,18 @@ __all__ = [
     "PromotionPackagedFile",
     "PromotionResult",
     "prepare_promotion",
+    "_collect_hosted_paper_dependency_scan",
+    "_paper_signal_design_facts",
+    "_paper_smoke_context",
+    "_report_packaged_files",
+    "_report_paper_execution_profile",
+    "_run_edge_paper_run_one_smoke",
+    "_source_temporal_dependency_facts",
+    "_trade_log_oracle_facts",
+    "_validate_agent_paper_signal_contract",
+    "_validate_packaged_research_evidence_sources",
+    "_write_hosted_paper_contract_request",
+    "PROMOTION_TAIL_TRACE_FILENAME",
     *[
         name
         for name in globals()

@@ -6,7 +6,14 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
-from .constants import *  # noqa: F403 - facade re-exports promotion constants.
+from .constants import (
+    PROMOTION_CONTRACT_REPORT_FILENAME,
+    PROMOTION_GATE_FILENAME,
+    PROMOTION_HOSTED_CONTRACT_SCOPE,
+    PROMOTION_MODE_AGENT_PAPER_CONTRACT,
+    PROMOTION_MODE_ZERO_CHANGE,
+    PROMOTION_PATCH_FILENAME,
+)
 from .cleanup import cleanup_legacy_promotion_outputs as _cleanup_legacy_promotion_outputs
 from .facts import (
     _collect_hosted_paper_dependency_scan,

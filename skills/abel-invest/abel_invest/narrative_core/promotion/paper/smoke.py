@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import csv
 from contextlib import contextmanager, redirect_stdout
-import hashlib
-import importlib.util
 import json
 import re
 from pathlib import Path

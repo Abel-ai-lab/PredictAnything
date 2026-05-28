@@ -8,7 +8,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import source_scan, tail_oracle
-from .constants import *  # noqa: F403
+from .constants import (
+    LOCAL_RUNTIME_STATE_DIR,
+    PROMOTION_BRANCH_FILE_SUFFIXES,
+    STATE_SELF_CHECK_DIRECTORY_PARTS,
+    STATE_SELF_CHECK_DIRECTORY_SUFFIXES,
+    STATE_SELF_CHECK_FILE_SUFFIXES,
+    STATE_SELF_CHECK_SOURCE_KEYWORDS,
+    STATE_SELF_CHECK_SOURCE_PATH_PARTS,
+)
 from .models import PromotionHostedPaperContractRequired
 from .utils import _clean, _date_part, _finite_float, _json_safe
 
