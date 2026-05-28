@@ -1515,6 +1515,7 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
         "edge/promotion-gate.json",
         "edge/promotion.patch",
         "edge/paper-contract-report.json",
+        "edge/promotion-tail-trace.json",
     ]
     assert (
         manifest["source"]["selectionMode"]
@@ -2637,9 +2638,15 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
     assert paper_gate["status"] == "failed"
     assert paper_gate["method"] == "edge_paper_run_one_tail_smoke"
     assert "diverged" in paper_gate["details"]["reason"]
-    comparison = paper_gate["details"]["smoke"]["tailConsistency"]["comparisons"][0]
-    assert comparison["expectedNextPosition"] == 0.0
-    assert comparison["actualNextPosition"] == 1.0
+    tail_summary = paper_gate["details"]["smoke"]["tailConsistency"]
+    assert "comparisons" not in tail_summary
+    assert tail_summary["mismatchCount"] == 1
+    assert tail_summary["firstMismatch"]["expectedNextPosition"] == 0.0
+    assert tail_summary["firstMismatch"]["actualNextPosition"] == 1.0
+    trace_path = Path(result["promotionReport"]["gatePath"]).with_name(
+        "promotion-tail-trace.json"
+    )
+    assert trace_path.is_file()
     request = json.loads(Path(result["promotionReport"]["requestPath"]).read_text(encoding="utf-8"))
     assert request["signals"][-1]["kind"] == "promotion_gate_failed"
     assert request["validation"]["lastGateFailure"]["failedGates"][0]["name"] == "paper_dry_run"
@@ -2648,9 +2655,13 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
     ]
     assert request_tail["status"] == "failed"
     assert "comparisons" not in request_tail
-    assert request_tail["failedSampleDates"][0]["asOf"] == "2020-01-02"
-    assert "expectedNextPosition" not in json.dumps(request_tail)
-    assert "actualNextPosition" not in json.dumps(request_tail)
+    assert request_tail["firstMismatch"]["asOf"] == "2020-01-02"
+    assert request_tail["firstMismatch"]["expectedNextPosition"] == 0.0
+    assert request_tail["firstMismatch"]["actualNextPosition"] == 1.0
+    assert request_tail["tracePath"] == "edge/promotion-tail-trace.json"
+    assert request_tail["selectedRoundCutoverEnd"] == "2020-12-31"
+    assert request_tail["firstMismatchIsSelectedRoundEnd"] is False
+    assert "stateEnd" in " ".join(request_tail["immutableContractFacts"])
 
 
 def test_export_selected_strategy_artifact_records_slow_training_diagnostics(

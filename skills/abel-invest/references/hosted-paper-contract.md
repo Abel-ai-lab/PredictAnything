@@ -37,6 +37,9 @@ absence. Read the source and report semantic dependencies the scan missed.
 If the gate returns another request, treat `validation.lastGateFailure` as a
 semantic diagnostic. Revisit continuation design, state, history boundary, or
 evidence; do not patch individual validation dates.
+For tail parity failures, start from the compact mismatch diagnosis in the
+request. Inspect `promotion-tail-trace.json` only when you need detailed audit
+rows.
 
 Do not edit the original branch. Do not start by reading Abel-skills promotion
 internals or Edge gate internals; the request is the workbench. Inspect
@@ -73,11 +76,13 @@ When source edits are needed for assets or state, use:
 
 ```python
 from abel_edge.runtime_paths import context_runtime_paths
+from abel_edge.paper_state import PaperStateStore
 
 paths = context_runtime_paths(self.context)
 paths.base_strategy             # read-only files packaged under strategy/**
 paths.runtime                   # read-only runtime config under runtime/**
 paths.state / "strategy" / ...  # strategy-owned mutable paper state
+store = PaperStateStore.from_context(self.context)
 ```
 
 Rules:
@@ -85,6 +90,8 @@ Rules:
 - remove developer-local absolute paths such as `/home/...` or `/Users/...`;
 - read immutable packaged assets through `paths.base_strategy`;
 - write mutable strategy state only under `paths.state / "strategy"`;
+- prefer `PaperStateStore` for hosted paper state paths, JSON/pickle state,
+  daily `as_of` keys, idempotence checks, and small `get_paper_signal` extras;
 - preserve `compute_decisions(ctx)` as the research/backtest authority unless
   the source is semantically unusable;
 - do not use selected-round `trade-log.csv`, gate answers, or promotion outputs
@@ -151,6 +158,60 @@ strategy-owned state produced by that replay is packaged as
 `runtime/initial-state/**`. Do not hand-build final startup files for normal
 stateful continuation, and do not encode expected positions or gate answers in
 state.
+
+## Stateful PaperStateStore Scaffold
+
+For `stateful_continuation`, adapt this shape. The helper owns state paths,
+serialization, daily keys, idempotence checks, and return extras. The strategy
+still owns feature construction, fitting, retrain calendars, prediction, and
+the exact state schema.
+
+```python
+from abel_edge.paper_state import PaperStateStore
+
+STATE_SCHEMA = "my-strategy.paper-state/v1"
+
+
+class BranchEngine(StrategyEngine):
+    def _paper_store(self):
+        return PaperStateStore.from_context(
+            self.context,
+            "strategy/paper_state.pkl",
+        )
+
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        store = self._paper_store()
+        state = self._build_state_through(cutover_as_of)
+        state["schema"] = STATE_SCHEMA
+        state["last_as_of"] = store.as_of_key(cutover_as_of)
+        store.save(state)
+        return store.summary(state, as_of=cutover_as_of)
+
+    def get_paper_signal(self, *, as_of=None):
+        store = self._paper_store()
+        state = store.load(default={})
+        if store.is_current(state, as_of):
+            return store.signal(
+                next_position=state["next_position"],
+                payload=state,
+                as_of=as_of,
+            )
+
+        state = self._advance_paper_state(state, as_of=as_of)
+        state = store.mark_current(state, as_of)
+        store.save(state)
+        return store.signal(
+            next_position=state["next_position"],
+            payload=state,
+            as_of=as_of,
+        )
+```
+
+`_build_state_through(...)` should replay only what is needed to create
+cutover state that matches the selected research strategy through
+`cutover_as_of`. `_advance_paper_state(...)` should process only dates after the
+stored cursor and should refit only when the original strategy's continuation
+calendar says a refit is due.
 
 ## Report
 

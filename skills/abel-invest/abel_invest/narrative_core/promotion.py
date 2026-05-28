@@ -26,6 +26,12 @@ from abel_edge.engine.trader import paper_run_one
 from abel_edge.research.promotion_gate import build_promotion_gate_report
 
 from . import promotion_source, promotion_tail
+from .promotion_paper_trace import (
+    PROMOTION_TAIL_TRACE_FILENAME,
+    paper_dry_run_gate_summary as _paper_dry_run_gate_summary,
+    tail_parity_failure_diagnosis as _tail_parity_failure_diagnosis,
+    write_paper_tail_trace as _write_paper_tail_trace,
+)
 
 
 _call_name = promotion_source.call_name
@@ -46,7 +52,6 @@ _paper_tail_oracle_rows = promotion_tail.paper_tail_oracle_rows
 _paper_tail_position_change_count = promotion_tail.paper_tail_position_change_count
 _paper_tail_prior_row = promotion_tail.paper_tail_prior_row
 _paper_tail_selection_reason = promotion_tail.paper_tail_selection_reason
-_redacted_tail_failure_payload = promotion_tail.redacted_tail_failure_payload
 _redacted_timeline_row = promotion_tail.redacted_timeline_row
 _redacted_trade_log_oracle_sample = promotion_tail.redacted_trade_log_oracle_sample
 _select_paper_tail_oracle_sample = promotion_tail.select_paper_tail_oracle_sample
@@ -383,6 +388,11 @@ def prepare_promotion(
         runtime_env=runtime_env,
         is_denylisted_source=is_denylisted_source,
     )
+    tail_trace_path = _write_paper_tail_trace(destination, paper_dry_run)
+    gate_paper_dry_run = _paper_dry_run_gate_summary(
+        paper_dry_run,
+        trace_path=tail_trace_path,
+    )
     if paper_dry_run.get("status") == "passed":
         replay_state_files = _generated_replay_initial_state_files(destination)
         if replay_state_files:
@@ -403,7 +413,7 @@ def prepare_promotion(
         contract=contract_payload,
         state_entries=packaged_files,
         behavior_equivalence=behavior_equivalence,
-        paper_dry_run=paper_dry_run,
+        paper_dry_run=gate_paper_dry_run,
     )
     gate_path.write_text(
         json.dumps(gate_report, indent=2, sort_keys=True),
@@ -421,7 +431,10 @@ def prepare_promotion(
             candidate=candidate,
             destination=destination,
         )
-        failure_details = _promotion_gate_failure_request_payload(gate_report)
+        failure_details = _promotion_gate_failure_request_payload(
+            gate_report,
+            selected_round_cutover_end=_scan_cutover_end(failure_scan),
+        )
         failure_signals = _hosted_paper_contract_signals(failure_scan)
         failure_signals.append(
             {
@@ -458,6 +471,8 @@ def prepare_promotion(
     if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
         assert contract_report_path is not None
         extra_source_map[f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}"] = contract_report_path
+    if tail_trace_path is not None:
+        extra_source_map[f"edge/{PROMOTION_TAIL_TRACE_FILENAME}"] = tail_trace_path
 
     return PromotionResult(
         mode=mode,
@@ -889,6 +904,24 @@ def _hosted_paper_contract_guide_reference() -> dict[str, Any]:
     }
 
 
+def _hosted_paper_contract_scaffold_references(
+    requirements: dict[str, Any],
+) -> list[dict[str, str]]:
+    if not requirements.get("statefulContinuationRequired"):
+        return []
+    return [
+        {
+            "name": "stateful_continuation_paper_state_store",
+            "guideSection": "Stateful PaperStateStore Scaffold",
+            "when": "requirements.statefulContinuationRequired=true",
+            "purpose": (
+                "Adapt this scaffold so build_paper_initial_state and "
+                "get_paper_signal share the same PaperStateStore state file."
+            ),
+        }
+    ]
+
+
 def _hosted_paper_contract_requirements(
     dependency_scan: dict[str, Any],
     *,
@@ -1133,45 +1166,47 @@ def _write_hosted_paper_contract_request(
         facts,
         attempt_policy=attempt_policy,
     )
-    request_path.write_text(
-        json.dumps(
-            {
-                "schema": PROMOTION_AGENT_REQUEST_SCHEMA,
-                "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
-                "scope": PROMOTION_HOSTED_CONTRACT_SCOPE,
-                "sourcePath": str(source_path),
-                "branchPath": str(branch),
-                "output": {
-                    "artifactDir": str(promoted_dir.parent),
-                    "promotedDir": str(promoted_dir),
-                    "reportPath": str(
-                        promoted_dir / PROMOTION_CONTRACT_REPORT_FILENAME
-                    ),
-                },
-                "contractGuide": _hosted_paper_contract_guide_reference(),
-                "task": (
-                    "Declare the selected research strategy's hosted live-paper "
-                    "contract. Read contractGuide first, then use this request "
-                    "for the current branch/round facts. Stateless strategies "
-                    "usually need only a history boundary profile and should "
-                    "preserve promoted source."
-                ),
-                "requirements": requirements,
-                "signals": signals,
-                "facts": facts,
-                "attemptPolicy": attempt_policy,
-                "validation": validation_payload,
-                "selectedRoundCutoverEnd": cutover_end,
-            },
-            indent=2,
-            sort_keys=True,
+    scaffolds = _hosted_paper_contract_scaffold_references(requirements)
+    request_payload = {
+        "schema": PROMOTION_AGENT_REQUEST_SCHEMA,
+        "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
+        "scope": PROMOTION_HOSTED_CONTRACT_SCOPE,
+        "sourcePath": str(source_path),
+        "branchPath": str(branch),
+        "output": {
+            "artifactDir": str(promoted_dir.parent),
+            "promotedDir": str(promoted_dir),
+            "reportPath": str(promoted_dir / PROMOTION_CONTRACT_REPORT_FILENAME),
+        },
+        "contractGuide": _hosted_paper_contract_guide_reference(),
+        "task": (
+            "Declare the selected research strategy's hosted live-paper "
+            "contract. Read contractGuide first, then use this request "
+            "for the current branch/round facts. Stateless strategies "
+            "usually need only a history boundary profile and should "
+            "preserve promoted source."
         ),
+        "requirements": requirements,
+        "signals": signals,
+        "facts": facts,
+        "attemptPolicy": attempt_policy,
+        "validation": validation_payload,
+        "selectedRoundCutoverEnd": cutover_end,
+    }
+    if scaffolds:
+        request_payload["scaffolds"] = scaffolds
+    request_path.write_text(
+        json.dumps(request_payload, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     return request_path
 
 
-def _promotion_gate_failure_request_payload(gate_report: dict[str, Any]) -> dict[str, Any]:
+def _promotion_gate_failure_request_payload(
+    gate_report: dict[str, Any],
+    *,
+    selected_round_cutover_end: str = "",
+) -> dict[str, Any]:
     failed_gates: list[dict[str, Any]] = []
     gates = gate_report.get("gates") if isinstance(gate_report.get("gates"), list) else []
     for gate in gates:
@@ -1191,7 +1226,11 @@ def _promotion_gate_failure_request_payload(gate_report: dict[str, Any]) -> dict
             compact_smoke: dict[str, Any] = {}
             tail = smoke.get("tailConsistency")
             if isinstance(tail, dict):
-                compact_smoke["tailConsistency"] = _redacted_tail_failure_payload(tail)
+                compact_smoke["tailConsistency"] = _tail_parity_failure_diagnosis(
+                    tail,
+                    selected_round_cutover_end=selected_round_cutover_end,
+                    trace_path=_clean(smoke.get("tracePath")),
+                )
             for key in (
                 "validationBootstrap",
                 "warmStart",
@@ -1210,10 +1249,13 @@ def _promotion_gate_failure_request_payload(gate_report: dict[str, Any]) -> dict
                     "patched into strategy code, assets, or initial state"
                 )
         failed_gates.append(failure)
-    return {
+    payload = {
         "status": _clean(gate_report.get("status")),
         "failedGates": failed_gates,
     }
+    if selected_round_cutover_end:
+        payload["selectedRoundCutoverEnd"] = selected_round_cutover_end
+    return payload
 
 
 def _report_has_hosted_paper_contract(report: dict[str, Any]) -> bool:
@@ -1418,6 +1460,7 @@ def _is_research_evidence_source(source_path: Path, *, branch: Path) -> bool:
         "edge-result.json",
         "edge-validation.md",
         "promotion-gate.json",
+        "promotion-tail-trace.json",
         "trade-log.csv",
     }
 

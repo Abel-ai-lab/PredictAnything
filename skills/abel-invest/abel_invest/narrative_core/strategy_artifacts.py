@@ -28,6 +28,7 @@ from abel_invest.narrative_core.contracts.paths import (
 from abel_invest.narrative_core.io import _now, read_tsv_rows
 from abel_invest.narrative_core.promotion import (
     PROMOTION_GATE_FILENAME,
+    PROMOTION_TAIL_TRACE_FILENAME,
     PROMOTION_HOSTED_CONTRACT_SCOPE,
     PROMOTION_MODE_AGENT_PAPER_CONTRACT,
     PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED,
@@ -135,6 +136,7 @@ STALE_STRATEGY_ARTIFACT_FILES = (
     "manifest.json",
     "metric-input.csv",
     PROMOTION_GATE_FILENAME,
+    PROMOTION_TAIL_TRACE_FILENAME,
     "trade-log.csv",
 )
 STALE_PROMOTED_GENERATED_FILES = (

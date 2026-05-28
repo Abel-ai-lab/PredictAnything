@@ -228,6 +228,10 @@ def test_artifact_export_cleanup_removes_legacy_and_completed_outputs(tmp_path):
         json.dumps({"status": "passed"}),
         encoding="utf-8",
     )
+    (destination / "promotion-tail-trace.json").write_text(
+        json.dumps({"status": "passed"}),
+        encoding="utf-8",
+    )
     (promoted / "engine.py").write_text("class BranchEngine: pass\n", encoding="utf-8")
     (promoted / "paper-contract-report.json").write_text("{}", encoding="utf-8")
 
@@ -238,6 +242,7 @@ def test_artifact_export_cleanup_removes_legacy_and_completed_outputs(tmp_path):
 
     assert not legacy.exists()
     assert not (destination / "artifact.zip").exists()
+    assert not (destination / "promotion-tail-trace.json").exists()
     assert not promoted.exists()
 
 
@@ -295,6 +300,17 @@ def test_contract_request_is_slim_and_marks_training_stateful(tmp_path):
     payload = json.loads(request_path.read_text(encoding="utf-8"))
     assert payload["requirements"]["statefulContinuationRequired"] is True
     assert payload["requirements"]["continuationMethod"] == "stateful_continuation"
+    assert payload["scaffolds"] == [
+        {
+            "guideSection": "Stateful PaperStateStore Scaffold",
+            "name": "stateful_continuation_paper_state_store",
+            "purpose": (
+                "Adapt this scaffold so build_paper_initial_state and "
+                "get_paper_signal share the same PaperStateStore state file."
+            ),
+            "when": "requirements.statefulContinuationRequired=true",
+        }
+    ]
     assert "contractGuide" in payload
     assert "reportContract" not in payload
     assert "gateContract" not in payload
