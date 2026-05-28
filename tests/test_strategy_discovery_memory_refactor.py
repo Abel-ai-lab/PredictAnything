@@ -384,7 +384,8 @@ def _fake_artifact_export_runner(command, cwd=None, capture_output=None, text=No
         trade_log_path.write_text(
             "date,asset_return,pnl,position,cum_return,source,next_position\n"
             "2020-01-01,0,0,0,0,backfill,0\n"
-            "2020-01-02,0,0,1,0,backfill,1\n",
+            "2020-01-02,0,0,1,0,backfill,1\n"
+            "2020-01-03,0,0,1,0,backfill,1\n",
             encoding="utf-8",
         )
         return subprocess.CompletedProcess(
@@ -1461,7 +1462,8 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                     "2020-01-01,0,0,0,0,backfill,0\n"
-                    "2020-01-02,0,0,1,0,backfill,1\n",
+                    "2020-01-02,0,0,1,0,backfill,1\n"
+                    "2020-01-03,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -1570,7 +1572,8 @@ def test_export_selected_strategy_artifact_nulls_inapplicable_metrics(
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                     "2020-01-01,0,0,0,0,backfill,0\n"
-                    "2020-01-02,0,0,1,0,backfill,1\n",
+                    "2020-01-02,0,0,1,0,backfill,1\n"
+                    "2020-01-03,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -1658,7 +1661,8 @@ def test_promote_branch_strategy_uses_explicit_branch_round(
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                 "2020-01-01,0,0,0,0,backfill,0\n"
-                "2020-01-02,0,0,1,0,backfill,1\n",
+                "2020-01-02,0,0,1,0,backfill,1\n"
+                "2020-01-03,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2398,7 +2402,8 @@ def test_export_selected_strategy_artifact_normalizes_relative_python_bin(
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                 "2020-01-01,0,0,0,0,backfill,0\n"
-                "2020-01-02,0,0,1,0,backfill,1\n",
+                "2020-01-02,0,0,1,0,backfill,1\n"
+                "2020-01-03,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2471,7 +2476,8 @@ def test_export_selected_strategy_artifact_rejects_full_compute_paper_signal(
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                 "2020-01-01,0,0,0,0,backfill,0\n"
-                "2020-01-02,0,0,1,0,backfill,1\n",
+                "2020-01-02,0,0,1,0,backfill,1\n"
+                "2020-01-03,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2582,7 +2588,8 @@ def test_export_selected_strategy_artifact_rejects_tail_signal_mismatch(
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                 "2020-01-01,0,0,0,0,backfill,0\n"
-                "2020-01-02,0,0,0,0,backfill,0\n",
+                "2020-01-02,0,0,0,0,backfill,0\n"
+                "2020-01-03,0,0,0,0,backfill,0\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -2712,7 +2719,8 @@ def test_export_selected_strategy_artifact_records_slow_training_diagnostics(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                 "2020-01-01,0,0,1,0,backfill,1\n"
                 "2020-01-02,0,0,1,0,backfill,1\n"
-                "2020-01-03,0,0,1,0,backfill,1\n",
+                "2020-01-03,0,0,1,0,backfill,1\n"
+                "2020-01-04,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -3648,7 +3656,7 @@ def test_paper_smoke_bootstraps_state_before_holdout_tail(
     assert smoke["validationBootstrap"]["status"] == "passed"
     assert smoke["validationBootstrap"]["cutoverAsOf"] == "2020-01-01"
     assert smoke["tailConsistency"]["validationCutoverAsOf"] == "2020-01-01"
-    assert smoke["tailConsistency"]["sampleSize"] == 3
+    assert smoke["tailConsistency"]["sampleSize"] == 2
     assert smoke["stateChangedFirstCall"] is True
     assert smoke["stateChangedSecondCall"] is False
 
@@ -4197,7 +4205,8 @@ def test_export_selected_strategy_artifact_regenerates_missing_metric_input(
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                 "2020-01-01,0,0,0,0,backfill,0\n"
-                "2020-01-02,0,0,1,0,backfill,1\n",
+                "2020-01-02,0,0,1,0,backfill,1\n"
+                "2020-01-03,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(
@@ -4338,7 +4347,8 @@ def test_upload_strategy_artifact_for_session_returns_upload_summary(
             trade_log_path.write_text(
                 "date,asset_return,pnl,position,cum_return,source,next_position\n"
                 "2020-01-01,0,0,0,0,backfill,0\n"
-                "2020-01-02,0,0,1,0,backfill,1\n",
+                "2020-01-02,0,0,1,0,backfill,1\n"
+                "2020-01-03,0,0,1,0,backfill,1\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(

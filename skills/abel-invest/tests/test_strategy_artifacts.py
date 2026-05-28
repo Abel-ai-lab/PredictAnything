@@ -18,6 +18,7 @@ from abel_invest.narrative_core.promotion.request import (
     _write_hosted_paper_contract_request,
 )
 from abel_invest.narrative_core.promotion.tail_oracle import (
+    paper_tail_oracle_rows,
     paper_tail_position_change_count,
     paper_tail_selection_reason,
     select_paper_tail_oracle_sample,
@@ -379,7 +380,8 @@ def test_tail_oracle_sample_uses_dynamic_holdout_window():
     selected = select_paper_tail_oracle_sample(comparable)
 
     assert len(selected) == 20
-    assert selected[0]["decisionIndex"] == 20
+    assert selected[0]["decisionIndex"] == 19
+    assert selected[-1]["decisionIndex"] == 38
     assert paper_tail_selection_reason(comparable, selected) == "target_tail_window"
 
 
@@ -395,7 +397,7 @@ def test_tail_oracle_sample_expands_to_recent_position_change():
 
     selected = select_paper_tail_oracle_sample(comparable)
 
-    assert len(selected) == 25
+    assert len(selected) == 24
     assert selected[0]["decisionIndex"] == 75
     assert paper_tail_position_change_count(
         selected,
@@ -405,6 +407,24 @@ def test_tail_oracle_sample_expands_to_recent_position_change():
         paper_tail_selection_reason(comparable, selected)
         == "expanded_to_recent_position_change"
     )
+
+
+def test_tail_oracle_excludes_selected_round_terminal_ledger_row(tmp_path):
+    trade_log = tmp_path / "trade-log.csv"
+    trade_log.write_text(
+        "date,next_position\n"
+        "2024-01-01,0\n"
+        "2024-01-02,0\n"
+        "2024-01-03,1\n",
+        encoding="utf-8",
+    )
+
+    rows = paper_tail_oracle_rows(trade_log)
+
+    assert [row["asOf"] for row in rows] == ["2024-01-02"]
+    assert rows[-1]["asOf"] != "2024-01-03"
+    assert rows[0]["validationCutoverAsOf"] == "2024-01-01"
+    assert rows[0]["selectionReason"] == "target_tail_window"
 
 
 def _write_market_feed(path, symbol: str, closes: list[float]) -> None:

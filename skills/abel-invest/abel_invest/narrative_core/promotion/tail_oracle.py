@@ -60,19 +60,20 @@ def select_paper_tail_oracle_sample(
 ) -> list[dict[str, Any]]:
     if not comparable:
         return []
-    available = len(comparable) - 1 if len(comparable) > 1 else len(comparable)
+    paperable = comparable[:-1]
+    available = max(len(paperable) - 1, 0)
     if available <= 0:
-        return comparable[-1:]
+        return []
 
     target_count = min(PROMOTION_PAPER_TAIL_TARGET_COUNT, available)
     max_count = min(PROMOTION_PAPER_TAIL_MAX_COUNT, available)
-    selected = comparable[-target_count:]
+    selected = paperable[-target_count:]
     prior = paper_tail_prior_row(comparable, selected)
     if paper_tail_position_change_count(selected, prior=prior) > 0:
         return selected
 
     for count in range(target_count + 1, max_count + 1):
-        expanded = comparable[-count:]
+        expanded = paperable[-count:]
         prior = paper_tail_prior_row(comparable, expanded)
         if paper_tail_position_change_count(expanded, prior=prior) > 0:
             return expanded
@@ -125,7 +126,7 @@ def paper_tail_selection_reason(
 ) -> str:
     if not selected:
         return "none"
-    available = len(comparable) - 1 if len(comparable) > 1 else len(comparable)
+    available = max(len(comparable) - 2, 0)
     target_count = min(PROMOTION_PAPER_TAIL_TARGET_COUNT, available)
     if len(selected) < target_count:
         return "all_available_with_cutover"
