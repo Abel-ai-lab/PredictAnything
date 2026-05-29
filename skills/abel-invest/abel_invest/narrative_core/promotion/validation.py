@@ -42,20 +42,25 @@ def _validate_agent_paper_signal_contract(
                 "hosted paper contract report must include paperSignal"
             )
         return
-    implemented = paper_signal.get("implemented")
-    incremental_ready = paper_signal.get("incrementalReady")
-    if require_paper_signal and implemented is not True:
-        raise PromotionHostedPaperContractRequired(
-            "hosted paper contract must set paperSignal.implemented=true"
-        )
     continuation = _paper_signal_continuation_payload(paper_signal)
     continuation_method = _clean(continuation.get("method")) if continuation else ""
-    if require_paper_signal and incremental_ready is not True:
-        raise PromotionHostedPaperContractRequired(
-            "hosted paper contract must set paperSignal.incrementalReady=true"
+    stateless_recompute = continuation_method == "stateless_recompute"
+    implemented = paper_signal.get("implemented")
+    incremental_ready = paper_signal.get("incrementalReady")
+    if require_paper_signal and not stateless_recompute:
+        if implemented is not True:
+            raise PromotionHostedPaperContractRequired(
+                "hosted paper contract must set paperSignal.implemented=true"
+            )
+        if incremental_ready is not True:
+            raise PromotionHostedPaperContractRequired(
+                "hosted paper contract must set paperSignal.incrementalReady=true"
+            )
+    if require_paper_signal or incremental_ready is True:
+        _validate_paper_signal_continuation_contract(
+            paper_signal,
+            continuation_method=continuation_method,
         )
-    if incremental_ready is True:
-        _validate_paper_signal_continuation_contract(paper_signal)
         if (
             continuation_method == "full_replay_fallback"
             and not full_replay_fallback_allowed
@@ -70,10 +75,11 @@ def _validate_agent_paper_signal_contract(
             cutover_end=_candidate_cutover_end(candidate),
             continuation_method=continuation_method,
         )
-        _validate_paper_signal_evidence_contract(
-            paper_signal,
-            continuation_method=continuation_method,
-        )
+        if not stateless_recompute:
+            _validate_paper_signal_evidence_contract(
+                paper_signal,
+                continuation_method=continuation_method,
+            )
         _validate_continuation_method_admissibility(
             report,
             source,
@@ -150,6 +156,8 @@ def _allowed_source_edit_reasons(
 
 def _validate_paper_signal_continuation_contract(
     paper_signal: dict[str, Any],
+    *,
+    continuation_method: str = "",
 ) -> None:
     continuation = _paper_signal_continuation_payload(paper_signal)
     if not isinstance(continuation, dict):
@@ -157,13 +165,15 @@ def _validate_paper_signal_continuation_contract(
             "continuing hosted paper reports must declare "
             "paperSignal.continuation"
         )
-    method = _clean(continuation.get("method"))
+    method = continuation_method or _clean(continuation.get("method"))
     if method not in PROMOTION_CONTINUATION_METHODS:
         raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.method must be one of "
             "stateless_recompute, stateful_continuation, "
             "or full_replay_fallback"
         )
+    if method == "stateless_recompute":
+        return
     if not _clean(continuation.get("reason")):
         raise PromotionHostedPaperContractRequired(
             "paperSignal.continuation.reason must explain why the chosen "
@@ -222,6 +232,21 @@ def _validate_paper_signal_design_contract(
             "fixed_lookback, origin_anchored, state_only, or full_replay"
         )
 
+    if continuation_method == "stateless_recompute":
+        state = design.get("state")
+        if isinstance(state, dict) and state.get("usesPersistentState") is True:
+            raise PromotionHostedPaperContractRequired(
+                "paperSignal.continuation.method=stateless_recompute must not "
+                "use persistent strategy state"
+            )
+        cutover = design.get("cutover")
+        if isinstance(cutover, dict) and cutover.get("requiresStartupState") is True:
+            raise PromotionHostedPaperContractRequired(
+                "paperSignal.continuation.method=stateless_recompute must not "
+                "require startup cutover state"
+            )
+        return
+
     state = design.get("state")
     if not isinstance(state, dict) or not isinstance(
         state.get("usesPersistentState"), bool
@@ -239,35 +264,22 @@ def _validate_paper_signal_design_contract(
         )
 
     calendar = design.get("calendar")
-    if continuation_method != "stateless_recompute":
-        if not isinstance(calendar, dict) or not isinstance(
-            calendar.get("usesAbsoluteDecisionOrdinal"), bool
-        ):
-            raise PromotionHostedPaperContractRequired(
-                "paperSignal.design.calendar.usesAbsoluteDecisionOrdinal "
-                "must be true or false"
-            )
-        if calendar.get("usesAbsoluteDecisionOrdinal") is True and not _clean(
-            calendar.get("origin")
-        ):
-            raise PromotionHostedPaperContractRequired(
-                "paperSignal.design.calendar.origin is required when "
-                "absolute decision ordinals are used"
-            )
+    if not isinstance(calendar, dict) or not isinstance(
+        calendar.get("usesAbsoluteDecisionOrdinal"), bool
+    ):
+        raise PromotionHostedPaperContractRequired(
+            "paperSignal.design.calendar.usesAbsoluteDecisionOrdinal "
+            "must be true or false"
+        )
+    if calendar.get("usesAbsoluteDecisionOrdinal") is True and not _clean(
+        calendar.get("origin")
+    ):
+        raise PromotionHostedPaperContractRequired(
+            "paperSignal.design.calendar.origin is required when "
+            "absolute decision ordinals are used"
+        )
 
     cutover = design.get("cutover")
-    if continuation_method == "stateless_recompute":
-        if isinstance(cutover, dict) and cutover.get("requiresStartupState") is True:
-            raise PromotionHostedPaperContractRequired(
-                "paperSignal.continuation.method=stateless_recompute must not "
-                "require startup cutover state"
-            )
-        daily_step = design.get("dailyStep")
-        if isinstance(daily_step, dict) and not _clean(daily_step.get("reason")):
-            raise PromotionHostedPaperContractRequired(
-                "paperSignal.design.dailyStep.reason must explain one future as_of call"
-            )
-        return
 
     if not isinstance(cutover, dict) or not isinstance(
         cutover.get("requiresStartupState"), bool

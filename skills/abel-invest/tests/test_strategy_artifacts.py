@@ -359,11 +359,24 @@ def test_stateless_contract_request_requires_agent_boundary_choice(tmp_path):
 
     payload = json.loads(request_path.read_text(encoding="utf-8"))
     assert payload["requirements"]["expectedAction"] == "write_profile_report_only"
+    assert payload["requirements"]["continuationMethod"] == "stateless_recompute"
     assert payload["requirements"]["sourceEditPolicy"]["required"] is False
+    assert "signals" not in payload
+    assert "contractGuide" not in payload
+    assert "factSidecars" not in payload
+    assert "validation" not in payload
+    assert "selection" not in payload
     assert payload["reportTemplate"]["sourceEdit"]["changed"] is False
+    paper_signal = payload["reportTemplate"]["paperSignal"]
+    assert paper_signal["continuation"] == {"method": "stateless_recompute"}
+    assert "implemented" not in paper_signal
+    assert "incrementalReady" not in paper_signal
+    assert "evidence" not in paper_signal
+    assert "state" not in paper_signal["design"]
     history = payload["reportTemplate"]["paperSignal"]["design"]["history"]
     assert history["boundary"] == ""
-    assert "Choose after reading sourcePath" in history["reason"]
+    assert "source-backed reason" in history["reason"]
+    assert "ISO YYYY-MM-DD" in history["reason"]
     candidates = payload["facts"]["historyProfile"]["temporalHints"][
         "historyBoundaryCandidates"
     ]
@@ -371,6 +384,31 @@ def test_stateless_contract_request_requires_agent_boundary_choice(tmp_path):
     assert "observations, not answers" in payload["facts"]["historyProfile"][
         "decisionRule"
     ]
+
+
+def test_stateless_minimal_contract_report_validates():
+    report = {
+        "schema": "abel-invest.agent-paper-contract-report/v1",
+        "kind": "hosted_paper_contract",
+        "scope": "hosted_paper_contract",
+        "sourceEdit": {"changed": False},
+        "paperSignal": {
+            "continuation": {"method": "stateless_recompute"},
+            "design": {
+                "history": {
+                    "boundary": "fixed_lookback",
+                    "lookbackBars": 41,
+                    "reason": "rolling source window",
+                }
+            },
+        },
+    }
+
+    _validate_agent_paper_signal_contract(
+        report,
+        "class BranchEngine: pass\n",
+        require_paper_signal=True,
+    )
 
 
 def test_tail_oracle_sample_uses_dynamic_holdout_window():

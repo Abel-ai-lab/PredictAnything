@@ -13,8 +13,9 @@ research backtest semantics -> selected round cutover -> future daily paper call
 ```
 
 The first task is contract design, not source editing. Understand the strategy,
-choose the continuation method, declare the paper history boundary, and provide
-evidence. Edit promoted source only when the contract says code is required.
+choose the continuation method, declare the paper history boundary, and fill the
+request's `reportTemplate`. Edit promoted source only when the contract says
+code is required.
 
 Harness facts are observations, not complete semantic truth. Empty observed
 lists such as no observed fit calls or no observed state writes are not proof of
@@ -226,7 +227,41 @@ continuation calendar says a refit is due.
 
 ## Report
 
-Write `paper-contract-report.json` with this shape:
+For normal `stateless_recompute`, preserve the promoted source and write only
+the profile fields requested by `reportTemplate`:
+
+```json
+{
+  "schema": "abel-invest.agent-paper-contract-report/v1",
+  "kind": "hosted_paper_contract",
+  "scope": "hosted_paper_contract",
+  "sourceEdit": {
+    "changed": false,
+    "reason": "none",
+    "paths": []
+  },
+  "paperSignal": {
+    "continuation": {
+      "method": "stateless_recompute"
+    },
+    "design": {
+      "history": {
+        "boundary": "fixed_lookback",
+        "lookbackBars": 120,
+        "origin": "",
+        "reason": "source-backed reason for the chosen boundary"
+      }
+    }
+  }
+}
+```
+
+For `origin_anchored`, set `history.origin` to a parseable ISO date such as the
+effective backtest/history start from the request facts. Do not use symbolic
+strings such as `effective_window_start`.
+
+For `stateful_continuation`, use the full shape because the gate needs the
+state, cutover, calendar, daily-step, and evidence fields:
 
 ```json
 {
@@ -243,7 +278,7 @@ Write `paper-contract-report.json` with this shape:
     "implemented": true,
     "incrementalReady": true,
     "continuation": {
-      "method": "stateless_recompute",
+      "method": "stateful_continuation",
       "reason": "why this method preserves selected strategy semantics",
       "futureDailyFlow": "how future as_of calls run"
     },
