@@ -121,7 +121,7 @@ def test_run_doctor_runtime_stale_routes_to_env_refresh(
         "probe_package_freshness",
         lambda *_args, **_kwargs: {
             "ok": False,
-            "summary": "Workspace runtime has abel-edge 0.8.4, below this skill's required >= 0.8.6.",
+            "summary": "Workspace runtime has abel-edge 0.8.4, below this skill's required >= 0.8.8.",
         },
     )
 
