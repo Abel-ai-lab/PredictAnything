@@ -135,6 +135,8 @@ Every method must declare the paper history boundary. The gate packages that
 boundary into `manifest.runtime.paperExecutionProfile`, and Edge uses it to
 limit paper-time feed reads. This boundary describes market data needed by a
 future paper call; it is not the same thing as a retrain calendar anchor.
+It also is not the same thing as the history range used to bootstrap startup
+state at cutover.
 
 For `stateful_continuation`, store retrain/refit anchors, absolute row cursors,
 and fitted-object validity in `design.calendar` and persisted strategy state.
@@ -164,6 +166,13 @@ last emitted position. Do not default to replaying the full selected backtest
 history. A bounded suffix replay is acceptable when it is the smallest reliable
 way to reconstruct equivalent state; origin-to-cutover replay is a last resort
 and must still fit the hosted paper timeout.
+
+For DecisionContext-based bootstrap reads, use
+`self.paper_bootstrap_context(start=..., end=cutover_as_of)`. This keeps the
+same runtime feeds and state paths but bypasses the future daily paper history
+clamp while startup state is being constructed. Future
+`get_paper_signal(as_of=...)` calls should keep using the normal paper path, so
+the declared `paperExecutionProfile.history` still bounds daily feed reads.
 
 Future `get_paper_signal(as_of=...)` calls should load that state, advance only
 the rows/dates after the stored cursor, refit only when the original strategy's
@@ -203,9 +212,11 @@ class BranchEngine(StrategyEngine):
 
     def build_paper_initial_state(self, *, cutover_as_of=None):
         store = self._paper_store()
+        # Inside _build_cutover_state, call self.paper_bootstrap_context(...)
+        # if startup state needs a different range than future daily paper reads.
         state = self._build_cutover_state(cutover_as_of)
         state["schema"] = STATE_SCHEMA
-            state = store.mark_current(state, cutover_as_of)
+        state = store.mark_current(state, cutover_as_of)
         store.save(state)
         return store.summary(state, as_of=cutover_as_of)
 
@@ -233,9 +244,11 @@ class BranchEngine(StrategyEngine):
 cutover state that matches the selected research strategy through
 `cutover_as_of`. For example, if the source refits every N rows, build the
 model/scaler for the last active retrain anchor at cutover instead of refitting
-every earlier anchor. `_advance_paper_state(...)` should process only dates
-after the stored cursor and should refit only when the original strategy's
-continuation calendar says a refit is due.
+every earlier anchor. If that bootstrap needs more history than future daily
+paper reads, use `self.paper_bootstrap_context(...)` for bootstrap only.
+`_advance_paper_state(...)` should process only dates after the stored cursor
+and should refit only when the original strategy's continuation calendar says a
+refit is due.
 
 ## Report
 
