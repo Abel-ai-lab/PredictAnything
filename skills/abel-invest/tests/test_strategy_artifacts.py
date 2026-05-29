@@ -308,6 +308,19 @@ def test_contract_request_is_slim_and_marks_training_stateful(tmp_path):
     assert payload["requirements"]["statefulContinuationRequired"] is True
     assert payload["requirements"]["continuationMethod"] == "stateful_continuation"
     assert payload["requirements"]["expectedAction"] == "implement_stateful_continuation"
+    decision_rule = payload["facts"]["historyProfile"]["decisionRule"]
+    assert "market-data window" in decision_rule
+    assert "design.calendar" in decision_rule
+    assert "persisted state" in decision_rule
+    assert "fitted calendars" not in decision_rule
+    paper_signal = payload["reportTemplate"]["paperSignal"]
+    history_reason = paper_signal["design"]["history"]["reason"]
+    calendar_reason = paper_signal["design"]["calendar"]["reason"]
+    assert "market-data window" in history_reason
+    assert "design.calendar" in history_reason
+    assert "persisted state" in history_reason
+    assert "retrain/refit cadence" in calendar_reason
+    assert "row ordinals" in calendar_reason
     scaffold = payload["scaffolds"][0]
     assert scaffold["name"] == "stateful_continuation_paper_state_store"
     assert scaffold["statePath"] == "strategy/paper_state.pkl"

@@ -132,9 +132,17 @@ hosted paper fallback performance limit.
 
 Every method must declare the paper history boundary. The gate packages that
 boundary into `manifest.runtime.paperExecutionProfile`, and Edge uses it to
-limit paper-time feed reads. For expanding, ranking, cumulative, or ordinal
-logic, declare the calendar or history origin. Fixed-window indicators may use a
-recent lookback; origin-based statistics usually cannot.
+limit paper-time feed reads. This boundary describes market data needed by a
+future paper call; it is not the same thing as a retrain calendar anchor.
+
+For `stateful_continuation`, store retrain/refit anchors, absolute row cursors,
+and fitted-object validity in `design.calendar` and persisted strategy state.
+Do not choose `history.boundary=origin_anchored` merely because the source has a
+retrain calendar or absolute row ordinal. Use `fixed_lookback` when future paper
+calls only need a bounded feed window to compute current features and possible
+refits from the persisted state. Use `origin_anchored` for history only when the
+future signal itself still needs origin-to-`as_of` market history, such as
+expanding, cumulative, ranked, or unresolved history dependencies.
 
 ## Stateful Bootstrap
 
@@ -159,7 +167,10 @@ and must still fit the hosted paper timeout.
 Future `get_paper_signal(as_of=...)` calls should load that state, advance only
 the rows/dates after the stored cursor, refit only when the original strategy's
 continuation calendar says a refit is due, and persist the updated state. Do
-not cold-start the whole training path on every paper call.
+not cold-start the whole training path on every paper call. When a refit is due,
+use the bounded market history needed for the source features and train window
+whenever the persisted state carries the calendar/cursor needed to align the
+refit schedule.
 
 The gate calls the bootstrap hook for the validation cutover, then uses Edge
 `paper_run_one(...)` for holdout tail advance with prepared market data from the
@@ -288,7 +299,7 @@ state, cutover, calendar, daily-step, and evidence fields:
         "lookbackBars": 120,
         "origin": null,
         "feeds": ["AAPL"],
-        "reason": "history required for one paper signal"
+        "reason": "market-data window needed by future daily paper execution"
       },
       "state": {
         "usesPersistentState": false,
@@ -300,7 +311,7 @@ state, cutover, calendar, daily-step, and evidence fields:
         "origin": null,
         "decisionIndexSource": null,
         "nextAdvanceRule": null,
-        "reason": "calendar and ordinal semantics"
+        "reason": "retrain/refit cadence, row ordinals, and calendar anchor"
       },
       "cutover": {
         "requiresStartupState": false,

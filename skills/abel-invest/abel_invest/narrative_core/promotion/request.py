@@ -559,10 +559,12 @@ def _hosted_paper_contract_work_order_facts(
             "decisionRule": (
                 "Harness boundary candidates are observations, not answers. Read "
                 "sourcePath before choosing history.boundary. Use fixed_lookback "
-                "only when source semantics are finite-window; use origin_anchored "
-                "for expanding/cumulative/ranked history, row-index dependencies "
-                "that affect the emitted as_of decision, fitted calendars, or "
-                "unresolved history needs."
+                "when future paper execution only needs a bounded market-data "
+                "window. Retrain calendars, fitted-model anchors, and absolute "
+                "row cursors belong in design.calendar and persisted state. Use "
+                "origin_anchored for history only when future paper execution "
+                "still needs origin-to-as_of market history, such as expanding, "
+                "cumulative, ranked, or unresolved history dependencies."
             ),
         },
         "assetPolicy": validation_oracle.get("assetPolicy")
@@ -697,8 +699,9 @@ def _hosted_paper_contract_report_template(
                     "lookbackBars": None,
                     "origin": "",
                     "reason": (
-                        "Choose after reading sourcePath; do not copy harness "
-                        "historyBoundaryCandidates blindly."
+                        "Declare the market-data window needed by future daily "
+                        "paper execution. Put retrain/ordinal anchors in "
+                        "design.calendar and persisted state."
                     ),
                 },
                 "state": {
@@ -718,7 +721,10 @@ def _hosted_paper_contract_report_template(
                 "calendar": {
                     "usesAbsoluteDecisionOrdinal": False,
                     "origin": "",
-                    "reason": "",
+                    "reason": (
+                        "Describe retrain/refit cadence, absolute row ordinals, "
+                        "and any calendar origin needed to advance state."
+                    ),
                 },
                 "cutover": {
                     "requiresStartupState": True,
