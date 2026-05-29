@@ -281,20 +281,41 @@ def _run_edge_paper_run_one_smoke_unbounded(
                     second = paper_run_one(context, as_of=oracle_rows[-1]["asOf"])
                 second_elapsed = time.monotonic() - second_started
                 after_second = _snapshot_tree(state_dir)
-            if second.get("n_rows") != 0 or after_second != before_second:
-                return {
-                    "status": "failed",
-                    "reason": "paper_run_one was not idempotent for the same as_of",
-                    "asOf": oracle_rows[-1]["asOf"],
-                    "firstResult": _json_safe(first),
-                    "secondResult": _json_safe(second),
-                    "validationContext": _json_safe(validation_context),
-                    "tailConsistency": _tail_consistency_payload(
-                        oracle_rows,
-                        comparisons,
-                        status="passed",
-                    ),
-                }
+                if second.get("n_rows") != 0 or after_second != before_second:
+                    return {
+                        "status": "failed",
+                        "reason": "paper_run_one was not idempotent for the same as_of",
+                        "asOf": oracle_rows[-1]["asOf"],
+                        "firstResult": _json_safe(first),
+                        "secondResult": _json_safe(second),
+                        "validationContext": _json_safe(validation_context),
+                        "tailConsistency": _tail_consistency_payload(
+                            oracle_rows,
+                            comparisons,
+                            status="passed",
+                        ),
+                    }
+                production_finalization = {"status": "skipped"}
+                if requires_validation_bootstrap:
+                    production_finalization = _finalize_production_startup_state(
+                        context,
+                        state_dir=state_dir,
+                        validation_tail_end_as_of=oracle_rows[-1]["asOf"],
+                        production_end_as_of=_selected_round_cutover_end(candidate),
+                    )
+                    if production_finalization.get("status") == "failed":
+                        return {
+                            "status": "failed",
+                            "reason": _clean(production_finalization.get("reason"))
+                            or "production startup state finalization failed",
+                            "tailConsistency": _tail_consistency_payload(
+                                oracle_rows,
+                                comparisons,
+                                status="passed",
+                            ),
+                            "validationBootstrap": bootstrap,
+                            "productionFinalization": production_finalization,
+                        }
             latest_position = _finite_float(comparisons[-1].get("actualNextPosition"))
             generated_initial_state_files = []
             if requires_validation_bootstrap:
@@ -413,6 +434,66 @@ def _paper_run_tail_comparisons(
             }
         )
     return comparisons
+
+
+def _finalize_production_startup_state(
+    context: dict[str, Any],
+    *,
+    state_dir: Path,
+    validation_tail_end_as_of: str,
+    production_end_as_of: str,
+) -> dict[str, Any]:
+    production_end = _date_part(_clean(production_end_as_of))
+    validation_tail_end = _date_part(_clean(validation_tail_end_as_of))
+    if not production_end:
+        return {"status": "skipped", "reason": "selected round end is unavailable"}
+    if not _date_is_after(production_end, validation_tail_end):
+        return {"status": "skipped", "asOf": production_end}
+
+    before = _snapshot_tree(state_dir)
+    started_at = time.monotonic()
+    with redirect_stdout(sys.stderr):
+        result = paper_run_one(context, as_of=production_end)
+    after = _snapshot_tree(state_dir)
+    if result.get("n_rows") == 0 and after == before:
+        return {
+            "status": "failed",
+            "reason": (
+                "paper_run_one did not advance startup state to selected round end"
+            ),
+            "asOf": production_end,
+            "result": _json_safe(result),
+        }
+    return {
+        "status": "passed",
+        "asOf": production_end,
+        "elapsedSeconds": round(time.monotonic() - started_at, 6),
+        "stateChanged": after != before,
+        "result": _json_safe(result),
+    }
+
+
+def _selected_round_cutover_end(candidate: Any) -> str:
+    edge_result = getattr(candidate, "edge_result", None)
+    if not isinstance(edge_result, dict):
+        return ""
+    effective_window = edge_result.get("effective_window")
+    if not isinstance(effective_window, dict):
+        return ""
+    return _date_part(_clean(effective_window.get("end")))
+
+
+def _date_is_after(left: str, right: str) -> bool:
+    left_text = _date_part(_clean(left))
+    right_text = _date_part(_clean(right))
+    if not left_text:
+        return False
+    if not right_text:
+        return True
+    try:
+        return pd.to_datetime(left_text, utc=True) > pd.to_datetime(right_text, utc=True)
+    except (TypeError, ValueError):
+        return left_text > right_text
 
 
 def _fast_paper_validation(
