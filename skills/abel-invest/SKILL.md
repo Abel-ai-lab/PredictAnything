@@ -231,7 +231,8 @@ Visualization and promotion:
   to create a session review page.
 - If the user agrees or explicitly asks, run
   `<command_prefix> visualize-session --session <session>`
-  yourself and share the returned Markdown link. For an explicit session
+  yourself. After it succeeds, share the returned Markdown link and, if present,
+  any user-facing `Tip:` line returned by the command. For an explicit session
   visualization/upload request, run this command before inspecting Abel Invest
   CLI, upload, or promotion internals; let the CLI produce the contract request
   if one is needed.
