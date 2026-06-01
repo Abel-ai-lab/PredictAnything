@@ -244,10 +244,6 @@ Visualization and promotion:
   selected strategy emits a hosted-paper contract request, continue the
   promotion loop instead of treating the attachment as optional. Research
   validation gates and hosted-paper promotion gates are separate.
-- Use `visualize-session --without-strategy-artifact` only when the user
-  explicitly asks for a session view without strategy artifact upload, or after
-  you have reported a hard blocker in the hosted-paper promotion loop and the
-  user accepts a narrative-only view.
 - If visualization or artifact export emits a hosted paper
   `paper-contract-request.json`, handle it in this same skill loop. Read the
   request first and use its `reportTemplate`. Read
@@ -258,7 +254,9 @@ Visualization and promotion:
   If another request appears, inspect `validation.lastGateFailure`,
   `validation.attemptPolicy`, and `requirements.fallback`, then continue until
   promotion succeeds, eligible fallback succeeds or fails a gate, or a genuine
-  implementation/runtime blocker remains.
+  implementation/runtime blocker remains. If the loop cannot complete, report
+  the session as `action_required` unless the user explicitly asks to skip
+  strategy artifacts.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`
   owns API key setup; do not ask for a router URL unless the user is testing a
   non-default router.

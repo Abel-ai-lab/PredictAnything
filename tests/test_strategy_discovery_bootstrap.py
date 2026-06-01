@@ -134,13 +134,15 @@ def test_strategy_discovery_cli_exposes_env_refresh() -> None:
     assert args.path == "abel-invest-workspace"
 
 
-def test_visualize_session_strategy_artifact_is_default_with_session_only_opt_out() -> None:
+def test_visualize_session_strategy_artifact_is_default_with_hidden_legacy_opt_out(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     parser = build_parser()
 
     default_args = parser.parse_args(
         ["visualize-session", "--session", "research/tsla/tsla-v1"]
     )
-    opt_out_args = parser.parse_args(
+    legacy_opt_out_args = parser.parse_args(
         [
             "visualize-session",
             "--session",
@@ -150,7 +152,10 @@ def test_visualize_session_strategy_artifact_is_default_with_session_only_opt_ou
     )
 
     assert default_args.without_strategy_artifact is False
-    assert opt_out_args.without_strategy_artifact is True
+    assert legacy_opt_out_args.without_strategy_artifact is True
+    with pytest.raises(SystemExit):
+        parser.parse_args(["visualize-session", "--help"])
+    assert "--without-strategy-artifact" not in capsys.readouterr().out
     with pytest.raises(SystemExit):
         parser.parse_args(
             [

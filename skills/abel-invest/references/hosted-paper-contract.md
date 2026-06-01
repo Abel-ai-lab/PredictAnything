@@ -69,14 +69,13 @@ rows.
 Stop the loop only when promotion succeeds, `full_replay_fallback` has been
 attempted and fails parity or performance, the required promoted-source edit
 cannot be implemented from the available source/context, an unrelated
-CLI/runtime/auth blocker prevents progress, or the user explicitly accepts a
-session-only view.
+CLI/runtime/auth blocker prevents progress, or the user explicitly asks to skip
+strategy artifacts.
 
-Do not edit the original branch. Do not use
-`visualize-session --without-strategy-artifact` to avoid contract work. Do not
-start by reading Abel-skills promotion internals or Edge gate internals; the
-request is the workbench. Inspect internals only after a refreshed request
-cannot explain a failure.
+Do not edit the original branch. Do not bypass artifact promotion when
+visualizing a session. Do not start by reading Abel-skills promotion internals
+or Edge gate internals; the request is the workbench. Inspect internals only
+after a refreshed request cannot explain a failure.
 
 ## Source Edits
 

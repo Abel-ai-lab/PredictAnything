@@ -345,10 +345,7 @@ def build_parser() -> argparse.ArgumentParser:
     visualize_session.add_argument(
         "--without-strategy-artifact",
         action="store_true",
-        help=(
-            "Upload only the narrative session view and skip strategy artifact "
-            "preparation/upload."
-        ),
+        help=argparse.SUPPRESS,
     )
     visualize_session.add_argument(
         "--artifact-output-dir",
