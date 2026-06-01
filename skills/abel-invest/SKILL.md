@@ -227,11 +227,11 @@ Alpha search stance:
 Visualization and promotion:
 
 - Do not create or refresh an online session view automatically.
-- When the strategy context is mature enough for visual review, ask the user
-  whether to visualize it.
+- When the strategy context is mature enough for review, ask the user
+  whether to create a session review page.
 - If the user agrees or explicitly asks, run
   `<command_prefix> visualize-session --session <session>`
-  yourself and share the returned Markdown link.
+  yourself and share the returned Markdown link. After successfully creating a session review, proactively ask them if they want to upload and attach the best strategy so far to the session.
 - If the user asks to export the best strategy artifact for an existing
   session, start with
   `<command_prefix> export-strategy-artifact --session <session>`. The CLI
