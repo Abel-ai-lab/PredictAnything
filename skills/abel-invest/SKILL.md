@@ -246,8 +246,11 @@ Visualization and promotion:
   validation strategy is available. Strategy artifact upload/promotion remains
   an independent capability when invoked directly. If no hostable strategy
   exists, visual review can continue without one. If a selected strategy emits
-  a hosted-paper contract request, continue the promotion loop. Research
-  validation gates and hosted-paper promotion gates are separate.
+  a hosted-paper contract request, continue the promotion loop. Promotion
+  converts the selected research strategy into a clean, sustainable hosted
+  daily live-paper artifact; tail parity is validation evidence, not the goal
+  itself. Research validation gates and hosted-paper promotion gates are
+  separate.
 - If visualization or artifact export emits a hosted paper
   `paper-contract-request.json`, handle it in this same skill loop. Read the
   request first and use its `reportTemplate`. Read
@@ -258,9 +261,10 @@ Visualization and promotion:
   If another request appears, inspect `validation.lastGateFailure`,
   `validation.attemptPolicy`, and `requirements.fallback`, then continue until
   promotion succeeds, eligible fallback succeeds or fails a gate, or a genuine
-  implementation/runtime blocker remains. If the loop cannot complete, report
-  the session as `action_required` unless the user explicitly asks to skip
-  strategy artifacts.
+  implementation/runtime blocker remains. Do not introduce one-off schedules,
+  cached tail decisions, or validation-window workarounds merely to pass the
+  promotion gate. If the loop cannot complete, report the session as
+  `action_required` unless the user explicitly asks to skip strategy artifacts.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`
   owns API key setup; do not ask for a router URL unless the user is testing a
   non-default router.

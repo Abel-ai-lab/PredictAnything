@@ -55,14 +55,14 @@ def _hosted_paper_contract_scaffold_references(
                 "Adapt the helper methods to the selected strategy semantics; "
                 "build_paper_initial_state should construct minimal cutover "
                 "state, not default to full-history replay. Use "
-                "self.paper_bootstrap_context(...) inside bootstrap reads when "
+                "self.paper_bootstrap_context(start=...) inside bootstrap reads when "
                 "cutover state needs a different history range than future "
                 "daily paper calls."
             ),
             "statePath": "strategy/paper_state.pkl",
             "interfaces": [
                 "PaperStateStore.from_context(self.context, 'strategy/paper_state.pkl')",
-                "self.paper_bootstrap_context(start=..., end=cutover_as_of)",
+                "self.paper_bootstrap_context(start=...)",
                 "build_paper_initial_state(self, *, cutover_as_of=None)",
                 "get_paper_signal(self, *, as_of=None)",
                 "store.is_current(state, as_of)",
@@ -77,9 +77,10 @@ def _hosted_paper_contract_scaffold_references(
                 "        return PaperStateStore.from_context(self.context, 'strategy/paper_state.pkl')\n\n"
                 "    def build_paper_initial_state(self, *, cutover_as_of=None):\n"
                 "        store = self._paper_store()\n"
-                "        # _build_cutover_state may use self.paper_bootstrap_context(...)\n"
+                "        # _build_cutover_state may use self.paper_bootstrap_context(start=...)\n"
                 "        # for startup reads that should not be clamped by the\n"
-                "        # future daily paper history boundary.\n"
+                "        # future daily paper history boundary. Edge owns the\n"
+                "        # validation cutover upper bound during promotion.\n"
                 "        state = self._build_cutover_state(cutover_as_of)\n"
                 "        state['schema'] = STATE_SCHEMA\n"
                 "        state = store.mark_current(state, cutover_as_of)\n"
@@ -100,7 +101,8 @@ def _hosted_paper_contract_scaffold_references(
                 "then advances the tail with Edge paper_run_one. If parity passes, the "
                 "state produced by that advance is packaged as runtime/initial-state/**. "
                 "Daily paper reads still use the declared paperExecutionProfile history "
-                "boundary; bootstrap-only reads may use paper_bootstrap_context. Do not "
+                "boundary; bootstrap-only reads may use paper_bootstrap_context(start=...) "
+                "and are bounded by the validation cutover during promotion. Do not "
                 "hand-build final startup state or encode expected positions."
             ),
         }

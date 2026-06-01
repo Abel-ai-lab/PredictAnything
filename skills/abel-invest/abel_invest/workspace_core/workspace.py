@@ -476,9 +476,11 @@ allowed, and declare the paper history boundary in `paper-contract-report.json`.
 Rerun the same command afterward. If another request appears, inspect
 `validation.lastGateFailure`, `validation.attemptPolicy`, and
 `requirements.fallback`, then continue until promotion succeeds, fallback is
-eligible and succeeds or fails a gate, or a hard blocker remains. Do not start
-a separate agent process. Leave contract-blocked sessions as `action_required`
-unless the user explicitly asks to skip strategy artifacts.
+eligible and succeeds or fails a gate, or a hard blocker remains. Promotion
+converts the selected research strategy into a clean hosted daily live-paper
+artifact; do not add one-off schedules or cached tail decisions merely to pass
+the gate. Do not start a separate agent process. Leave contract-blocked sessions
+as `action_required` unless the user explicitly asks to skip strategy artifacts.
 This workspace is for alpha-managed strategy search, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.

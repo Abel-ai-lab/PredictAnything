@@ -767,10 +767,32 @@ def _run_paper_validation_state_bootstrap(
             ),
             "cutoverAsOf": cutover_as_of,
         }
+    scope = getattr(engine, "paper_bootstrap_cutover_scope", None)
+    if not callable(scope):
+        return {
+            "required": True,
+            "status": "failed",
+            "reason": (
+                "stateful_continuation validation requires Abel Edge "
+                "paper_bootstrap_cutover_scope support"
+            ),
+            "cutoverAsOf": cutover_as_of,
+        }
 
     before = _snapshot_tree(state_dir)
     started_at = time.monotonic()
-    result = hook(cutover_as_of=cutover_as_of)
+    try:
+        with scope(cutover_as_of):
+            result = hook(cutover_as_of=cutover_as_of)
+    except Exception as exc:
+        return {
+            "required": True,
+            "status": "failed",
+            "method": "build_paper_initial_state",
+            "cutoverAsOf": cutover_as_of,
+            "elapsedSeconds": round(time.monotonic() - started_at, 6),
+            "reason": f"{exc.__class__.__name__}: {exc}",
+        }
     elapsed = time.monotonic() - started_at
     after = _snapshot_tree(state_dir)
     wrote_default_state = False

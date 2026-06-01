@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from contextlib import contextmanager
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +14,10 @@ from abel_invest.narrative_core.promotion import (
     PromotionHostedPaperContractRequired,
 )
 from abel_invest.narrative_core.promotion import source_scan
-from abel_invest.narrative_core.promotion.paper.smoke import _paper_smoke_context
+from abel_invest.narrative_core.promotion.paper.smoke import (
+    _paper_smoke_context,
+    _run_paper_validation_state_bootstrap,
+)
 from abel_invest.narrative_core.promotion.request import (
     _write_hosted_paper_contract_request,
 )
@@ -719,6 +723,56 @@ class BranchEngine:
         state_path.write_text("state")
         return {"next_position": 0.0}
 """
+
+
+class _ScopedBootstrapEngine:
+    def __init__(self):
+        self.active_cutover = None
+        self.seen_cutover = None
+
+    @contextmanager
+    def paper_bootstrap_cutover_scope(self, cutover_as_of):
+        previous = self.active_cutover
+        self.active_cutover = cutover_as_of
+        try:
+            yield
+        finally:
+            self.active_cutover = previous
+
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        self.seen_cutover = (cutover_as_of, self.active_cutover)
+        return {"cutover": cutover_as_of}
+
+
+class _UnscopedBootstrapEngine:
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        return {}
+
+
+def test_stateful_bootstrap_runs_inside_edge_cutover_scope(tmp_path):
+    engine = _ScopedBootstrapEngine()
+
+    result = _run_paper_validation_state_bootstrap(
+        engine,
+        state_dir=tmp_path / "state",
+        oracle_rows=[{"validationCutoverAsOf": "2026-04-16"}],
+        required=True,
+    )
+
+    assert result["status"] == "passed"
+    assert engine.seen_cutover == ("2026-04-16", "2026-04-16")
+
+
+def test_stateful_bootstrap_requires_edge_cutover_scope(tmp_path):
+    result = _run_paper_validation_state_bootstrap(
+        _UnscopedBootstrapEngine(),
+        state_dir=tmp_path / "state",
+        oracle_rows=[{"validationCutoverAsOf": "2026-04-16"}],
+        required=True,
+    )
+
+    assert result["status"] == "failed"
+    assert "paper_bootstrap_cutover_scope" in result["reason"]
 
 
 def test_ml_training_stateful_contract_does_not_gate_on_prose_keywords():
