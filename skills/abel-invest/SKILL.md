@@ -231,18 +231,22 @@ Visualization and promotion:
   whether to visualize it.
 - If the user agrees or explicitly asks, run
   `<command_prefix> visualize-session --session <session>`
-  yourself and share the returned Markdown link.
+  yourself and share the returned Markdown link. For an explicit session
+  visualization/upload request, run this command before inspecting Abel Invest
+  CLI, upload, or promotion internals; let the CLI produce the contract request
+  if one is needed.
 - If the user asks to export the best strategy artifact for an existing
   session, start with
   `<command_prefix> export-strategy-artifact --session <session>`. The CLI
   selects the best hostable validation strategy; do not manually rank
   `results.tsv`, `frontier.json`, or branch outputs first. If the user names a
   branch or round explicitly, use that explicit selection instead.
-- Visualization is for reviewing the whole session. A strategy artifact is the
-  default attachment when a hostable validation strategy is available. If no
-  hostable strategy exists, visual review can continue without one. If a
-  selected strategy emits a hosted-paper contract request, continue the
-  promotion loop instead of treating the attachment as optional. Research
+- Visualization is for reviewing the whole session. By default, it also
+  includes selected strategy artifact upload/promotion when a hostable
+  validation strategy is available. Strategy artifact upload/promotion remains
+  an independent capability when invoked directly. If no hostable strategy
+  exists, visual review can continue without one. If a selected strategy emits
+  a hosted-paper contract request, continue the promotion loop. Research
   validation gates and hosted-paper promotion gates are separate.
 - If visualization or artifact export emits a hosted paper
   `paper-contract-request.json`, handle it in this same skill loop. Read the

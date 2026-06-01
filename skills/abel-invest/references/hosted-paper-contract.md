@@ -19,7 +19,8 @@ code is required.
 
 Harness facts are observations, not complete semantic truth. Empty observed
 lists such as no observed fit calls or no observed state writes are not proof of
-absence. Read the source and report semantic dependencies the scan missed.
+absence. Read the selected/promoted strategy source and report semantic
+dependencies the scan missed.
 
 ## Loop
 
@@ -73,9 +74,9 @@ CLI/runtime/auth blocker prevents progress, or the user explicitly asks to skip
 strategy artifacts.
 
 Do not edit the original branch. Do not bypass artifact promotion when
-visualizing a session. Do not start by reading Abel-skills promotion internals
-or Edge gate internals; the request is the workbench. Inspect internals only
-after a refreshed request cannot explain a failure.
+visualizing a session. The request is the workbench; do not inspect Abel Invest
+or Edge implementation internals unless the command crashes without an
+actionable request or a refreshed request is internally inconsistent.
 
 ## Source Edits
 

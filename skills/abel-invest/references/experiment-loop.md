@@ -239,14 +239,16 @@ session folder to the command:
 <command_prefix> visualize-session --session research/<ticker>/<exp_id>
 ```
 
-The command builds the online view from local session evidence. By default it
-also prepares and attaches the automatically selected best hostable validation
-strategy artifact when one is available; this attachment is selected by Sharpe,
-return, drawdown, and validation pass-rate. Research validation gates and
-hosted-paper promotion gates are separate. If no hostable validation strategy
-exists, visual review can continue without an attachment. If a selected
-strategy emits a hosted-paper contract request, that session is
+The command is the default composite entrypoint for session visualization: it
+builds the online view from local session evidence and, when the CLI selects a
+hostable validation strategy, includes strategy artifact upload/promotion
+through the strategy-artifact capability. Strategy artifact upload/promotion
+remains an independent capability when invoked directly. If no hostable
+validation strategy exists, visual review can continue without an artifact. If
+a selected strategy emits a hosted-paper contract request, that session is
 `action_required` until the contract loop succeeds or a hard blocker remains.
+Do not pre-audit Abel Invest implementation internals before this command
+produces an actionable request.
 
 Use the entrypoint that matches the user's request. For session visualization
 or upload, keep using `visualize-session --session <session>` so the default
