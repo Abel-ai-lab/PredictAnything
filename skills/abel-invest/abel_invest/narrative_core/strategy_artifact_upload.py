@@ -12,6 +12,11 @@ from urllib.request import Request, urlopen
 from abel_invest.narrative_core.strategy_artifacts import export_selected_strategy_artifact
 from abel_invest.narrative_core.upload_transport import build_multipart_form_data
 
+STRATEGY_DETAIL_ENTRY_TIP = (
+    "Tip: On the session review page, scroll to Session strategies near the bottom "
+    "and click View Strategy to open the bound strategy detail page."
+)
+
 
 def post_strategy_artifact_upload(
     *,
@@ -300,7 +305,7 @@ def render_strategy_artifact_upload_lines(artifact_result: dict | None) -> list[
         details.append(f"selected={branch_id}/{round_id}")
     if details:
         summary += f" ({', '.join(details)})"
-    return [summary]
+    return [summary, STRATEGY_DETAIL_ENTRY_TIP]
 
 
 def _strategy_artifact_skip_line(artifact_result: dict) -> str:

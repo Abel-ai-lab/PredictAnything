@@ -4473,6 +4473,7 @@ def test_visualize_session_uploads_strategy_artifact_by_default(
     assert "Strategy artifact uploaded: upload_1" in output
     assert "admission=queued" in output
     assert "router admission continues asynchronously" in output
+    assert "Session strategies near the bottom" in output
 
 
 def test_visualize_session_aborts_before_upload_when_agent_paper_contract_fails(
@@ -4548,6 +4549,7 @@ def test_render_strategy_artifact_upload_result_lines() -> None:
     assert "Strategy artifact uploaded: upload_1" in rendered
     assert "admission=queued" in rendered
     assert "router admission continues asynchronously" in rendered
+    assert "Session strategies near the bottom" in rendered
 
 
 def test_render_skill_dashboard_session_upload_result_returns_markdown_link() -> None:

@@ -225,6 +225,24 @@ def test_strategy_artifact_skip_line_keeps_session_view_language():
     assert "skipped" not in lines[0].lower()
 
 
+def test_strategy_artifact_success_lines_include_strategy_detail_tip():
+    lines = render_strategy_artifact_upload_lines(
+        {
+            "artifactUploadId": "upload_1",
+            "admissionStatus": "accepted",
+            "selectedBranchId": "momentum_lead",
+            "selectedRoundId": "round-006",
+        }
+    )
+
+    assert lines == [
+        "Strategy artifact uploaded: upload_1 "
+        "(admission=accepted, selected=momentum_lead/round-006)",
+        "Tip: On the session review page, scroll to Session strategies near the "
+        "bottom and click View Strategy to open the bound strategy detail page.",
+    ]
+
+
 def test_artifact_export_cleanup_removes_legacy_and_completed_outputs(tmp_path):
     session = tmp_path / "research" / "meta" / "session"
     session.mkdir(parents=True)
