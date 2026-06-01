@@ -3261,7 +3261,8 @@ def test_hosted_paper_request_is_actionable_for_training_like_source(
     assert request["requirements"]["statefulContinuationRequired"] is True
     assert request["requirements"]["continuationMethod"] == "stateful_continuation"
     assert request["requirements"]["observedTrainingCalls"] == ["model.fit"]
-    assert request["contractGuide"]["relativePath"] == "references/hosted-paper-contract.md"
+    assert request["contractGuide"]["referencePath"] == "references/hosted-paper-contract.md"
+    assert "relativePath" not in request["contractGuide"]
     assert request["facts"]["strategyProfile"]["observedTrainingCalls"] == ["model.fit"]
     assert request["facts"]["sourceScan"]["observedFitCalls"] == [
         "model.fit"

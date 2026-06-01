@@ -27,6 +27,7 @@ from abel_invest.narrative_core.promotion.validation import (
     _validate_agent_paper_signal_contract,
 )
 from abel_invest.narrative_core.strategy_artifact_upload import (
+    _strategy_artifact_preupload_error,
     render_strategy_artifact_upload_lines,
 )
 from abel_invest.narrative_core.strategy_artifacts import (
@@ -879,3 +880,55 @@ def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp
     assert "full_replay_fallback" in payload["requirements"]["sourceEditPolicy"][
         "allowedReasons"
     ]
+
+
+def test_strategy_artifact_preupload_error_includes_contract_loop_status(tmp_path):
+    request_path = tmp_path / "paper-contract-request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "requirements": {
+                    "expectedAction": "implement_stateful_continuation",
+                    "continuationMethod": "stateful_continuation",
+                },
+                "validation": {
+                    "attemptPolicy": {
+                        "contractRequestRefreshes": 2,
+                        "liveContractFailures": 1,
+                        "fullReplayFallbackEligible": False,
+                        "fallbackAfterRequestRefreshes": 3,
+                        "fallbackAfterFailures": 3,
+                    },
+                    "lastGateFailure": {
+                        "failedGates": [
+                            {
+                                "name": "paper_dry_run",
+                                "reason": "tail parity mismatch",
+                            }
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    message = _strategy_artifact_preupload_error(
+        {
+            "skipReason": "hosted_paper_contract_required",
+            "promotionReport": {
+                "reason": "promotion gate did not pass",
+                "requestPath": str(request_path),
+            },
+        }
+    )
+
+    assert "expectedAction=implement_stateful_continuation" in message
+    assert "continuationMethod=stateful_continuation" in message
+    assert "contractRequestRefreshes=2" in message
+    assert "liveContractFailures=1" in message
+    assert "fullReplayFallbackEligible=false" in message
+    assert "fallbackAfterRequestRefreshes" not in message
+    assert "fallbackAfterFailures" not in message
+    assert "lastGateFailure=paper_dry_run:tail parity mismatch" in message
+    assert "nextAction=write_or_repair_paper_contract_report" in message

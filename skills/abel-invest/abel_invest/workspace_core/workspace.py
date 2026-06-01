@@ -342,8 +342,9 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `visualize-session` creates an online session view from the session folder;
   it includes the selected best ranked hostable strategy artifact when one is
   available by default, selected from validation evidence rather than requiring
-  every gate to pass. Use `--without-strategy-artifact` only for narrative-only
-  views
+  every research gate to pass. If a selected strategy emits a hosted-paper
+  contract request, continue that loop instead of bypassing artifact work. Use
+  `--without-strategy-artifact` only for accepted narrative-only views
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter wiring scaffold for the first end-to-end run, not a finished strategy
 
@@ -470,8 +471,12 @@ needed, open its `referencePath` from the active Abel Invest skill, not from the
 workspace or CLI package path.
 Edit only when `sourceEditPolicy` says a source edit is required or genuinely
 allowed, and declare the paper history boundary in `paper-contract-report.json`.
-Rerun the same command afterward. Do not start a separate agent process. Use
-`--without-strategy-artifact` only for narrative-only views.
+Rerun the same command afterward. If another request appears, inspect
+`validation.lastGateFailure`, `validation.attemptPolicy`, and
+`requirements.fallback`, then continue until promotion succeeds, fallback is
+eligible and succeeds or fails a gate, or a hard blocker remains. Do not start
+a separate agent process. Use `--without-strategy-artifact` only for accepted
+narrative-only views.
 This workspace is for alpha-managed strategy search, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.

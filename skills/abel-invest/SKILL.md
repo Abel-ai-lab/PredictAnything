@@ -238,12 +238,16 @@ Visualization and promotion:
   selects the best hostable validation strategy; do not manually rank
   `results.tsv`, `frontier.json`, or branch outputs first. If the user names a
   branch or round explicitly, use that explicit selection instead.
-- Visualization is for reviewing the whole session. A strategy artifact is an
-  optional attachment selected from hostable validation evidence; a missing
-  attachment should not block visual review. Research validation gates and
-  hosted-paper promotion gates are separate.
+- Visualization is for reviewing the whole session. A strategy artifact is the
+  default attachment when a hostable validation strategy is available. If no
+  hostable strategy exists, visual review can continue without one. If a
+  selected strategy emits a hosted-paper contract request, continue the
+  promotion loop instead of treating the attachment as optional. Research
+  validation gates and hosted-paper promotion gates are separate.
 - Use `visualize-session --without-strategy-artifact` only when the user
-  explicitly asks for a session view without strategy artifact upload.
+  explicitly asks for a session view without strategy artifact upload, or after
+  you have reported a hard blocker in the hosted-paper promotion loop and the
+  user accepts a narrative-only view.
 - If visualization or artifact export emits a hosted paper
   `paper-contract-request.json`, handle it in this same skill loop. Read the
   request first and use its `reportTemplate`. Read
@@ -251,6 +255,10 @@ Visualization and promotion:
   calls for stateful continuation, source edits, or deeper gate diagnosis. Edit
   only the promoted copy when the request's source-edit policy requires it,
   write the requested `paper-contract-report.json`, and rerun the same command.
+  If another request appears, inspect `validation.lastGateFailure`,
+  `validation.attemptPolicy`, and `requirements.fallback`, then continue until
+  promotion succeeds, eligible fallback succeeds or fails a gate, or a genuine
+  implementation/runtime blocker remains.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`
   owns API key setup; do not ask for a router URL unless the user is testing a
   non-default router.
