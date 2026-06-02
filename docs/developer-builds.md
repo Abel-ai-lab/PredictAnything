@@ -1,10 +1,10 @@
 # Developer Builds
 
-This page is for maintainers who need to build local Abel skill artifacts from repository source.
+This page is for maintainers who need to build local Abel Strategy Research Skills artifacts from repository source.
 
-## Build The Full Skills Collection
+## Build The Abel Strategy Research Skill Collection
 
-Use this when you want to rebuild the full public `skills/` tree from the
+Use this when you want to rebuild the public strategy research `skills/` tree from the
 maintainer-owned collection source under `maintainers/skills/`.
 
 Public-safe render:

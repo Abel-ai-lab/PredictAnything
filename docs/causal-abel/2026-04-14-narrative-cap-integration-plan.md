@@ -147,14 +147,14 @@ This smoke runner should report provider reachability separately from query succ
 Run after implementation:
 
 ```bash
-cd /Users/rayz/Documents/causal-agent-protocol/Abel-skills
+cd /Users/rayz/Documents/causal-agent-protocol/abel-strategy-research-skills
 python3 maintainers/causal-abel/smoke_narrative_cap_probe.py
 ```
 
 Script-level spot checks:
 
 ```bash
-cd /Users/rayz/Documents/causal-agent-protocol/Abel-skills/skills/causal-abel
+cd /Users/rayz/Documents/causal-agent-protocol/abel-strategy-research-skills/skills/causal-abel
 python scripts/narrative_cap_probe.py card
 python scripts/narrative_cap_probe.py methods --verbs narrate
 python scripts/narrative_cap_probe.py narrate --query "AI datacenter demand and NVDA"
@@ -182,4 +182,3 @@ These do not block the current plan, but they should be revisited during impleme
 - whether to keep the helper script fully standalone or factor shared HTTP helpers with the existing graph probe
 - whether the narrative provider should have a tiny dedicated reference file or rely only on script `--help`
 - whether unit tests are needed immediately or if maintainer smoke coverage is enough for the first pass
-

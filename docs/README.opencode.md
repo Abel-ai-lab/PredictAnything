@@ -1,6 +1,6 @@
-# Abel Skills for OpenCode
+# Abel Strategy Research Skills for OpenCode
 
-Install the whole Abel collection through the OpenCode plugin config.
+Install Abel strategy research workflows through the OpenCode plugin config.
 
 Choose one install scope:
 
@@ -13,7 +13,7 @@ Add Abel to your global OpenCode config:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/Abel-skills.git"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git"]
 }
 ```
 
@@ -23,7 +23,7 @@ Add Abel to the current project's `opencode.json`:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/Abel-skills.git"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git"]
 }
 ```
 
@@ -33,7 +33,7 @@ To pin a specific version, branch, or tag, append it after `#`:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/Abel-skills.git#v1.2.0"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git#v1.4.2"]
 }
 ```
 

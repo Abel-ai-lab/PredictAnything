@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the full Abel skills collection from maintainer sources."""
+"""Render the Abel strategy research skills collection from maintainer sources."""
 
 from __future__ import annotations
 
@@ -260,7 +260,7 @@ def _render_profile_aware_skills(output_dir: Path, values: dict[str, str]) -> No
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Render the full Abel skills collection with a selected profile."
+        description="Render the Abel strategy research skills collection with a selected profile."
     )
     parser.add_argument(
         "--source-dir",

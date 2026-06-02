@@ -1,4 +1,4 @@
 interface:
-  display_name: "Abel"
-  short_description: "Main Abel entrypoint for causal reads, strategy discovery, and auth."
+  display_name: "Abel Strategy Research Skills"
+  short_description: "AI agent skills for strategy discovery with Abel: explore market ideas, analyze causal drivers, and develop investment strategies."
   default_prompt: "Use $abel to route this request to the right Abel skill."
