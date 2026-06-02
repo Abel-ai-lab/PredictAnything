@@ -2,8 +2,6 @@
 
 AI agent skills for strategy discovery with Abel: explore market ideas, analyze causal drivers, and develop investment strategies.
 
-![Abel Strategy Research Skills — AI agent skills for strategy discovery with Abel: explore market ideas, analyze causal drivers, and develop investment strategies.](docs/assets/social-preview.png)
-
 Abel Strategy Research Skills help Claude Code, OpenAI Codex, OpenCode, and ClawHub agents explore market ideas, analyze causal drivers, and develop investment strategies.
 
 These skills support investment research and strategy discovery. They are not a trading bot, automated trade execution system, or backtesting engine.
