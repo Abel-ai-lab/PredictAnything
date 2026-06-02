@@ -1,18 +1,32 @@
 # Abel Strategy Research Skills
 
-AI agent skills for strategy discovery with Abel: explore market ideas, analyze causal drivers, and develop investment strategies.
+<p align="center">
+  <strong>Explore market ideas, analyze causal drivers, and research trading strategies with Abel.</strong>
+</p>
 
-Abel Strategy Research Skills help Claude Code, OpenAI Codex, OpenCode, and ClawHub agents explore market ideas, analyze causal drivers, and develop investment strategies.
+<p align="center">
+  <a href="#codex">OpenAI Codex</a> |
+  <a href="#claude-code">Claude Code</a> |
+  <a href="#opencode">OpenCode</a> |
+  <a href="#clawhub--openclaw">ClawHub</a>
+</p>
 
-These skills support investment research and trading strategy discovery with backtesting.
 
-## What You Can Do
+## Capabilities
 
-- Explore strategy ideas from natural-language market questions
-- Analyze causal drivers across companies, sectors, and market themes
-- Develop investment strategy hypotheses
-- Compare drivers, risks, and evidence behind a strategy
-- Set up or repair Abel authentication for agent-based research workflows
+Abel Strategy Research Skills turn AI agents into causal-graph-powered strategy discovery researchers. From a market question, agents can explore causal drivers, generate trading strategy hypotheses, backtest ideas, and push the strongest candidates into Abel for review, paper tracking, and sharing through the web app.
+
+- **Causal-graph strategy discovery**  
+  Go beyond brute-force factor search. Agents use Abel’s causal graph to discover economically meaningful drivers, relationships, regimes, and signals for new trading strategy ideas.
+
+- **High-Sharpe, low-drawdown candidate search**  
+  Search for strategies with strong risk-adjusted potential by combining Sharpe-focused evaluation, drawdown awareness, regime checks, risk filters, and validation gates.
+
+- **Hypothesis-to-backtest workflow**  
+  Turn open-ended market questions into testable strategy hypotheses across assets, features, filters, sizing rules, model variants, and ensemble approaches.
+
+- **Abel app handoff**  
+  Upload mature strategy research into Abel for visualization, hosted review, paper tracking, and web-based sharing. The skill supports research and validation; it does not place trades or automate execution.
 
 ## Example Workflows
 
@@ -23,22 +37,15 @@ Ask your AI agent to:
 - "Analyze causal drivers for mortgage-rate-sensitive homebuilder stocks."
 - "Develop semiconductor demand strategies using Abel."
 - "Explore investment strategies related to power demand and data centers."
-- "Check my Abel auth setup before running strategy research."
 
 ## Strategy Discovery, Not Trade Execution
 
 Abel Strategy Research Skills focus on research workflows: exploring market themes, analyzing causal drivers, developing investment strategies, and comparing hypotheses, risks, candidates, and evidence.
 
-They do not place trades, automate execution, or provide a backtesting engine.
+They do not place trades, automate execution.
 
 Learn more: [Abel Strategy Research](docs/strategy-research.md)
 
-## Main Skills
-
-- `abel`: main entrypoint for Abel strategy research workflows
-- `abel-invest`: core strategy discovery and investment research skill
-- `abel-ask`: graph-native analysis of causal drivers and market decisions
-- `abel-auth`: connect or repair Abel auth
 
 ## Supported Agent Platforms
 
