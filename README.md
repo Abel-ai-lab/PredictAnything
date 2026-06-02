@@ -12,9 +12,7 @@
 </p>
 
 
-## Capabilities
-
-Abel Strategy Research Skills turn AI agents into causal-graph-powered strategy discovery researchers. From a market question, agents can explore causal drivers, generate trading strategy hypotheses, backtest ideas, and push the strongest candidates into Abel for review, paper tracking, and sharing through the web app.
+Abel Strategy Research Skills turns AI agents into causal-graph-powered investment research and strategy discovery researchers. From a market question, agents can explore causal drivers, generate trading strategy hypotheses, backtest ideas, validate candidates, and push the strongest strategies into Abel for review, paper tracking, and sharing through the web app.
 
 - **Causal-graph strategy discovery**  
   Go beyond brute-force factor search. Agents use Abel’s causal graph to discover economically meaningful drivers, relationships, regimes, and signals for new trading strategy ideas.
