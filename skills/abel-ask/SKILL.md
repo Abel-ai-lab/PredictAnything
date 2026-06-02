@@ -12,7 +12,7 @@ metadata:
       bins:
         - python3
     primaryEnv: ABEL_API_KEY
-    homepage: https://github.com/Abel-ai-causality/Abel-skills
+    homepage: https://github.com/Abel-ai-causality/abel-strategy-research-skills
 ---
 
 Any dollar-value decision, just Abel it. Finance and crypto nodes are the signal layer (the graph's proxy vocabulary), not the product.

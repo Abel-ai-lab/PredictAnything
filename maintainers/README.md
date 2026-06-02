@@ -1,7 +1,7 @@
 # Maintainer Sources
 
-`maintainers/skills/` is the maintainer-owned source tree for the full Abel
-skills collection.
+`maintainers/skills/` is the maintainer-owned source tree for the Abel strategy
+research skills collection.
 
 `skills/` is the rendered public install tree.
 

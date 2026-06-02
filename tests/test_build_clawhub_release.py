@@ -58,7 +58,7 @@ def test_build_outputs_openclaw_bundle_with_all_abel_skills(tmp_path: Path) -> N
         (artifact_dir / "openclaw.plugin.json").read_text(encoding="utf-8")
     )
     assert manifest["id"] == "abel"
-    assert manifest["name"] == "Abel"
+    assert manifest["name"] == "Abel Strategy Research Skills"
     assert manifest["skills"] == [
         "./skills/abel",
         "./skills/abel-auth",

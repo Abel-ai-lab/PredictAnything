@@ -38,17 +38,17 @@ If the user installs Abel, asks to connect Abel, or the workflow is missing live
 """
 
 CLAWHUB_OPENAI_YAML = """interface:
-  display_name: "Abel"
-  short_description: "Main Abel entrypoint for causal reads, auth, and strategy discovery."
+  display_name: "Abel Strategy Research Skills"
+  short_description: "AI agent skills for strategy discovery with Abel: explore market ideas, analyze causal drivers, and develop investment strategies."
   default_prompt: "Use $abel to route this request to the right Abel skill."
 """
 
 OPENCLAW_PLUGIN_MANIFEST = {
     "id": "abel",
-    "name": "Abel",
+    "name": "Abel Strategy Research Skills",
     "description": (
-        "Abel skill bundle for OpenClaw: routing, auth, causal reads, and investment "
-        "strategy discovery. Includes Python-backed skills and shared probes."
+        "AI agent skills for strategy discovery with Abel: explore market ideas, "
+        "analyze causal drivers, and develop investment strategies."
     ),
     "skills": [f"./skills/{skill_name}" for skill_name in OPENCLAW_MANIFEST_SKILL_NAMES],
     "configSchema": {
@@ -61,8 +61,8 @@ OPENCLAW_PLUGIN_MANIFEST = {
 PACKAGE_JSON_BASE = {
     "name": "abel",
     "description": (
-        "Abel native OpenClaw plugin package with routing, auth, causal read, "
-        "and strategy discovery skills."
+        "Abel Strategy Research Skills package for OpenClaw with routing, auth, "
+        "strategy discovery, and causal-driver analysis."
     ),
     "type": "module",
     "private": False,
@@ -81,8 +81,8 @@ OPENCLAW_EXTENSION_ENTRY = """import { definePluginEntry } from "openclaw/plugin
 
 export default definePluginEntry({
   id: "abel",
-  name: "Abel",
-  description: "Plugin-shipped Abel skills bundle.",
+  name: "Abel Strategy Research Skills",
+  description: "Plugin-shipped Abel strategy research skills bundle.",
   register(_api) {},
 });
 """

@@ -2,7 +2,7 @@
 
 ## GitHub Direct Install
 
-`main` is the stable direct-install source for the Abel collection.
+`main` is the stable direct-install source for Abel Strategy Research Skills.
 
 ## Release Tags
 
@@ -14,7 +14,7 @@ OpenCode can pin a release tag, branch, or other git ref with:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/Abel-skills.git#v1.2.0"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git#v1.4.2"]
 }
 ```
 
