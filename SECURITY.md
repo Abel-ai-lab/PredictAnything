@@ -1,6 +1,6 @@
 # Security Policy
 
-Please report security issues privately.
+Please report security issues privately at `security@abel.ai`.
 
 Do not open public issues for:
 
