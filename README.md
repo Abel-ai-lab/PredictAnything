@@ -61,7 +61,7 @@ Installation differs by platform.
 Tell Codex:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-causality/abel-strategy-research-skills/refs/heads/main/.codex/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.codex/INSTALL.md
 ```
 
 **Detailed docs:** [docs/README.codex.md](docs/README.codex.md)
@@ -75,7 +75,7 @@ Supports:
 Tell Claude Code:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-causality/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
 ```
 
 **Detailed docs:** [docs/README.claude.md](docs/README.claude.md)
@@ -89,7 +89,7 @@ Supports:
 Tell OpenCode:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-causality/abel-strategy-research-skills/refs/heads/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.opencode/INSTALL.md
 ```
 
 **Detailed docs:** [docs/README.opencode.md](docs/README.opencode.md)
@@ -112,7 +112,7 @@ Install-time auth note:
 Existing installs under paths like `~/.claude/abel-skills`, `~/.codex/abel-skills`, `.claude/abel-skills`, or `.agents/abel-skills` can keep their local folder names. To migrate an existing checkout, update its git remote:
 
 ```bash
-git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-research-skills.git
+git remote set-url origin https://github.com/Abel-ai-lab/abel-strategy-research-skills.git
 ```
 
 New install examples use `abel-strategy-research-skills`.

@@ -7,7 +7,7 @@ Use Claude Code to discover strategies with Abel, analyze causal drivers, and su
 Tell Claude Code:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-causality/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
 ```
 
 ## Manual Installation
@@ -27,7 +27,7 @@ Choose one install scope:
 1. Clone the repo:
 
    ```bash
-   git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git ~/.claude/abel-strategy-research-skills
+   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git ~/.claude/abel-strategy-research-skills
    ```
 
 2. Create Claude personal skill symlinks:
@@ -58,7 +58,7 @@ Run these commands from the project root:
 
    ```bash
    mkdir -p .claude
-   git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git .claude/abel-strategy-research-skills
+   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git .claude/abel-strategy-research-skills
    ```
 
 2. Create project-local skill symlinks:
@@ -83,7 +83,7 @@ Existing installs under `~/.claude/abel-skills` or `.claude/abel-skills` can kee
 
 ```bash
 cd ~/.claude/abel-skills
-git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-research-skills.git
+git remote set-url origin https://github.com/Abel-ai-lab/abel-strategy-research-skills.git
 ```
 
 ### After Either Install
