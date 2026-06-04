@@ -123,6 +123,9 @@ After installation, start from `Abel`, complete `abel-auth` if needed, then boot
 
 Try:
 
-- Discover AI infrastructure investment strategies with Abel.
-- Find a TSLA strategy thesis.
-- Analyze causal drivers for mortgage-rate-sensitive homebuilder stocks.
+- Abel, find a strategy for AMZN.
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Which companies benefit from AI datacenter expansion?
+- Analyze what is happening with TSLA.
+- Should I still invest in an MBA degree?

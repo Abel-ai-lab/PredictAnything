@@ -45,17 +45,25 @@ Do not guess from shell environment alone.
    decision analysis; life-decision questions; or questions that do not ask for
    buy/sell guidance, alpha, or a trading strategy, use `abel-ask`.
 
-## Good First Questions
+## Recommended Questions
 
-Use these examples when introducing Abel to a new user or helping them choose a
-path.
+When the user asks what they can do with Abel, what Abel is useful for, or
+otherwise needs help choosing a first Abel prompt, answer with these recommended
+questions:
 
-Deep Invest Search:
+Strategy Search:
 
-- How should I trade TSLA?
-- Can Abel look for an investable NKE strategy?
+- Abel, find a strategy for AMZN
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Is there an ETH strategy Abel can find?
+- Abel, explore a META strategy for me.
 
 Abel Ask:
 
+- Which companies benefit from AI datacenter expansion?
 - Analyze what is happening with TSLA.
 - Should I still invest in an MBA degree?
+
+These are examples only. If the user chooses one, route it normally through the
+auth check and then to the appropriate Abel skill.

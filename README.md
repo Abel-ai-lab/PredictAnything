@@ -30,11 +30,12 @@ Abel Strategy Research Skills turns AI agents into causal-graph-powered trading 
 
 Ask your AI agent to:
 
-- "Discover AI infrastructure investment strategies with Abel."
-- "Find a TSLA strategy thesis."
-- "Analyze causal drivers for mortgage-rate-sensitive homebuilder stocks."
-- "Develop semiconductor demand strategies using Abel."
-- "Explore investment strategies related to power demand and data centers."
+- "Abel, find a strategy for AMZN."
+- "Can Abel look for an ORCL strategy?"
+- "Abel, help me search for a tradable TSLA strategy."
+- "Which companies benefit from AI datacenter expansion?"
+- "Analyze what is happening with TSLA."
+- "Should I still invest in an MBA degree?"
 
 ## Strategy Discovery, Not Trade Execution
 
