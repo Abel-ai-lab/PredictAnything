@@ -9,6 +9,25 @@ Abel Skills is the collection repository for Abel agent skills. Users should ins
 - `abel-auth`: connect or repair Abel auth
 - `abel-invest`: workspace-first strategy discovery
 
+## Abel-Invest Capability Snapshot
+
+A June 1, 2026 directional benchmark compared the Abel workflow against an isolated LLM-only selection path over `1,000` tickers from `2020-01-01` to `2026-05-28`. The no-skill isolation audit passed, and the comparable both-OK set covered `960` tickers. This benchmark is useful capability evidence, but not the strict academic incremental-value claim because it was later superseded by an identical-prompt protocol.
+
+| Measure | Abel skill | LLM-only | Readout |
+| --- | ---: | ---: | --- |
+| OK coverage | `997 / 1000` (`99.7%`) | `962 / 1000` (`96.2%`) | Abel covers `35` more tickers |
+| Mean Sharpe | `0.8245` | `0.2308` | `3.57x` higher |
+| Median Sharpe | `0.8139` | `0.2336` | `3.48x` higher |
+| Mean total return | `1.5221` | `0.6084` | `2.50x` higher |
+| Median total return | `1.0170` | `0.1393` | `7.30x` higher |
+| Median max drawdown | `-0.1911` | `-0.3306` | smaller typical drawdown |
+| Mean return/drawdown | `7.4754` | `1.9765` | `3.78x` higher |
+| Median return/drawdown | `5.7227` | `0.5066` | `11.29x` higher |
+
+Paired win rates on the both-OK set favored Abel on Sharpe (`98.3%`), total return (`84.7%`), max drawdown (`79.3%`, less negative is better), and return/drawdown (`92.0%`). Lower-tail behavior also improved: Abel's 10th percentile Sharpe stayed positive at `0.5174`, while the LLM-only arm's was `-0.2719`.
+
+Backtests and benchmark comparisons are research artifacts, not investment advice.
+
 ## Installation
 
 Installation differs by platform.
