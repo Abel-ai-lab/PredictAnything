@@ -162,8 +162,8 @@ Core search invariants:
 - Follow `experiment-loop.md` as the single detailed source for the round loop,
   completion check, stop report, visualization prompt, and interrupted/blocked
   note boundary.
-- Stay in `Exploring` until the user objective/default target is achieved, the
-  ledger supports that the bounded search is unlikely to reach the target.
+- Stay in `Exploring` until the user objective/default target is achieved or
+  the ledger supports that the bounded search is unlikely to reach the target.
   Otherwise keep searching and choose the next concrete action.
 - If the user explicitly interrupts or an external blocker prevents
   continuation, do not enter `Completed`; give only a brief
@@ -180,6 +180,10 @@ Core search invariants:
   Use `discovery-protocol.md` for graph semantics and expansion; use
   `data-driven-construction.md` for feature factories, model comparison,
   denoise, node subsets, lags, regimes, sizing, filters, and ensembles.
+- Mine the current graph universe empirically before treating it as exhausted.
+  Graph expansion is available when evidence points outside the current view and
+  helps the next empirical search question; it is not a coverage ritual.
+  Supplemental non-graph drivers need user context or evidence support.
 - Let observed metrics, failure modes, and candidate shape choose the next
   family. Mechanism stories are useful after evidence appears; they do not
   replace scored construction.
