@@ -243,27 +243,37 @@ different ranking. If the user explicitly named a branch or round, use that
 explicit selection. Otherwise report the command's selected branch/round
 exactly; the selector already owns near-tie reliability tie-breaks.
 
-Use this default stop-report shape:
+Default stop reports should use this shape:
 
-1. Name the selected strategy in one plain sentence.
-2. Explain the four user-facing metrics:
-   - total return: how much the backtest made over the period
-   - Sharpe: whether the return was earned with reasonable risk-adjusted
-     stability
-   - max drawdown: the deepest peak-to-trough pain during the run
-   - backtest period: the dates these numbers cover
-3. Translate validation into confidence and robustness. Do not make "gate
-   PASS" the user's goal, and do not describe a high-return/high-Sharpe
-   near-pass as a failed strategy; describe it as a promising lead whose
-   robustness evidence is not yet enough for a final reportable strategy.
-4. If the session has a recorded candidate strategy round, end by asking
-   whether to create a session review page. Do not create or refresh the online
-   view until the user agrees or explicitly asks.
+1. Strategy: name the selected strategy and its core idea in plain language.
+2. Key performance: list exactly four metrics: backtest period, total return,
+   Sharpe, and max drawdown. Add one short plain-language meaning for each.
+3. Overall readout: one warm, clear, non-promotional paragraph explaining why
+   this is the current best strategy or best lead.
+4. Next step: if a candidate strategy exists, ask whether to create the session
+   review page.
 
-By default, do not lead with raw validation terms such as gate/PASS, DSR, K,
-PositionIC, Lo-adjusted Sharpe, or Edge verdict. Include them only when the user
-asks for technical details or when they are necessary to explain why exploration
-cannot produce a final reportable strategy.
+Do not lead with branch/round, gate/PASS, DSR, K, verdict, or selection-policy
+details unless the user asks for technical details.
+
+Example:
+
+```text
+I found the strongest strategy from this session: it uses a focused set of
+related market signals to decide when to hold the target and when to reduce
+exposure.
+
+Key performance:
+- Backtest period: 2021-01-01 to 2026-01-01, the historical window tested.
+- Total return: +120%, meaning the capital a little more than doubled.
+- Sharpe: 2.1, suggesting the returns were strong relative to daily swings.
+- Max drawdown: -11%, the worst pullback along the way.
+
+Overall, this is the most balanced result in the session so far: it produced
+strong growth while keeping the rough patches reasonably contained.
+
+Would you like me to create the session review page?
+```
 
 ## Evidence Reading
 

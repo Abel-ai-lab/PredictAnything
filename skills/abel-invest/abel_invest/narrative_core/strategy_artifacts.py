@@ -784,7 +784,7 @@ def best_strategy_command(args) -> int:
         if isinstance(payload.get("backtestPeriod"), dict)
         else {}
     )
-    print(f"Best strategy: {payload.get('branchId')}/{payload.get('roundId')}")
+    print(f"Selected strategy: {payload.get('branchId')}/{payload.get('roundId')}")
     print(
         "Backtest: "
         f"{period.get('start') or 'unknown'} -> {period.get('end') or 'unknown'}"
@@ -795,12 +795,6 @@ def best_strategy_command(args) -> int:
         f"sharpe={metrics.get('sharpe')}, "
         f"max_drawdown={metrics.get('maxDrawdown')}"
     )
-    selection_policy = (
-        payload.get("selectionPolicy")
-        if isinstance(payload.get("selectionPolicy"), dict)
-        else {}
-    )
-    print(f"Selection rule: {selection_policy.get('rule', '')}")
     print("Read-only selection: no artifact export, upload, or promotion was run.")
     return 0
 
