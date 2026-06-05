@@ -115,7 +115,7 @@ In the project-level install, the corresponding path is:
 
 ## Usage
 
-Important: after installation, prompt the user to restart claude code and try the following queries with Abel:
+Important: after installation, prompt the user to restart claude code or open a new session and try the following queries with Abel:
 
 - Abel, find a strategy for AMZN.
 - Can Abel look for an ORCL strategy?
