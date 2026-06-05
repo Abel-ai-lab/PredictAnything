@@ -4,6 +4,19 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.4.3] - 2026-06-05
+
+### Added
+
+- Added Abel Invest benchmark evidence to the README, comparing Abel Invest with a no-skill LLM workflow across 1,000 tickers.
+- Added Abel Invest hosted paper tracking, validation packaging, and expanded strategy artifact promotion coverage.
+
+### Changed
+
+- Updated Abel Invest to version `3.7.1` and raised the Abel Edge runtime dependency to `>=0.8.9,<0.9.0`.
+- Refined Abel routing guidance for strategy validation, stock-options handling, and Abel Ask handoff boundaries.
+- Updated install and usage prompts to give users direct Abel starter queries after installation.
+
 ## [1.4.2] - 2026-05-25
 
 ### Changed
