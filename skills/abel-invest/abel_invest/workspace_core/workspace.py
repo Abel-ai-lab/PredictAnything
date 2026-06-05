@@ -471,8 +471,10 @@ reason, Edge feedback, and ledger ref. Read `exploration_path.md` and the latest
 Edge result before choosing the next Edge run; after Edge feedback, keep the
 path updated. Check path coverage before starting another round. Check input
 realization before claiming graph-derived contribution. Stay in Exploring until
-the objective is met or the ledger supports stopping; if interrupted or blocked,
-do not enter Completed or ask for visualization.
+the objective is met or the ledger supports unable-to-reach; if a concrete next
+search action remains, keep Exploring. When either normal ending holds, enter
+Completed. If interrupted or blocked, do not enter Completed or ask for
+visualization.
 `render`, `status`, and `check` are audit actions only. Do not create
 the online session view automatically; a recorded candidate strategy round makes
 the session eligible for visualization, but visualization is not a required step

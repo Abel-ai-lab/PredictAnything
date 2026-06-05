@@ -102,9 +102,9 @@ Report the null honestly when no candidate passes final-K validation.
 
 - A candidate that passes validation at final K and meets the objective -> report it.
 - A raw-metric winner without enough robustness evidence -> report it as a
-  high-value lead or near-pass, not final success.
+  promising but not final-success strategy in the completed stop report.
 - None clears after a bounded, K-accounted search -> report the null honestly,
-  with the current best lead and its limits.
+  with the current best available strategy and its limits.
 
 ## Anti-Patterns
 

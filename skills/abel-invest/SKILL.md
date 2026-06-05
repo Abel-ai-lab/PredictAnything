@@ -163,9 +163,10 @@ Core search invariants:
 - Follow `experiment-loop.md` as the single detailed source for the round loop,
   completion check, stop report, visualization prompt, and interrupted/blocked
   note boundary.
-- Stay in `Exploring` until the user objective/default target is achieved or
-  the ledger supports that the bounded search is unlikely to reach the target.
-  Otherwise keep searching and choose the next concrete action.
+- Stay in `Exploring` until a normal ending is justified: the user
+  objective/default target is achieved, or the ledger supports that the bounded
+  search is unlikely to reach the target. Either normal ending enters
+  `Completed`. If a concrete next search action remains, keep searching.
 - If the user explicitly interrupts or an external blocker prevents
   continuation, do not enter `Completed`; give only a brief
   interrupted/blocked note and do not ask for visualization.
@@ -218,8 +219,9 @@ Core search invariants:
 
 Completion, reporting, and artifacts:
 
-- Stop reports are allowed only after `Completed`. A completed stop report is
-  one exit contract: use
+- `Completed` is the only normal final-answer state, whether the target was
+  reached or the ledger supports unable-to-reach. A completed stop report is one
+  exit contract: use
   `<command_prefix> best-strategy --session <session> --json` for read-only
   selection, report that command's selected branch/round exactly, and present a
   compact user-facing result: strategy idea, four key metrics with plain

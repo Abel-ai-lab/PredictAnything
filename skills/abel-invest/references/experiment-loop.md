@@ -179,8 +179,10 @@ campaign total. `guarded-optimization.md` owns the final-K reporting rules.
 
 ## Before Ending Exploration
 
-The loop defaults to `Exploring`. Enter `Completed` only after the completion
-check passes.
+The loop defaults to `Exploring`. A normal final answer must first enter
+`Completed`. `Completed` has two exits: the user objective/default target is
+achieved, or the ledger supports that the bounded search is unlikely to reach
+the target.
 
 Do not write "exhausted", "ceiling", or "no edge" from a single failed
 candidate family, a small round count, or one candidate passing validation.
@@ -205,6 +207,8 @@ or the ledger supports that the current bounded search is unlikely to reach the
 target. If none holds, stay in `Exploring`, keep searching, and choose the next
 concrete action.
 
+If you can name a concrete next search action, the search is still `Exploring`.
+
 Do not stop by round count, a mediocre candidate, a high-Sharpe near-pass, an
 easy-to-validate low-objective branch, `render` / `status` / `check` success,
 path coverage completeness, visualization eligibility, or promotion blockage.
@@ -219,10 +223,10 @@ complete, and the next concrete action. Do not ask for visualization.
 
 ## Stop Report
 
-Use this section only after exploration enters `Completed`. Treat the stop
-report as one exit contract: select the current best strategy, explain it in
-ordinary user language, and ask about session visualization when a candidate
-strategy round exists.
+Use this section for every `Completed` exit, successful or ledger-supported
+unable-to-reach. Treat the stop report as one exit contract: select the current
+best strategy, explain it in ordinary user language, and ask about session
+visualization when a candidate strategy round exists.
 
 For the session default, run the read-only command:
 
@@ -244,7 +248,7 @@ Default stop reports should use this shape:
 2. Key performance: list exactly four metrics: backtest period, total return,
    Sharpe, and max drawdown. Add one short plain-language meaning for each.
 3. Overall readout: one warm, clear, non-promotional paragraph explaining why
-   this is the current best strategy or best lead.
+   this is the current best available strategy, including any important limits.
 4. Next step: if a candidate strategy exists, ask whether to create the session
    review page.
 

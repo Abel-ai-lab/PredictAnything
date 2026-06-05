@@ -204,7 +204,8 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     assert "before another recorded round" in round_output
     assert "State self-check:" in round_output
     assert "stay in Exploring and take the next concrete search action" in round_output
-    assert "Use a stop report only after Completed" in round_output
+    assert "ledger-supported unable-to-reach" in round_output
+    assert "run best-strategy before the final answer" in round_output
 
     ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
     context = json.loads((branch / "outputs" / "round-001-alpha-context.json").read_text(encoding="utf-8"))
