@@ -224,8 +224,11 @@ exploration and do not proactively ask for visualization from a checkpoint.
 
 ## Stop Report
 
-Use this section only after exploration enters `Completed`. When
-stopping exploration, report the current best strategy before the final summary.
+Use this section only after exploration enters `Completed`. Treat the stop
+report as one exit contract: select the current best strategy, explain it in
+ordinary user language, and ask about session visualization when a candidate
+strategy round exists.
+
 For the session default, run the read-only command:
 
 ```bash
@@ -239,17 +242,27 @@ manually walk `results.tsv`, `frontier.json`, or branch folders to invent a
 different ranking. If the user explicitly named a branch or round, use that
 explicit selection.
 
-Explain the selected strategy in ordinary user language with:
+Use this default stop-report shape:
 
-- total return: how much the backtest made over the period
-- Sharpe: whether the return was earned with reasonable risk-adjusted stability
-- max drawdown: the deepest peak-to-trough pain during the run
-- backtest period: the dates these numbers cover
+1. Name the selected strategy in one plain sentence.
+2. Explain the four user-facing metrics:
+   - total return: how much the backtest made over the period
+   - Sharpe: whether the return was earned with reasonable risk-adjusted
+     stability
+   - max drawdown: the deepest peak-to-trough pain during the run
+   - backtest period: the dates these numbers cover
+3. Translate validation into confidence and robustness. Do not make "gate
+   PASS" the user's goal, and do not describe a high-return/high-Sharpe
+   near-pass as a failed strategy; describe it as a promising lead whose
+   robustness evidence is not yet enough for a final reportable strategy.
+4. If the session has a recorded candidate strategy round, end by asking
+   whether to create a session review page. Do not create or refresh the online
+   view until the user agrees or explicitly asks.
 
-Translate validation into confidence and robustness. Do not make "gate PASS" the
-user's goal, and do not describe a high-return/high-Sharpe near-pass as a failed
-strategy; describe it as a promising lead whose robustness evidence is not yet
-enough for a final reportable strategy.
+By default, do not lead with raw validation terms such as gate/PASS, DSR, K,
+PositionIC, Lo-adjusted Sharpe, or Edge verdict. Include them only when the user
+asks for technical details or when they are necessary to explain why exploration
+cannot produce a final reportable strategy.
 
 ## Evidence Reading
 
@@ -280,14 +293,14 @@ anchors, and interpretation. It is scout context, not validation evidence.
 Do not create an online session view automatically. A session becomes eligible
 for visualization after at least one real candidate strategy round has been
 recorded; eligibility does not make visualization part of every exploration
-round. When exploration enters `Completed`, ask the user whether to
-create a session review page if a recorded candidate exists, regardless of
-whether the result is strong, weak, PASS, FAIL, or close to promotion. Do not
-prompt after `init-session`, prepare-only scouts, cache warming, or diagnostic
-tables that have not produced a recorded candidate strategy round. If the user
-declines, avoid repeating the prompt unless they ask after later work. If the
-user agrees, or if the user explicitly asks to create or publish the session
-review page, pass the session folder to the command:
+round. The visualization question belongs in the `Completed` stop report when a
+recorded candidate exists, regardless of whether the result is strong, weak, or
+not yet robust enough for promotion. Do not prompt after `init-session`,
+prepare-only scouts, cache warming, or diagnostic tables that have not produced
+a recorded candidate strategy round. If the user declines, avoid repeating the
+prompt unless they ask after later work. If the user agrees, or if the user
+explicitly asks to create or publish the session review page, pass the session
+folder to the command:
 
 ```bash
 <command_prefix> visualize-session --session research/<ticker>/<exp_id>

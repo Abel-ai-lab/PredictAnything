@@ -193,20 +193,25 @@ Core search invariants:
 
 Completion, reporting, and artifacts:
 
-- Stop reports are allowed only after `Completed`. Use
-  `<command_prefix> best-strategy --session <session> --json` for the read-only
-  best-strategy selection, then explain total return, Sharpe, max drawdown, and
-  backtest period in ordinary language.
+- Stop reports are allowed only after `Completed`. A completed stop report is
+  one exit contract: use
+  `<command_prefix> best-strategy --session <session> --json` for read-only
+  selection, explain total return, Sharpe, max drawdown, and backtest period in
+  ordinary language, and ask whether to create a session review page when a
+  recorded candidate exists.
+- Keep internal completion evidence out of the default user-facing goal:
+  translate Abel Edge validation into confidence and robustness, and do not lead
+  with gate/PASS/DSR/K/PositionIC/Edge verdict unless the user asks for
+  technical details.
 - Do not run `visualize-session` or `export-strategy-artifact` merely to compute
   the best strategy, and do not manually rank `results.tsv`, `frontier.json`, or
   branch outputs.
 - If still `Exploring`, report progress as "best so far + why not complete +
   next action"; do not present a checkpoint as completion or proactively ask for
   visualization.
-- Do not create or refresh an online session view automatically. A recorded
-  candidate makes the session eligible for visualization; after `Completed`, ask
-  whether to create a session review page. If the user agrees or explicitly
-  asks, run `<command_prefix> visualize-session --session <session>`.
+- Do not create or refresh an online session view automatically. If the user
+  agrees or explicitly asks, run
+  `<command_prefix> visualize-session --session <session>`.
 - For local artifact export or promotion probes, use the matching CLI command
   from `experiment-loop.md`; if a hosted paper `paper-contract-request.json`
   appears, read it first and follow its `reportTemplate` / `contractGuide`.
