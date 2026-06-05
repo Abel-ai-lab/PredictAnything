@@ -25,6 +25,8 @@ def test_scaffold_workspace_writes_alpha_owned_boundary_guidance(tmp_path: Path)
 
     readme = (root / "README.md").read_text(encoding="utf-8")
     agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+    readme_flat = readme.replace("\n", " ")
+    agents_flat = agents.replace("\n", " ")
 
     assert agents.startswith(
         f"<!-- {WORKSPACE_AGENTS_GUIDE_SCHEMA} version={ABEL_INVEST_VERSION} -->"
@@ -37,13 +39,21 @@ def test_scaffold_workspace_writes_alpha_owned_boundary_guidance(tmp_path: Path)
     assert "frontier.md" in readme
     assert "exploration_path.md" in readme
     assert "research_journal.md" not in readme
+    assert "best-strategy --session research/tsla/tsla-v1 --json" in readme
+    assert "without exporting, uploading, or promoting artifacts" in readme_flat
     assert "visualize-session" in readme
     assert "creates an online session view" in readme
+    assert "When exploration enters Completed" in readme
     assert "abel-auth" in readme
     assert "standalone `abel-edge init` project inside it" in agents
     assert "Do not create `./abel-invest-workspace` inside it." in agents
+    assert "`best-strategy --session <session> --json`" in agents
+    assert "does not export, upload, or promote artifacts" in agents_flat
     assert "visualize-session" in agents
     assert "online session view" in agents
+    assert "visualization is not a required step after every round" in agents_flat
+    assert "merely to compute the best strategy" in agents
+    assert "`render`, `status`, and `check` are audit actions only" in agents
     assert "exploration_path.md" in agents
     assert "research_journal.md" not in agents
     assert "abel-auth" in agents

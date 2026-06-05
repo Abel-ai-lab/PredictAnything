@@ -353,6 +353,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Interpreter used to run Abel-edge artifact helpers (defaults to workspace python).",
     )
 
+    best_strategy = sub.add_parser(
+        "best-strategy",
+        help=(
+            "Select the current best session strategy without exporting, "
+            "uploading, or promoting artifacts"
+        ),
+    )
+    best_strategy.add_argument(
+        "--session",
+        required=True,
+        help="Session directory. Selection is read-only and uses the session default policy.",
+    )
+    best_strategy.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON instead of a compact text summary.",
+    )
+
     export_strategy_artifact = sub.add_parser(
         "export-strategy-artifact",
         help=(

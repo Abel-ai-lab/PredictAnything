@@ -303,7 +303,9 @@ def test_init_session_output_uses_data_led_graph_enriched_alpha_search() -> None
     assert "<target-control-branch>" in rendered
     assert "graph-v1" not in rendered
     assert "data-led graph-enriched alpha search" in rendered
-    assert "Sharpe > 2 is aspirational" in rendered
+    assert "Sharpe > 2 and all required Abel Edge gates passing" in rendered
+    assert "stay in Exploring until the objective is met" in rendered
+    assert "render/status/check are audit actions only" in rendered
     assert "disposable probes may live in research/tsla/demo/scratch" in rendered
     assert "equivalent heredoc/notebook/query cell" in rendered
     assert "first serious recorded alpha candidate should normally be probe-informed" in rendered

@@ -166,3 +166,15 @@ def test_visualize_session_strategy_artifact_is_default_and_opt_out_is_rejected(
                 "--with-strategy-artifact",
             ]
         )
+
+
+def test_best_strategy_is_read_only_session_selector() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        ["best-strategy", "--session", "research/tsla/tsla-v1", "--json"]
+    )
+
+    assert args.command == "best-strategy"
+    assert args.session == "research/tsla/tsla-v1"
+    assert args.json is True

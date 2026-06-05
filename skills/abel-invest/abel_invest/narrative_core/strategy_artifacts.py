@@ -47,6 +47,7 @@ from abel_invest.workspace_core.workspace import find_workspace_root
 
 
 STRATEGY_ARTIFACT_SCHEMA = "abel-invest.strategy-artifact/v1"
+BEST_STRATEGY_REPORT_SCHEMA = "abel-invest.best-strategy/v1"
 STRATEGY_ARTIFACT_ENTRYPOINT = "strategy/strategy.py"
 STRATEGY_ARTIFACT_CLASS_NAME = "BranchEngine"
 STRATEGY_ARTIFACT_PAPER_MODE = "paper_signal"
@@ -330,6 +331,87 @@ def select_branch_promotion_candidate(
         pass_round_count=len(validation_rows),
         eligible_count=len(candidates),
     )
+
+
+def best_strategy_report_payload(session: Path) -> dict[str, Any]:
+    """Return the read-only best strategy selection for stop/progress reports."""
+
+    session = resolve_workspace_arg_path(session).resolve()
+    selection = select_best_pass_strategy(session)
+    selected = selection.selected
+    payload: dict[str, Any] = {
+        "schema": BEST_STRATEGY_REPORT_SCHEMA,
+        "session": str(session),
+        "status": "selected" if selected is not None else "skipped",
+        "skipReason": selection.skip_reason,
+        "selectionPolicy": {
+            "scope": SELECTION_SCOPE_SESSION,
+            "rule": SELECTION_RULE_AUTO_BEST_PASS,
+            "reason": SELECTION_REASON_AUTO_BEST_PASS,
+            "metricOrder": list(SELECTION_METRIC_ORDER),
+        },
+        "validationRoundCount": selection.validation_round_count,
+        "eligibleCount": selection.eligible_count,
+        "selectedBranchId": selection.selected_branch_id,
+        "selectedRoundId": selection.selected_round_id,
+        "selection": _selection_payload(selected),
+        "artifactExported": False,
+        "artifactUploadSkipped": True,
+        "promotionStarted": False,
+    }
+    if selected is None:
+        return payload
+
+    metrics = (
+        selected.edge_result.get("metrics")
+        if isinstance(selected.edge_result.get("metrics"), dict)
+        else {}
+    )
+    effective_window = (
+        selected.edge_result.get("effective_window")
+        if isinstance(selected.edge_result.get("effective_window"), dict)
+        else {}
+    )
+    requested_window = (
+        selected.edge_result.get("requested_window")
+        if isinstance(selected.edge_result.get("requested_window"), dict)
+        else {}
+    )
+    total_return = _to_float(metrics.get("total_return"))
+    payload.update(
+        {
+            "ticker": selected.ticker,
+            "branchId": selected.branch_id,
+            "roundId": selected.round_id,
+            "decision": selected.decision,
+            "verdict": _clean(selected.edge_result.get("verdict")),
+            "score": selected.score or _clean(selected.edge_result.get("score")),
+            "description": selected.description,
+            "metrics": {
+                "totalReturn": total_return,
+                "sharpe": selected.sharpe,
+                "maxDrawdown": selected.max_dd,
+                "loAdjusted": selected.lo_adjusted,
+                "annualReturn": selected.annual_return,
+                "calmar": selected.calmar,
+                "passRate": selected.pass_rate,
+            },
+            "backtestPeriod": {
+                "start": _clean(effective_window.get("start"))
+                or _clean(requested_window.get("start")),
+                "end": _clean(effective_window.get("end"))
+                or _clean(requested_window.get("end")),
+            },
+            "paths": {
+                "branch": str(selected.branch),
+                "engine": str(selected.strategy_source_path),
+                "edgeResult": str(selected.edge_result_path),
+                "edgeReport": str(selected.edge_report_path or ""),
+                "edgeHandoff": str(selected.edge_handoff_path or ""),
+            },
+        }
+    )
+    return payload
 
 
 def build_strategy_artifact_manifest(
@@ -678,6 +760,49 @@ def export_strategy_artifact_command(args) -> int:
         python_bin=args.python_bin,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def best_strategy_command(args) -> int:
+    """CLI adapter for read-only session best-strategy selection."""
+
+    session = resolve_workspace_arg_path(args.session).resolve()
+    payload = best_strategy_report_payload(session)
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if payload.get("status") != "selected":
+        print(
+            "No best strategy selected "
+            f"(reason={payload.get('skipReason') or 'unknown'})."
+        )
+        print("Read-only selection: no artifact export, upload, or promotion was run.")
+        return 0
+
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    period = (
+        payload.get("backtestPeriod")
+        if isinstance(payload.get("backtestPeriod"), dict)
+        else {}
+    )
+    print(f"Best strategy: {payload.get('branchId')}/{payload.get('roundId')}")
+    print(
+        "Backtest: "
+        f"{period.get('start') or 'unknown'} -> {period.get('end') or 'unknown'}"
+    )
+    print(
+        "Metrics: "
+        f"total_return={metrics.get('totalReturn')}, "
+        f"sharpe={metrics.get('sharpe')}, "
+        f"max_drawdown={metrics.get('maxDrawdown')}"
+    )
+    selection_policy = (
+        payload.get("selectionPolicy")
+        if isinstance(payload.get("selectionPolicy"), dict)
+        else {}
+    )
+    print(f"Selection rule: {selection_policy.get('rule', '')}")
+    print("Read-only selection: no artifact export, upload, or promotion was run.")
     return 0
 
 

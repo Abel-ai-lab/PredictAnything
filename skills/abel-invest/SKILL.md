@@ -7,8 +7,9 @@ description: >
   search, or continue/prepare/debug an Abel strategy-discovery workspace —
   even if they don't say "Abel" and even when they just ask for "a good
   strategy for X" or "is there alpha in Y". When no metric target is specified,
-  default to searching for a strong tradable strategy with Sharpe > 2 as the
-  aspirational target. Prefer this over ad-hoc hand-designed strategy work.
+  default to searching for a high-return, reportable strategy with Sharpe > 2
+  and all required Abel Edge gates passing. Prefer this over ad-hoc
+  hand-designed strategy work.
 metadata:
   openclaw:
     requires:
@@ -87,9 +88,10 @@ Always start by resolving workspace state before strategy work.
   reportability rules). Core path — not optional — when a performance bar is set.
 - Before writing "exhausted / ceiling / no edge":
   read `references/experiment-loop.md` and check the ledger requirements there.
-- Data-driven candidate construction, especially when ordinary alpha search
-  risks becoming another simple hand-written rule:
-  read `references/data-driven-construction.md`. Core path.
+- Ordinary non-grandma alpha search, data-driven candidate construction, or the
+  next idea risks becoming another simple hand-written rule:
+  read `references/data-driven-construction.md` before the first broad
+  candidate. Core path.
 - No explicit metric target:
   use the normal experiment loop and default objective; do not treat this as a
   separate mode.
@@ -118,16 +120,10 @@ Always:
   status, blockers, what evidence exists, and the next action you will take.
 - Treat `agent_context.md` as the compact factual resume surface,
   `exploration_path.md` as the human-facing chosen-path and Edge-feedback log.
-- On a fresh or unfamiliar ticker, treat the first serious recorded alpha round
-  as probe-informed by default. Follow `experiment-loop.md`: use
-  `init-session` frontier/readiness facts to choose a bounded scout universe,
-  `prepare-branch` a narrow scout/candidate branch so data/cache and `inputs/`
-  exist, then run a compact first-look data scout before committing a broad
-  candidate. The scout should score candidate-shaped variants with objective
-  metrics and produce a ranked short list, not only diagnostic tables. Scratch
-  work in `research/<ticker>/<session_id>/scratch/`, one-off heredocs,
-  notebooks, or query cells is normal Abel Invest research, not product code
-  and not validation evidence.
+- On a fresh or unfamiliar ticker, use the compact first-look scout in
+  `experiment-loop.md` before the first broad recorded candidate unless the user
+  gave a narrow path or continuation. Its output should be a ranked short list
+  of scored candidate shapes, not only diagnostics or an analysis memo.
 
 Never:
 
@@ -141,9 +137,9 @@ Never:
   search inside one "single" strategy. Name search width honestly.
 - Do not report a raw-metric winner as a robust strategy before required
   validation and honest search-width accounting support that claim.
-- Do not optimize for gate-passing at the expense of Sharpe, return, or the
+- Do not optimize only for gate-passing at the expense of Sharpe, return, or the
   user's objective. Gates estimate reliability and reportability; they are not
-  the final purpose of the search.
+  the user-facing purpose of the search.
 - Do not treat `--selection-trials` as a strategy-quality shortcut; it is
   reportability accounting, not a brake on empirical search.
 - Do not `run-branch` a flat/no-signal branch solely to warm cache or make a
@@ -157,115 +153,63 @@ Never:
 - Do not depend on any external skill for guarded optimization; abel-invest runs
   it self-contained.
 
-Alpha search stance:
+Core search invariants:
 
-- User objective first. If the user gives no metric target, the default job is
-  to search for a strong tradable strategy: Sharpe > 2 is the aspirational
-  target, with high return, controlled drawdown, and reportable evidence
-  quality. Do not stop at a mediocre branch while useful graph-informed search
-  axes remain.
-- Search hard, then explain. Let observed results, failure modes, and metric
-  shape choose the next candidate family. Mechanism stories are useful after
-  evidence appears; they are not admission tickets.
-- Ordinary alpha search has a default posture: high-capacity empirical
-  construction over a scoped target + graph-derived universe. Use the graph,
-  target behavior, feature construction, model comparison, denoise, subset
-  search, regimes, sizing, filters, or ensembles as data calls for them; these
-  are degrees of freedom, not a scripted route.
-- Fresh or unfamiliar tickers should normally use the prepared first-look scout
-  sequence in `experiment-loop.md` before the first broad recorded candidate.
-  Its practical output is a ranked short list of scored candidate shapes, not
-  only an analysis memo.
-  Direct recorded branches remain valid for user-specified strategies, existing
-  leads, baselines, controls, continuations, or very narrow diagnostics.
-- Live graph discovery is the default high-value alpha universe when available.
-  Use `discovery-protocol.md` for graph semantics and expansion; use
-  `data-driven-construction.md` for feature factories, model comparison,
-  denoise, node subsets, lags, regimes, sizing, filters, and ensembles.
-- Target-only work is a baseline, seed, ablation, or competitor. A
-  graph-supported branch is not automatically data-driven: runtime graph reads
-  prove input realization, not construction breadth. Hand-written single-mechanism branches are diagnostics, controls, ablations, or refinements around empirical
-  construction, not the default search posture when live graph-derived data is
-  available.
-- A hard user metric target (Sharpe / MaxDD / PnL) is an optimization request.
-  Search is expected: use target/baseline context, graph-derived features,
-  feature factories, ensembles, parameter search, model-family comparison,
-  HPO, regime/sizing/filter search, and node-subset search when useful. Then
-  report candidates according to their objective quality and validation
-  reliability.
-- Record the effective width of any search that materially selected the
-  submitted candidate. Search-width accounting should not make the agent timid
-  about pursuing a high-ceiling empirical lead.
-- Passing all gates is not the product goal by itself. The goal is high Sharpe,
-  high return, and useful risk control; a higher pass rate means the candidate
-  is more reliable and reportable under the current validation profile. A
-  high-ceiling near-pass is search information, not waste.
-- Exhaustion is ledger-proven, never asserted. Do not write "exhausted",
-  "ceiling", or "no edge" unless the ledger shows, K-accounted: the bounded
-  candidate universe, materially different search axes, graph-derived and
-  target/baseline contrasts where useful, any intentionally tested principle and
-  its search impact, and all attempted width including otherwise-skipped
-  ERROR/preflight variants. One validated candidate does not certify search
-  exhaustiveness.
-- CAP graph nodes are model-supported causal priors, not trading instructions.
-  Do not infer hidden weight, exact lag, signed effect, or tradable direction
-  from graph role alone. Expand the graph or use narrative scout context only
-  when it helps the empirical search question.
-- Every recorded round requires an `exploration_path.md` entry with the chosen
-  path, compact reason, Edge feedback, round ledger reference, and any scout
-  influence before the next recorded round.
-- Input realization is evidence: a graph-supported declaration only becomes
-  graph-supported evidence when runtime reads the prepared graph inputs.
-  When graph-node reads are inferred from asset reads, preserve that source as a
-  fact rather than overstating edge-native field-level proof.
+- User objective first. If the user gives no metric target, search for a
+  high-return, reportable strategy with Sharpe > 2 and all required Abel Edge
+  gates passing. Do not stop at a mediocre branch or a promising near-pass while
+  useful graph-informed search axes remain.
+- Follow `experiment-loop.md` as the single detailed source for the round loop,
+  completion check, progress checkpoint, stop report, and visualization prompt.
+- Stay in `Exploring` until the user objective/default target is achieved, the
+  user asks to pause or summarize, or the ledger supports that the bounded
+  search is unlikely to reach the target. Otherwise keep searching and choose
+  the next concrete action.
+- Search hard, then explain. Use graph-derived context, target behavior,
+  feature construction, model comparison, denoise, subset search, regimes,
+  sizing, filters, or ensembles as data calls for them; do not turn any one
+  mechanism family into the default route.
+- Keep ordinary non-grandma alpha search empirical and graph-informed when live
+  graph candidates exist. Target-only ideas are baselines, seeds, ablations, or
+  competitors; hand-written single-mechanism rules are diagnostics or
+  refinements, not the default early search posture.
+- When first-hop graph leads are weak or near-pass and useful frontier nodes
+  remain, expand or rescope the graph-derived universe before treating that
+  lane as exhausted.
+- Let observed metrics, failure modes, and candidate shape choose the next
+  family. Mechanism stories are useful after evidence appears; they do not
+  replace scored construction.
+- Gates measure reliability and reportability; they are not the user-facing
+  goal. High return, high Sharpe, and useful risk control remain the product
+  objective. A high-ceiling near-pass is a lead, not waste or final success.
+- Record effective search width when search materially selects a submitted
+  candidate.
+- Exhaustion is ledger-proven. Do not write "exhausted", "ceiling", or "no
+  edge" unless `experiment-loop.md`'s ledger requirements are satisfied.
+- CAP graph nodes are priors, not trading instructions. Graph attribution
+  requires runtime input realization, not just a `branch.yaml` declaration.
 - The framework defines legality, evidence validity, search-width accounting,
   and reportability. The agent owns the alpha search.
-- In grandma mode, prefer simple target-only or low-complexity branches, keep
-  executed exposure unlevered, and judge candidates by simple return plus
-  `pnl_to_maxdd` evidence from the `grandma_daily` profile.
 
-Visualization and promotion:
+Completion, reporting, and artifacts:
 
-- Do not create or refresh an online session view automatically.
-- When the strategy context is mature enough for review, ask the user whether
-  to create a session review page.
-- If the user agrees or explicitly asks, run
-  `<command_prefix> visualize-session --session <session>`
-  yourself. After it succeeds, share the returned Markdown link and, if present,
-  any user-facing `Tip:` line returned by the command. For an explicit session
-  visualization/upload request, run this command before inspecting Abel Invest
-  CLI, upload, or promotion internals; let the CLI produce the contract request
-  if one is needed.
-- If the user asks to export the best strategy artifact for an existing
-  session, start with
-  `<command_prefix> export-strategy-artifact --session <session>`. The CLI
-  selects the best hostable validation strategy; do not manually rank
-  `results.tsv`, `frontier.json`, or branch outputs first. If the user names a
-  branch or round explicitly, use that explicit selection instead.
-- Visualization is for reviewing the whole session. By default, it also
-  includes selected strategy artifact upload/promotion when a hostable
-  validation strategy is available. Strategy artifact upload/promotion remains
-  an independent capability when invoked directly. If no hostable strategy
-  exists, visual review can continue without one. If a selected strategy emits
-  a hosted-paper contract request, continue the promotion loop. Promotion
-  converts the selected research strategy into a clean, sustainable hosted
-  daily live-paper artifact; tail parity is validation evidence, not the goal
-  itself. Research validation gates and hosted-paper promotion gates are
-  separate.
-- If visualization or artifact export emits a hosted paper
-  `paper-contract-request.json`, handle it in this same skill loop. Read the
-  request first and use its `reportTemplate`. Read
-  `contractGuide.referencePath` from this active skill only when the request
-  calls for stateful continuation, source edits, or deeper gate diagnosis. Edit
-  only the promoted copy when the request's source-edit policy requires it,
-  write the requested `paper-contract-report.json`, and rerun the same command.
-  If another request appears, inspect `validation.lastGateFailure`,
-  `validation.attemptPolicy`, and `requirements.fallback`, then continue until
-  promotion succeeds, eligible fallback succeeds or fails a gate, or a genuine
-  implementation/runtime blocker remains. Do not introduce one-off schedules,
-  cached tail decisions, or validation-window workarounds merely to pass the
-  promotion gate. If the loop cannot complete, report the session as
-  `action_required` unless the user explicitly asks to skip strategy artifacts.
+- Stop reports are allowed only after `Completed`. Use
+  `<command_prefix> best-strategy --session <session> --json` for the read-only
+  best-strategy selection, then explain total return, Sharpe, max drawdown, and
+  backtest period in ordinary language.
+- Do not run `visualize-session` or `export-strategy-artifact` merely to compute
+  the best strategy, and do not manually rank `results.tsv`, `frontier.json`, or
+  branch outputs.
+- If still `Exploring`, report progress as "best so far + why not complete +
+  next action"; do not present a checkpoint as completion or proactively ask for
+  visualization.
+- Do not create or refresh an online session view automatically. A recorded
+  candidate makes the session eligible for visualization; after `Completed`, ask
+  whether to create a session review page. If the user agrees or explicitly
+  asks, run `<command_prefix> visualize-session --session <session>`.
+- For local artifact export or promotion probes, use the matching CLI command
+  from `experiment-loop.md`; if a hosted paper `paper-contract-request.json`
+  appears, read it first and follow its `reportTemplate` / `contractGuide`.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`
   owns API key setup; do not ask for a router URL unless the user is testing a
   non-default router.

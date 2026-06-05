@@ -178,6 +178,45 @@ def test_select_best_pass_strategy_can_host_discarded_fail_validation_rounds(
     assert result.selected.selection_metric_values["sharpe"] == 1.4
 
 
+def test_best_strategy_report_payload_is_read_only_for_stop_reports(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("AAPL", "aapl-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "risk_sized_trend")
+    _write_strategy_result_row(
+        session,
+        branch,
+        round_id="round-001",
+        verdict="FAIL",
+        sharpe=1.7,
+        lo_adj=1.6,
+        max_dd=-0.055,
+        score="6/9",
+        annual_return=0.18,
+        decision="discard",
+    )
+
+    payload = ni.best_strategy_report_payload(session)
+
+    assert payload["schema"] == "abel-invest.best-strategy/v1"
+    assert payload["status"] == "selected"
+    assert payload["branchId"] == "risk_sized_trend"
+    assert payload["roundId"] == "round-001"
+    assert payload["artifactExported"] is False
+    assert payload["artifactUploadSkipped"] is True
+    assert payload["promotionStarted"] is False
+    assert payload["metrics"]["totalReturn"] == 0.42
+    assert payload["metrics"]["sharpe"] == 1.7
+    assert payload["metrics"]["maxDrawdown"] == -0.055
+    assert payload["backtestPeriod"] == {
+        "start": "2020-01-01",
+        "end": "2020-12-31",
+    }
+    assert payload["selectionPolicy"]["rule"].startswith("sharpe_desc")
+    assert not (session / "strategy_artifacts").exists()
+    assert not (branch / "promotions").exists()
+
+
 def test_select_best_pass_strategy_returns_skip_when_no_validation(tmp_path: Path) -> None:
     session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
     branch = ni.init_branch_dir(session, "regime_switch")

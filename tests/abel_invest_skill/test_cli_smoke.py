@@ -56,12 +56,19 @@ def test_public_cli_session_branch_render_status_check_smoke(
     assert _run_cli(monkeypatch, ["render", "--session", str(session)]) == 0
     assert _run_cli(monkeypatch, ["status", "--session", str(session)]) == 0
     assert _run_cli(monkeypatch, ["check", "--session", str(session)]) == 0
+    assert _run_cli(
+        monkeypatch,
+        ["best-strategy", "--session", str(session), "--json"],
+    ) == 0
 
     output = capsys.readouterr().out
     assert "Created Abel strategy discovery session" in output
     assert "Created Abel strategy discovery branch" in output
     assert "Session:" in output
     assert "Narrative check passed for" in output
+    assert "not exploration completion" in output
+    assert '"schema": "abel-invest.best-strategy/v1"' in output
+    assert '"skipReason": "no_validation_strategy"' in output
 
 
 def test_init_session_grandma_mode_routes_default_branch_to_grandma_profile(

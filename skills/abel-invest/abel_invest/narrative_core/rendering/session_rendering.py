@@ -225,7 +225,10 @@ def check_session(session: Path, *, strict: bool) -> int:
         for failure in failures:
             print(f"  - {failure}")
         return 1
-    print(f"Narrative check passed for {session}")
+    print(
+        f"Narrative check passed for {session} "
+        "(audit only; not exploration completion)"
+    )
     return 0
 
 

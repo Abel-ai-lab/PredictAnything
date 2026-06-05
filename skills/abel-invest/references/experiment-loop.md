@@ -33,10 +33,9 @@ non-grandma alpha search, keep the search posture empirical, high-capacity, and
 graph-informed over a scoped target + graph-derived universe, not another
 hand-written single mechanism.
 
-When the user gives no metric target, use a strong-strategy default: Sharpe > 2
-is the aspirational target, supported by high return, controlled drawdown, and
-reportable evidence quality. This is a search direction, not a promise and not
-a separate mode.
+When the user gives no metric target, use the default reportable target: high
+return, Sharpe > 2, and all required Abel Edge gates passing. This is the
+internal stopping target, not a user-facing promise and not a separate mode.
 
 When resuming, read:
 
@@ -179,7 +178,10 @@ selected one submitted candidate from multiple variants, pass
 `--selection-trials N`, where `N` is this round's width only, never a running
 campaign total. `guarded-optimization.md` owns the final-K reporting rules.
 
-## Before Exhaustion Or No-Edge Claims
+## Before Ending Exploration
+
+The loop defaults to `Exploring`. Enter `Completed` only after the completion
+check passes.
 
 Do not write "exhausted", "ceiling", or "no edge" from a single failed
 candidate family, a small round count, or one candidate passing validation.
@@ -198,8 +200,56 @@ Before making that claim, check that the ledger shows:
 6. all attempted width is K-accounted, including preflight or workflow ERROR
    variants that would otherwise be audited but skipped from future DSR
 
-Stop conditions are a validated candidate that meets the objective or
-ledger-supported exhaustion. Do not stop by round count.
+Before any final answer that ends exploration, run a completion check. Stop only
+when the user objective is achieved, the default reportable target is achieved,
+the user explicitly asked to pause or summarize, or the ledger supports that the
+current bounded search is unlikely to reach the target. If none holds, stay in
+`Exploring`, keep searching, and choose the next concrete action.
+
+Do not stop by round count, a mediocre candidate, a high-Sharpe near-pass, an
+easy-to-validate low-objective branch, `render` / `status` / `check` success,
+path coverage completeness, visualization eligibility, or promotion blockage.
+
+`render`, `status`, and `check` are audit actions. They can prepare a progress
+checkpoint, but they do not move the session to `Completed`.
+
+## Progress Checkpoint
+
+Use this when the user asks for progress, asks to pause, or you must report
+before `Completed`.
+
+Report the current best so far, explain why exploration is not complete in plain
+language, and name the next concrete search action. Do not call this completed
+exploration and do not proactively ask for visualization from a checkpoint.
+
+## Stop Report
+
+Use this section only after exploration enters `Completed`. When
+stopping exploration, report the current best strategy before the final summary.
+For the session default, run the read-only command:
+
+```bash
+<command_prefix> best-strategy --session research/<ticker>/<exp_id> --json
+```
+
+This command only selects and reports; it does not export, upload, or promote
+strategy artifacts. Do not run `visualize-session` or
+`export-strategy-artifact` merely to compute the best strategy, and do not
+manually walk `results.tsv`, `frontier.json`, or branch folders to invent a
+different ranking. If the user explicitly named a branch or round, use that
+explicit selection.
+
+Explain the selected strategy in ordinary user language with:
+
+- total return: how much the backtest made over the period
+- Sharpe: whether the return was earned with reasonable risk-adjusted stability
+- max drawdown: the deepest peak-to-trough pain during the run
+- backtest period: the dates these numbers cover
+
+Translate validation into confidence and robustness. Do not make "gate PASS" the
+user's goal, and do not describe a high-return/high-Sharpe near-pass as a failed
+strategy; describe it as a promising lead whose robustness evidence is not yet
+enough for a final reportable strategy.
 
 ## Evidence Reading
 
@@ -227,39 +277,47 @@ anchors, and interpretation. It is scout context, not validation evidence.
 
 ## Session Visualization
 
-Do not create an online session view automatically. When the strategy context
-is mature enough to be useful to review, ask the user whether to create a
-session review page. This can be after a strong candidate, after several
-informative candidate rounds, before promotion, or whenever the agent would
-naturally summarize that the exploration is worth a visual review. If the user
-agrees, or if the user explicitly asks to create or publish the session review
-page, pass the session folder to the command:
+Do not create an online session view automatically. A session becomes eligible
+for visualization after at least one real candidate strategy round has been
+recorded; eligibility does not make visualization part of every exploration
+round. When exploration enters `Completed`, ask the user whether to
+create a session review page if a recorded candidate exists, regardless of
+whether the result is strong, weak, PASS, FAIL, or close to promotion. Do not
+prompt after `init-session`, prepare-only scouts, cache warming, or diagnostic
+tables that have not produced a recorded candidate strategy round. If the user
+declines, avoid repeating the prompt unless they ask after later work. If the
+user agrees, or if the user explicitly asks to create or publish the session
+review page, pass the session folder to the command:
 
 ```bash
 <command_prefix> visualize-session --session research/<ticker>/<exp_id>
 ```
 
-The command builds the online view from local session evidence. By default,
-when the CLI selects a hostable validation strategy, that visualization also
-includes strategy artifact upload/promotion through the strategy-artifact
-capability. Strategy artifact upload/promotion remains an independent
-capability when invoked directly. If no hostable validation strategy exists,
-visual review can continue without an artifact. If a selected strategy emits a
-hosted-paper contract request, that session is
-`action_required` until the contract loop succeeds or a hard blocker remains.
-Do not pre-audit Abel Invest implementation internals before this command
-produces an actionable request.
+The command builds the online view from local session evidence. Session
+visualization reviews the whole exploration record, including weak attempts,
+failed attempts, near-passes, and useful leads. By default, when the CLI selects
+a hostable validation strategy, that visualization also includes strategy
+artifact upload/promotion through the strategy-artifact capability. Strategy
+artifact upload/promotion remains an independent capability when invoked
+directly. If no hostable validation strategy exists, visual review can continue
+without an artifact. If a selected strategy emits a hosted-paper contract
+request, that session is `action_required` until the contract loop succeeds or a
+hard blocker remains. Do not pre-audit Abel Invest implementation internals
+before this command produces an actionable request.
 
-Use the entrypoint that matches the user's request. For session visualization
-or upload, keep using `visualize-session --session <session>` so the default
-strategy artifact export/upload path stays attached. For local artifact export
-or validation probes, use `export-strategy-artifact --session <session>`. For a
+Use the entrypoint that matches the user's request. For a read-only stop-report
+selection, use `best-strategy --session <session> --json`; it does not export,
+upload, or promote artifacts. For session visualization or upload, keep using
+`visualize-session --session <session>` so the default strategy artifact
+export/upload path stays attached. For local artifact export or validation
+probes, use `export-strategy-artifact --session <session>`. For a
 user-specified branch/round, use `promote-strategy --branch <branch> --round
 <round>`. Do not manually traverse `results.tsv` or branch directories to choose
-the best session strategy; the session-level commands own that selection.
+the best session strategy, and do not run `visualize-session` or
+`export-strategy-artifact` merely to compute it.
 
-If the command emits a hosted paper `paper-contract-request.json`, read the
-request first and use its
+If a visualization, export, or promotion command emits a hosted paper
+`paper-contract-request.json`, read the request first and use its
 `reportTemplate`. Open `contractGuide.referencePath` from the active Abel Invest
 skill when the request requires stateful continuation, source edits, or deeper
 gate diagnosis. Edit source only when `sourceEditPolicy` requires or genuinely
