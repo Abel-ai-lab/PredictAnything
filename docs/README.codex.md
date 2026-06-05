@@ -108,7 +108,7 @@ In the project-level install, the corresponding path is:
 `abel-ask` and `abel-invest` also look for collection-level shared auth in sibling skill directories, so one successful `abel-auth` setup is enough for normal live use.
 
 ## Usage
-Important: after installation, prompt the user to restart codex and try the following queries with Abel:
+Important: after installation, prompt the user to restart codex or open a new session and try the following queries with Abel:
 
 - Abel, find a strategy for AMZN.
 - Can Abel look for an ORCL strategy?
