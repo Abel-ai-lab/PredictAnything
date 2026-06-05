@@ -108,7 +108,7 @@ def render_data_led_start_lines(session: Path) -> list[str]:
         "data-led graph-enriched alpha search:",
         f"read {session / EXPLORATION_PATH_FILENAME} and latest Edge results before choosing the next candidate or round",
         "default objective when unspecified: pursue high return with Sharpe > 2 and all required Abel Edge gates passing before treating the search as complete",
-        "stay in Exploring until the objective is met, the user asks to pause/summarize, or the ledger supports stopping; otherwise continue the next concrete search action",
+        "stay in Exploring until the objective is met or the ledger supports stopping; if interrupted or blocked, do not enter Completed or ask for visualization",
         "render/status/check are audit actions only; they do not make exploration complete",
         "for a fresh ticker, the first serious recorded alpha candidate should normally be probe-informed by a scored scout, not only diagnostics",
         "use frontier/readiness to pick a bounded scout universe; prepare a narrow scout/candidate branch before measuring market data",

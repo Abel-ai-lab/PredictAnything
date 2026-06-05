@@ -202,25 +202,21 @@ Before making that claim, check that the ledger shows:
 
 Before any final answer that ends exploration, run a completion check. Stop only
 when the user objective is achieved, the default reportable target is achieved,
-the user explicitly asked to pause or summarize, or the ledger supports that the
-current bounded search is unlikely to reach the target. If none holds, stay in
-`Exploring`, keep searching, and choose the next concrete action.
+or the ledger supports that the current bounded search is unlikely to reach the
+target. If none holds, stay in `Exploring`, keep searching, and choose the next
+concrete action.
 
 Do not stop by round count, a mediocre candidate, a high-Sharpe near-pass, an
 easy-to-validate low-objective branch, `render` / `status` / `check` success,
 path coverage completeness, visualization eligibility, or promotion blockage.
 
-`render`, `status`, and `check` are audit actions. They can prepare a progress
-checkpoint, but they do not move the session to `Completed`.
+`render`, `status`, and `check` are audit actions only. They do not complete
+exploration, create a reportable state, or justify a final answer.
 
-## Progress Checkpoint
-
-Use this when the user asks for progress, asks to pause, or you must report
-before `Completed`.
-
-Report the current best so far, explain why exploration is not complete in plain
-language, and name the next concrete search action. Do not call this completed
-exploration and do not proactively ask for visualization from a checkpoint.
+If the user explicitly interrupts, asks to stop, or an external blocker prevents
+continuation, do not enter `Completed` and do not use the stop report. Answer
+with a short interrupted/blocked note only: what was attempted, why it is not
+complete, and the next concrete action. Do not ask for visualization.
 
 ## Stop Report
 

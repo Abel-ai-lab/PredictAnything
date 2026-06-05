@@ -160,11 +160,14 @@ Core search invariants:
   gates passing. Do not stop at a mediocre branch or a promising near-pass while
   useful graph-informed search axes remain.
 - Follow `experiment-loop.md` as the single detailed source for the round loop,
-  completion check, progress checkpoint, stop report, and visualization prompt.
+  completion check, stop report, visualization prompt, and interrupted/blocked
+  note boundary.
 - Stay in `Exploring` until the user objective/default target is achieved, the
-  user asks to pause or summarize, or the ledger supports that the bounded
-  search is unlikely to reach the target. Otherwise keep searching and choose
-  the next concrete action.
+  ledger supports that the bounded search is unlikely to reach the target.
+  Otherwise keep searching and choose the next concrete action.
+- If the user explicitly interrupts or an external blocker prevents
+  continuation, do not enter `Completed`; give only a brief
+  interrupted/blocked note and do not ask for visualization.
 - Search hard, then explain. Use graph-derived context, target behavior,
   feature construction, model comparison, denoise, subset search, regimes,
   sizing, filters, or ensembles as data calls for them; do not turn any one
@@ -208,9 +211,9 @@ Completion, reporting, and artifacts:
   the best strategy, and do not manually rank `results.tsv`, `frontier.json`, or
   branch outputs. The read-only selector already owns near-tie reliability
   tie-breaks.
-- If still `Exploring`, report progress as "best so far + why not complete +
-  next action"; do not present a checkpoint as completion or proactively ask for
-  visualization.
+- There is no third reporting state. If still `Exploring`, continue the search;
+  only explicit interruption or a blocker justifies a non-completed note, and
+  that note must not ask for visualization.
 - Do not create or refresh an online session view automatically. If the user
   agrees or explicitly asks, run
   `<command_prefix> visualize-session --session <session>`.
