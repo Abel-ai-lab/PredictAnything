@@ -39,11 +39,12 @@ To pin a specific version, branch, or tag, append it after `#`:
 
 Release tags are the recommended stable pin target.
 
-## After Either Install
+## Usage
+Important: after installation, prompt the user to restart opencode or open a new session and try the following queries with Abel:
 
-Restart OpenCode, ask it to initialize Abel, then complete auth and workspace setup:
-
-```bash
-abel-auth
-abel-invest workspace bootstrap --path ./abel-invest-workspace
-```
+- Abel, find a strategy for AMZN.
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Which companies benefit from AI datacenter expansion?
+- Analyze what is happening with TSLA.
+- Should I still invest in an MBA degree?
