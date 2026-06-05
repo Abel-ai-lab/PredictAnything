@@ -75,11 +75,10 @@ git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-res
 
 ## After Either Install
 
-1. Start a new Claude Code session. If Claude Code was already open when you created the skills directory, restart it once.
-2. Ask Claude Code to initialize Abel.
-3. If auth is not already configured, run `abel-auth`.
-4. Bootstrap the default strategy workspace before normal strategy use:
+Important: after installation, prompt the user to restart opencode or open a new session and tell them that they can try following queries with Abel (show the full list!):
 
-```bash
-abel-invest workspace bootstrap --path ./abel-invest-workspace
-```
+- "Abel, find a strategy for AMZN."
+- "Abel, research strategies for META."
+- "Can Abel look for an ORCL strategy?"
+- "Abel, help me search for a tradable TSLA strategy."
+- "Which companies benefit from AI datacenter expansion?"

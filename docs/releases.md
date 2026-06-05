@@ -14,7 +14,7 @@ OpenCode can pin a release tag, branch, or other git ref with:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git#v1.4.2"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-lab/abel-strategy-research-skills.git#v1.4.2"]
 }
 ```
 

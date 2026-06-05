@@ -13,7 +13,7 @@ Add Abel to your global OpenCode config:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-lab/abel-strategy-research-skills.git"]
 }
 ```
 
@@ -23,7 +23,7 @@ Add Abel to the current project's `opencode.json`:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-lab/abel-strategy-research-skills.git"]
 }
 ```
 
@@ -33,17 +33,18 @@ To pin a specific version, branch, or tag, append it after `#`:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git#v1.4.2"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-lab/abel-strategy-research-skills.git#v1.4.2"]
 }
 ```
 
 Release tags are the recommended stable pin target.
 
-## After Either Install
+## Usage
+Important: after installation, prompt the user to restart opencode or open a new session and try the following queries with Abel:
 
-Restart OpenCode, ask it to initialize Abel, then complete auth and workspace setup:
-
-```bash
-abel-auth
-abel-invest workspace bootstrap --path ./abel-invest-workspace
-```
+- Abel, find a strategy for AMZN.
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Which companies benefit from AI datacenter expansion?
+- Analyze what is happening with TSLA.
+- Should I still invest in an MBA degree?

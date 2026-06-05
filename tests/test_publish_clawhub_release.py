@@ -48,7 +48,7 @@ def test_dry_run_uses_clawhub_package_publish_for_bundle(
         publish,
         "detect_git_source_metadata",
         lambda _source_dir: {
-            "source_repo": "Abel-ai-causality/abel-strategy-research-skills",
+            "source_repo": "Abel-ai-lab/abel-strategy-research-skills",
             "source_commit": "abc123",
             "source_ref": "develop",
             "source_path": "",
@@ -73,7 +73,7 @@ def test_dry_run_uses_clawhub_package_publish_for_bundle(
     assert "--name abel" in out
     assert "--display-name \"Abel Strategy Research Skills\"" in out
     assert f"--version {expected_version}" in out
-    assert "--source-repo Abel-ai-causality/abel-strategy-research-skills" in out
+    assert "--source-repo Abel-ai-lab/abel-strategy-research-skills" in out
     assert "--source-commit abc123" in out
     assert "--source-ref develop" in out
     assert "--tags latest" in out

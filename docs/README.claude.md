@@ -7,7 +7,7 @@ Use Claude Code to discover strategies with Abel, analyze causal drivers, and su
 Tell Claude Code:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-causality/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
 ```
 
 ## Manual Installation
@@ -27,7 +27,7 @@ Choose one install scope:
 1. Clone the repo:
 
    ```bash
-   git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git ~/.claude/abel-strategy-research-skills
+   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git ~/.claude/abel-strategy-research-skills
    ```
 
 2. Create Claude personal skill symlinks:
@@ -58,7 +58,7 @@ Run these commands from the project root:
 
    ```bash
    mkdir -p .claude
-   git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git .claude/abel-strategy-research-skills
+   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git .claude/abel-strategy-research-skills
    ```
 
 2. Create project-local skill symlinks:
@@ -83,7 +83,7 @@ Existing installs under `~/.claude/abel-skills` or `.claude/abel-skills` can kee
 
 ```bash
 cd ~/.claude/abel-skills
-git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-research-skills.git
+git remote set-url origin https://github.com/Abel-ai-lab/abel-strategy-research-skills.git
 ```
 
 ### After Either Install
@@ -113,16 +113,13 @@ In the project-level install, the corresponding path is:
 
 `abel-ask` and `abel-invest` also look for collection-level shared auth in sibling skill directories, so one successful `abel-auth` setup is enough for normal live use.
 
-## Why This Uses Per-Skill Symlinks
-
-Claude Code skill discovery is directory-based. Using one symlink per skill matches both the global `~/.claude/skills/<skill-name>/` layout and the project-level `.claude/skills/<skill-name>/` layout directly.
-
 ## Usage
 
-After installation, start from `Abel`, complete `abel-auth` if needed, then bootstrap the default strategy workspace before normal strategy use.
+Important: after installation, prompt the user to restart claude code or open a new session and try the following queries with Abel:
 
-Try:
-
-- Discover AI infrastructure investment strategies with Abel.
-- Find a TSLA strategy thesis.
-- Analyze causal drivers for mortgage-rate-sensitive homebuilder stocks.
+- Abel, find a strategy for AMZN.
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Which companies benefit from AI datacenter expansion?
+- Analyze what is happening with TSLA.
+- Should I still invest in an MBA degree?

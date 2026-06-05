@@ -16,9 +16,8 @@
   <rect width="1280" height="640" fill="url(#dot-grid)" opacity="0.72"/>
 
   <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" letter-spacing="0">
-    <text x="96" y="96" font-size="24" font-weight="760" fill="#8d8d8d">ABEL</text>
-    <text x="96" y="160" font-size="56" font-weight="780" fill="#202124">Abel Strategy Research Skills</text>
-    <text x="96" y="216" font-size="32" font-weight="680" fill="#887d21">AI agent skills for strategy discovery</text>
+    <text x="96" y="136" font-size="56" font-weight="640" fill="#202124">Abel Strategy Research Skills</text>
+    <text x="96" y="192" font-size="32" font-weight="520" fill="#887d21">AI agent skills for strategy discovery</text>
   </g>
 
   <g stroke="#ebe5d8" stroke-width="1.5">
@@ -35,7 +34,7 @@
     <line x1="1152" y1="256" x2="1152" y2="480"/>
   </g>
 
-  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" fill="#a6a6a6" font-size="20" font-weight="600">
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" fill="#a6a6a6" font-size="20" font-weight="460">
     <text x="48" y="288">2.5</text>
     <text x="48" y="352">2.0</text>
     <text x="48" y="416">1.5</text>
@@ -48,9 +47,8 @@
   <circle cx="1184" cy="216" r="16" fill="#ee8528"/>
 
   <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" letter-spacing="0">
-    <text x="96" y="536" font-size="28" font-weight="720" fill="#202124">Explore market ideas</text>
-    <text x="424" y="536" font-size="28" font-weight="720" fill="#202124">Analyze causal drivers</text>
-    <text x="800" y="536" font-size="28" font-weight="720" fill="#202124">Develop investment strategies</text>
-    <text x="96" y="592" font-size="24" font-weight="650" fill="#8d8d8d">Claude Code · Codex · OpenCode · ClawHub</text>
+    <text x="96" y="536" font-size="28" font-weight="560" fill="#202124">Explore market ideas</text>
+    <text x="424" y="536" font-size="28" font-weight="560" fill="#202124">Analyze causal drivers</text>
+    <text x="800" y="536" font-size="28" font-weight="560" fill="#202124">Develop investment strategies</text>
   </g>
 </svg>

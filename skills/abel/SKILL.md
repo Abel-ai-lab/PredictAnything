@@ -11,7 +11,7 @@ metadata:
       bins:
         - python3
     primaryEnv: ABEL_API_KEY
-    homepage: https://github.com/Abel-ai-causality/abel-strategy-research-skills
+    homepage: https://github.com/Abel-ai-lab/abel-strategy-research-skills
 ---
 
 Use `Abel` as the main entrypoint.
@@ -55,15 +55,19 @@ Do not guess from shell environment alone.
    Ask shortlist or mechanism as priors; do not let Ask emulate strategy
    discovery.
 
-## Good First Questions
+## Recommended Questions
 
-Use these examples when introducing Abel to a new user or helping them choose a
-path.
+When the user asks what they can do with Abel, what Abel is useful for, or
+otherwise needs help choosing a first Abel prompt, answer with these recommended
+questions:
 
-Deep Invest Search:
+Strategy Search:
 
-- How should I trade TSLA?
-- Can Abel look for an investable NKE strategy?
+- Abel, find a strategy for AMZN
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Is there an ETH strategy Abel can find?
+- Abel, explore a META strategy for me.
 
 Abel Ask:
 
@@ -72,3 +76,6 @@ Abel Ask:
 - Is spending $1M on an MBA worth it?
 - Should I learn to cook or keep eating out?
 - Should I still invest in an MBA degree?
+
+These are examples only. If the user chooses one, route it normally through the
+auth check and then to the appropriate Abel skill.

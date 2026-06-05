@@ -7,7 +7,7 @@ Use Codex to discover strategies with Abel, analyze causal drivers, and support 
 Tell Codex:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-causality/abel-strategy-research-skills/refs/heads/main/.codex/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.codex/INSTALL.md
 ```
 
 ## Manual Installation
@@ -27,7 +27,7 @@ Choose one install scope:
 1. Clone the repo:
 
    ```bash
-   git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git ~/.codex/abel-strategy-research-skills
+   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git ~/.codex/abel-strategy-research-skills
    ```
 
 2. Create the skills symlink:
@@ -55,7 +55,7 @@ Run these commands from the project root:
 
    ```bash
    mkdir -p .agents
-   git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git .agents/abel-strategy-research-skills
+   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git .agents/abel-strategy-research-skills
    ```
 
 2. Create the project-local skills symlink:
@@ -77,7 +77,7 @@ Existing installs under `~/.codex/abel-skills` or `.agents/abel-skills` can keep
 
 ```bash
 cd ~/.codex/abel-skills
-git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-research-skills.git
+git remote set-url origin https://github.com/Abel-ai-lab/abel-strategy-research-skills.git
 ```
 
 ### After Either Install
@@ -108,11 +108,11 @@ In the project-level install, the corresponding path is:
 `abel-ask` and `abel-invest` also look for collection-level shared auth in sibling skill directories, so one successful `abel-auth` setup is enough for normal live use.
 
 ## Usage
+Important: after installation, prompt the user to restart codex or open a new session and try the following queries with Abel:
 
-After restart, start from `Abel`, complete `abel-auth` if needed, then bootstrap the default strategy workspace before normal strategy use.
-
-Try:
-
-- Develop semiconductor demand strategies using Abel.
-- Explore investment strategies related to power demand and data centers.
-- Analyze causal drivers for mortgage-rate-sensitive homebuilder stocks.
+- Abel, find a strategy for AMZN.
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Which companies benefit from AI datacenter expansion?
+- Analyze what is happening with TSLA.
+- Should I still invest in an MBA degree?

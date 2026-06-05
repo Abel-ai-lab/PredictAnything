@@ -59,7 +59,7 @@ def test_strategy_discovery_bootstrap_lets_pyproject_install_dependencies() -> N
     script = Path(__file__).resolve().parents[1] / "skills" / "abel-invest" / "scripts" / "bootstrap_workspace.py"
     source = script.read_text(encoding="utf-8")
 
-    assert "git+https://github.com/Abel-ai-causality/Abel-edge.git@main" not in source
+    assert "git+https://github.com/Abel-ai-lab/Abel-edge.git@main" not in source
     assert "pip\", \"install\", \"PyYAML" not in source
     assert "--no-deps" not in source
     assert "--upgrade-strategy" in source
