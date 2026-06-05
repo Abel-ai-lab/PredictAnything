@@ -196,16 +196,17 @@ Completion, reporting, and artifacts:
 - Stop reports are allowed only after `Completed`. A completed stop report is
   one exit contract: use
   `<command_prefix> best-strategy --session <session> --json` for read-only
-  selection, explain total return, Sharpe, max drawdown, and backtest period in
-  ordinary language, and ask whether to create a session review page when a
-  recorded candidate exists.
+  selection, report that command's selected branch/round exactly, explain total
+  return, Sharpe, max drawdown, and backtest period in ordinary language, and
+  ask whether to create a session review page when a recorded candidate exists.
 - Keep internal completion evidence out of the default user-facing goal:
   translate Abel Edge validation into confidence and robustness, and do not lead
   with gate/PASS/DSR/K/PositionIC/Edge verdict unless the user asks for
   technical details.
 - Do not run `visualize-session` or `export-strategy-artifact` merely to compute
   the best strategy, and do not manually rank `results.tsv`, `frontier.json`, or
-  branch outputs.
+  branch outputs. The read-only selector already owns near-tie reliability
+  tie-breaks.
 - If still `Exploring`, report progress as "best so far + why not complete +
   next action"; do not present a checkpoint as completion or proactively ask for
   visualization.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ._memory_helpers import *  # noqa: F401,F403
 
-def test_select_best_pass_strategy_sorts_validation_rounds_by_sharpe_first(
+def test_select_best_pass_strategy_prefers_full_pass_within_sharpe_near_tie(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
@@ -62,13 +62,50 @@ def test_select_best_pass_strategy_sorts_validation_rounds_by_sharpe_first(
     assert result.pass_round_count == 4
     assert result.eligible_count == 4
     assert result.selected_branch_id == "momentum_lead"
-    assert result.selected_round_id == "round-006"
+    assert result.selected_round_id == "round-010"
     assert result.selected is not None
     assert result.selected.selection_rank == 1
-    assert result.selected.selection_metric_values["sharpe"] == 0.967
+    assert result.selected.selection_metric_values["sharpe"] == 0.945
     assert result.selected.selection_metric_values["annual_return"] == 0.42
-    assert result.selected.selection_metric_values["max_dd_abs"] == 0.1278
-    assert result.selected.selection_metric_values["pass_rate"] == 10 / 13
+    assert result.selected.selection_metric_values["max_dd_abs"] == 0.1340
+    assert result.selected.selection_metric_values["pass_rate"] == 1.0
+
+
+def test_select_best_pass_strategy_keeps_top_sharpe_when_gap_exceeds_tenth(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
+    near_pass_top = ni.init_branch_dir(session, "near_pass_top")
+    full_pass_lower = ni.init_branch_dir(session, "full_pass_lower")
+    _write_strategy_result_row(
+        session,
+        near_pass_top,
+        round_id="round-001",
+        verdict="FAIL",
+        sharpe=2.90,
+        lo_adj=2.70,
+        max_dd=-0.12,
+        score="8/9",
+        annual_return=0.42,
+    )
+    _write_strategy_result_row(
+        session,
+        full_pass_lower,
+        round_id="round-001",
+        verdict="PASS",
+        sharpe=2.79,
+        lo_adj=2.60,
+        max_dd=-0.08,
+        score="9/9",
+        annual_return=0.31,
+    )
+
+    result = ni.select_best_pass_strategy(session)
+
+    assert result.selected_branch_id == "near_pass_top"
+    assert result.selected is not None
+    assert result.selected.selection_metric_values["sharpe"] == 2.90
+    assert result.selected.selection_metric_values["pass_rate"] == 8 / 9
 
 
 def test_select_best_pass_strategy_sorts_by_sharpe_return_drawdown_then_latest(

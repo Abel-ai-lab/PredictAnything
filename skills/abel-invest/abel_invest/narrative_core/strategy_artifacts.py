@@ -58,6 +58,7 @@ SELECTION_SCOPE_SESSION = "session"
 SELECTION_SCOPE_BRANCH = "branch"
 SELECTION_METRIC_ORDER = (
     "sharpe",
+    "near_tie_full_pass",
     "annual_return",
     "max_dd_abs",
     "pass_rate",
@@ -68,12 +69,13 @@ SELECTION_MANIFEST_METRIC_ORDER = (
     "calmar",
     "max_dd",
 )
-SELECTION_RULE_AUTO_BEST_PASS = (
-    "sharpe_desc_annual_return_desc_max_dd_abs_asc_pass_rate_desc_latest_v3"
-)
+SELECTION_NEAR_TIE_SHARPE_DELTA = 0.1
+SELECTION_RULE_AUTO_BEST_PASS = "sharpe_desc_near_tie_full_pass_v4"
 SELECTION_REASON_AUTO_BEST_PASS = (
-    "highest Sharpe, then highest annualized return, then least severe max "
-    "drawdown, then highest validation pass rate; ties use latest recorded round"
+    "highest Sharpe; if an all-pass strategy is within 0.10 Sharpe of the top "
+    "near-pass strategy, prefer the all-pass strategy, then highest annualized "
+    "return, least severe max drawdown, highest validation pass rate, and "
+    "latest recorded round"
 )
 DEFAULT_PROMOTIONS_DIRNAME = "promotions"
 LEGACY_SESSION_ARTIFACT_DIRNAME = "paper_ready_artifact"
@@ -249,11 +251,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
             eligible_count=0,
         )
 
-    ranked = sorted(
-        candidates,
-        key=_auto_best_strategy_rank_key,
-    )
-    selected = _with_rank(ranked[0], selection_rank=1)
+    selected = _with_rank(_select_auto_best_strategy(candidates), selection_rank=1)
     return StrategySelectionResult(
         selected=selected,
         skip_reason="",
@@ -349,6 +347,7 @@ def best_strategy_report_payload(session: Path) -> dict[str, Any]:
             "rule": SELECTION_RULE_AUTO_BEST_PASS,
             "reason": SELECTION_REASON_AUTO_BEST_PASS,
             "metricOrder": list(SELECTION_METRIC_ORDER),
+            "nearTieSharpeDelta": SELECTION_NEAR_TIE_SHARPE_DELTA,
         },
         "validationRoundCount": selection.validation_round_count,
         "eligibleCount": selection.eligible_count,
@@ -955,6 +954,32 @@ def _auto_best_strategy_rank_key(
         abs(item.max_dd),
         -item.pass_rate,
         -item.session_round_index,
+    )
+
+
+def _select_auto_best_strategy(
+    candidates: list[StrategyArtifactCandidate],
+) -> StrategyArtifactCandidate:
+    ranked = sorted(candidates, key=_auto_best_strategy_rank_key)
+    top = ranked[0]
+    if _is_full_pass_candidate(top):
+        return top
+
+    near_tie_full_pass = [
+        item
+        for item in ranked
+        if _is_full_pass_candidate(item)
+        and top.sharpe - item.sharpe <= SELECTION_NEAR_TIE_SHARPE_DELTA + 1e-9
+    ]
+    if near_tie_full_pass:
+        return near_tie_full_pass[0]
+    return top
+
+
+def _is_full_pass_candidate(item: StrategyArtifactCandidate) -> bool:
+    return (
+        _clean(item.edge_result.get("verdict")).upper() == "PASS"
+        and item.pass_rate >= 1.0
     )
 
 

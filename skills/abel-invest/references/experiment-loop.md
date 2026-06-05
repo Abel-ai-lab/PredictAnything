@@ -240,7 +240,8 @@ strategy artifacts. Do not run `visualize-session` or
 `export-strategy-artifact` merely to compute the best strategy, and do not
 manually walk `results.tsv`, `frontier.json`, or branch folders to invent a
 different ranking. If the user explicitly named a branch or round, use that
-explicit selection.
+explicit selection. Otherwise report the command's selected branch/round
+exactly; the selector already owns near-tie reliability tie-breaks.
 
 Use this default stop-report shape:
 

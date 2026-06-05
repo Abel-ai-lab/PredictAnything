@@ -351,8 +351,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `frontier.md` reports input realization: declared graph-supported inputs only
   count as realized when the engine reads prepared graph inputs
 - `best-strategy` is the read-only entrypoint for stop reports: it selects the
-  current best session strategy without exporting, uploading, or promoting
-  artifacts
+  current best session strategy, including near-tie reliability tie-breaks,
+  without exporting, uploading, or promoting artifacts
 - `visualize-session` is the default composite entrypoint for session
   visualization: it creates an online session view and, when a hostable
   validation strategy is available, includes selected strategy artifact
@@ -478,10 +478,10 @@ the session eligible for visualization, but visualization is not a required step
 after every round. When exploration enters Completed, use
 `best-strategy --session <session> --json` to select the best strategy for the
 stop report; it is read-only and does not export, upload, or promote artifacts.
-Do not manually walk `results.tsv` or branch folders to choose the best session
-strategy. Ask the user whether to create a session review page if a recorded
-candidate exists. If the user agrees or explicitly asks to publish the session
-review page, run
+Report its selected branch/round exactly instead of manually walking
+`results.tsv` or branch folders to choose the best session strategy. Ask the
+user whether to create a session review page if a recorded candidate exists. If
+the user agrees or explicitly asks to publish the session review page, run
 `visualize-session --session <session>` before inspecting Abel Invest
 implementation internals. It builds the view from the session folder and, when
 available, includes selected strategy artifact upload/promotion; if no hostable
