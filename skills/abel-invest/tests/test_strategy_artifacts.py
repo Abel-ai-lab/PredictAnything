@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from contextlib import contextmanager
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +14,10 @@ from abel_invest.narrative_core.promotion import (
     PromotionHostedPaperContractRequired,
 )
 from abel_invest.narrative_core.promotion import source_scan
-from abel_invest.narrative_core.promotion.paper.smoke import _paper_smoke_context
+from abel_invest.narrative_core.promotion.paper.smoke import (
+    _paper_smoke_context,
+    _run_paper_validation_state_bootstrap,
+)
 from abel_invest.narrative_core.promotion.request import (
     _write_hosted_paper_contract_request,
 )
@@ -27,6 +31,7 @@ from abel_invest.narrative_core.promotion.validation import (
     _validate_agent_paper_signal_contract,
 )
 from abel_invest.narrative_core.strategy_artifact_upload import (
+    _strategy_artifact_preupload_error,
     render_strategy_artifact_upload_lines,
 )
 from abel_invest.narrative_core.strategy_artifacts import (
@@ -218,6 +223,24 @@ def test_strategy_artifact_skip_line_keeps_session_view_language():
         "exist, but none currently has the files needed for a hostable strategy artifact"
     ]
     assert "skipped" not in lines[0].lower()
+
+
+def test_strategy_artifact_success_lines_include_strategy_detail_tip():
+    lines = render_strategy_artifact_upload_lines(
+        {
+            "artifactUploadId": "upload_1",
+            "admissionStatus": "accepted",
+            "selectedBranchId": "momentum_lead",
+            "selectedRoundId": "round-006",
+        }
+    )
+
+    assert lines == [
+        "Strategy artifact uploaded: upload_1 "
+        "(admission=accepted, selected=momentum_lead/round-006)",
+        "Tip: On the session review page, scroll to Session strategies near the "
+        "bottom and click View Strategy to open the bound strategy detail page.",
+    ]
 
 
 def test_artifact_export_cleanup_removes_legacy_and_completed_outputs(tmp_path):
@@ -720,6 +743,56 @@ class BranchEngine:
 """
 
 
+class _ScopedBootstrapEngine:
+    def __init__(self):
+        self.active_cutover = None
+        self.seen_cutover = None
+
+    @contextmanager
+    def paper_bootstrap_cutover_scope(self, cutover_as_of):
+        previous = self.active_cutover
+        self.active_cutover = cutover_as_of
+        try:
+            yield
+        finally:
+            self.active_cutover = previous
+
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        self.seen_cutover = (cutover_as_of, self.active_cutover)
+        return {"cutover": cutover_as_of}
+
+
+class _UnscopedBootstrapEngine:
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        return {}
+
+
+def test_stateful_bootstrap_runs_inside_edge_cutover_scope(tmp_path):
+    engine = _ScopedBootstrapEngine()
+
+    result = _run_paper_validation_state_bootstrap(
+        engine,
+        state_dir=tmp_path / "state",
+        oracle_rows=[{"validationCutoverAsOf": "2026-04-16"}],
+        required=True,
+    )
+
+    assert result["status"] == "passed"
+    assert engine.seen_cutover == ("2026-04-16", "2026-04-16")
+
+
+def test_stateful_bootstrap_requires_edge_cutover_scope(tmp_path):
+    result = _run_paper_validation_state_bootstrap(
+        _UnscopedBootstrapEngine(),
+        state_dir=tmp_path / "state",
+        oracle_rows=[{"validationCutoverAsOf": "2026-04-16"}],
+        required=True,
+    )
+
+    assert result["status"] == "failed"
+    assert "paper_bootstrap_cutover_scope" in result["reason"]
+
+
 def test_ml_training_stateful_contract_does_not_gate_on_prose_keywords():
     _validate_agent_paper_signal_contract(
         _stateful_training_report(
@@ -879,3 +952,55 @@ def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp
     assert "full_replay_fallback" in payload["requirements"]["sourceEditPolicy"][
         "allowedReasons"
     ]
+
+
+def test_strategy_artifact_preupload_error_includes_contract_loop_status(tmp_path):
+    request_path = tmp_path / "paper-contract-request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "requirements": {
+                    "expectedAction": "implement_stateful_continuation",
+                    "continuationMethod": "stateful_continuation",
+                },
+                "validation": {
+                    "attemptPolicy": {
+                        "contractRequestRefreshes": 2,
+                        "liveContractFailures": 1,
+                        "fullReplayFallbackEligible": False,
+                        "fallbackAfterRequestRefreshes": 3,
+                        "fallbackAfterFailures": 3,
+                    },
+                    "lastGateFailure": {
+                        "failedGates": [
+                            {
+                                "name": "paper_dry_run",
+                                "reason": "tail parity mismatch",
+                            }
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    message = _strategy_artifact_preupload_error(
+        {
+            "skipReason": "hosted_paper_contract_required",
+            "promotionReport": {
+                "reason": "promotion gate did not pass",
+                "requestPath": str(request_path),
+            },
+        }
+    )
+
+    assert "expectedAction=implement_stateful_continuation" in message
+    assert "continuationMethod=stateful_continuation" in message
+    assert "contractRequestRefreshes=2" in message
+    assert "liveContractFailures=1" in message
+    assert "fullReplayFallbackEligible=false" in message
+    assert "fallbackAfterRequestRefreshes" not in message
+    assert "fallbackAfterFailures" not in message
+    assert "lastGateFailure=paper_dry_run:tail parity mismatch" in message
+    assert "nextAction=write_or_repair_paper_contract_report" in message

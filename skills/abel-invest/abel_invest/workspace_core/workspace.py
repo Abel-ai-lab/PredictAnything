@@ -293,7 +293,8 @@ After every recorded round, keep `exploration_path.md` covered with ledger ref,
 chosen path, compact reason, Edge feedback, and artifact refs before another
 recorded round.
 
-Only after asking the user and getting agreement for visual review, run:
+Only after asking the user and getting agreement to create a session review
+page, run:
 
 ```bash
 ./.venv/bin/abel-invest visualize-session --session research/tsla/tsla-v1
@@ -339,11 +340,13 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `prepare-branch` should run before a recorded round
 - `frontier.md` reports input realization: declared graph-supported inputs only
   count as realized when the engine reads prepared graph inputs
-- `visualize-session` creates an online session view from the session folder;
-  it includes the selected best ranked hostable strategy artifact when one is
-  available by default, selected from validation evidence rather than requiring
-  every gate to pass. Use `--without-strategy-artifact` only for narrative-only
-  views
+- `visualize-session` is the default composite entrypoint for session
+  visualization: it creates an online session view and, when a hostable
+  validation strategy is available, includes selected strategy artifact
+  upload/promotion through the strategy-artifact capability. Direct artifact
+  export/promotion remain independent commands. If a selected strategy emits a
+  hosted-paper contract request, continue that loop; if it
+  cannot complete, report the session as `action_required`
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter wiring scaffold for the first end-to-end run, not a finished strategy
 
@@ -455,13 +458,15 @@ Edge result before choosing the next Edge run; after Edge feedback, keep the
 path updated. Check path coverage before starting another round. Check input
 realization before claiming graph-derived contribution. Do not create the online
 session view automatically; when the exploration is mature enough for review,
-ask the user first. If the user agrees or explicitly asks to publish the session
-view, `visualize-session --session <session>` builds the view from the session
-folder and attaches the selected hostable validation strategy artifact when one
-is available. If the user asks only for a local strategy artifact export or a
-promotion validation probe, use
-`export-strategy-artifact --session <session>`. If the user explicitly names a
-branch or round, use `promote-strategy --branch <branch> --round <round>`.
+ask the user whether to create a session review page. If the user agrees or
+explicitly asks to publish the session review page, run
+`visualize-session --session <session>` before inspecting Abel Invest
+implementation internals. It builds the view from the session folder and, when
+available, includes selected strategy artifact upload/promotion. If the user
+asks only for a local strategy artifact export or a promotion validation probe,
+use `export-strategy-artifact --session <session>`. If the user explicitly
+names a branch or round, use `promote-strategy --branch <branch> --round
+<round>`.
 Do not manually walk `results.tsv` or branch folders to choose the best
 session strategy; session-level commands let the CLI select it. If the command
 emits a hosted paper `paper-contract-request.json`,
@@ -470,8 +475,14 @@ needed, open its `referencePath` from the active Abel Invest skill, not from the
 workspace or CLI package path.
 Edit only when `sourceEditPolicy` says a source edit is required or genuinely
 allowed, and declare the paper history boundary in `paper-contract-report.json`.
-Rerun the same command afterward. Do not start a separate agent process. Use
-`--without-strategy-artifact` only for narrative-only views.
+Rerun the same command afterward. If another request appears, inspect
+`validation.lastGateFailure`, `validation.attemptPolicy`, and
+`requirements.fallback`, then continue until promotion succeeds, fallback is
+eligible and succeeds or fails a gate, or a hard blocker remains. Promotion
+converts the selected research strategy into a clean hosted daily live-paper
+artifact; do not add one-off schedules or cached tail decisions merely to pass
+the gate. Do not start a separate agent process. Leave contract-blocked sessions
+as `action_required` unless the user explicitly asks to skip strategy artifacts.
 This workspace is for alpha-managed strategy search, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.

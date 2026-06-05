@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import strategy_discovery_api as strategy_api
+from . import api as strategy_api
 from abel_invest import __version__ as ABEL_INVEST_VERSION
 from abel_invest.narrative_core.command_handlers import workspace as workspace_handlers
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
@@ -172,7 +172,7 @@ def test_render_workspace_status_reports_alpha_managed_mode(tmp_path: Path) -> N
 
 def test_resolve_alpha_source_defaults_to_skill_root() -> None:
     resolved = resolve_alpha_source()
-    expected = Path(__file__).resolve().parents[1] / "skills" / "abel-invest"
+    expected = Path(__file__).resolve().parents[2] / "skills" / "abel-invest"
 
     assert resolved == expected.resolve()
     assert (resolved / "pyproject.toml").exists()

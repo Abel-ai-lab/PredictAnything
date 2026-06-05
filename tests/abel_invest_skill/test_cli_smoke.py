@@ -7,7 +7,7 @@ from pathlib import Path
 
 from abel_invest import cli
 from abel_invest.workspace_core.workspace import scaffold_workspace
-import strategy_discovery_api as ni
+from . import api as ni
 
 
 def _run_cli(monkeypatch, argv: list[str]) -> int:

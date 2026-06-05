@@ -1,7 +1,7 @@
-"""Test-only access to strategy-discovery owner modules.
+"""Test-only access to Abel Invest owner modules.
 
 This keeps tests off the public CLI entrypoint while preserving
-compact call sites during the refactor.
+compact call sites across package-local test modules.
 """
 
 from __future__ import annotations

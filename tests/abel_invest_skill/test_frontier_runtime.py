@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from abel_invest.narrative_core.evidence import graph_frontier
-import strategy_discovery_api as ni
+from . import api as ni
 
 
 def _seed_discovery() -> dict:

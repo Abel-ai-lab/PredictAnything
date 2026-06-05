@@ -19,7 +19,8 @@ code is required.
 
 Harness facts are observations, not complete semantic truth. Empty observed
 lists such as no observed fit calls or no observed state writes are not proof of
-absence. Read the source and report semantic dependencies the scan missed.
+absence. Read the selected/promoted strategy source and report semantic
+dependencies the scan missed.
 
 ## Loop
 
@@ -38,16 +39,44 @@ absence. Read the source and report semantic dependencies the scan missed.
 6. Rerun the same `visualize-session`, `export-strategy-artifact`, or
    `promote-strategy` command.
 
+Use this compact state machine:
+
+```text
+request -> report/source edit -> rerun same command -> pass
+                                        |
+                                        v
+                                  refreshed request
+                                        |
+                                        v
+                         repair from validation.lastGateFailure
+                                        |
+                                        v
+                         fallback eligible -> full_replay_fallback
+                                        |
+                                        v
+                         fallback gate fails -> report failed artifact
+```
+
 If the gate returns another request, treat `validation.lastGateFailure` as a
 semantic diagnostic. Revisit continuation design, state, history boundary, or
-evidence; do not patch individual validation dates.
+evidence; do not patch individual validation dates. Check
+`validation.attemptPolicy` and `requirements.fallback` on each refreshed
+request. `fullReplayFallbackEligible=false` is not a stop condition by itself;
+keep repairing the contract unless a hard blocker remains.
 For tail parity failures, start from the compact mismatch diagnosis in the
 request. Inspect `promotion-tail-trace.json` only when you need detailed audit
 rows.
 
-Do not edit the original branch. Do not start by reading Abel-skills promotion
-internals or Edge gate internals; the request is the workbench. Inspect
-internals only after a refreshed request cannot explain a failure.
+Stop the loop only when promotion succeeds, `full_replay_fallback` has been
+attempted and fails parity or performance, the required promoted-source edit
+cannot be implemented from the available source/context, an unrelated
+CLI/runtime/auth blocker prevents progress, or the user explicitly asks to skip
+strategy artifacts.
+
+Do not edit the original branch. Do not bypass artifact promotion when
+visualizing a session. The request is the workbench; do not inspect Abel Invest
+or Edge implementation internals unless the command crashes without an
+actionable request or a refreshed request is internally inconsistent.
 
 ## Source Edits
 
@@ -168,9 +197,11 @@ way to reconstruct equivalent state; origin-to-cutover replay is a last resort
 and must still fit the hosted paper timeout.
 
 For DecisionContext-based bootstrap reads, use
-`self.paper_bootstrap_context(start=..., end=cutover_as_of)`. This keeps the
-same runtime feeds and state paths but bypasses the future daily paper history
-clamp while startup state is being constructed. Future
+`self.paper_bootstrap_context(start=...)`. During promotion validation, Edge
+owns the bootstrap cutover bound and prevents bootstrap contexts from reading
+after `cutover_as_of`. This keeps the same runtime feeds and state paths but
+bypasses the future daily paper history clamp while startup state is being
+constructed. Future
 `get_paper_signal(as_of=...)` calls should keep using the normal paper path, so
 the declared `paperExecutionProfile.history` still bounds daily feed reads.
 
@@ -213,7 +244,7 @@ class BranchEngine(StrategyEngine):
 
     def build_paper_initial_state(self, *, cutover_as_of=None):
         store = self._paper_store()
-        # Inside _build_cutover_state, call self.paper_bootstrap_context(...)
+        # Inside _build_cutover_state, call self.paper_bootstrap_context(start=...)
         # if startup state needs a different range than future daily paper reads.
         state = self._build_cutover_state(cutover_as_of)
         state["schema"] = STATE_SCHEMA
@@ -246,10 +277,18 @@ cutover state that matches the selected research strategy through
 `cutover_as_of`. For example, if the source refits every N rows, build the
 model/scaler for the last active retrain anchor at cutover instead of refitting
 every earlier anchor. If that bootstrap needs more history than future daily
-paper reads, use `self.paper_bootstrap_context(...)` for bootstrap only.
+paper reads, use `self.paper_bootstrap_context(start=...)` for bootstrap only.
 `_advance_paper_state(...)` should process only dates after the stored cursor
 and should refit only when the original strategy's continuation calendar says a
 refit is due.
+
+For common walk-forward ML strategies, keep the implementation small: identify
+the active retrain anchor at cutover, bootstrap the current fitted model/scaler
+with `paper_bootstrap_context(start=...)`, persist fitted objects plus
+cursor/calendar state through `PaperStateStore`, make
+`build_paper_initial_state` create that
+cutover state, make `get_paper_signal(as_of=...)` load and advance only new
+dates, then rerun the same promotion command.
 
 ## Report
 

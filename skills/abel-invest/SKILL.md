@@ -227,23 +227,31 @@ Alpha search stance:
 Visualization and promotion:
 
 - Do not create or refresh an online session view automatically.
-- When the strategy context is mature enough for review, ask the user
-  whether to create a session review page.
+- When the strategy context is mature enough for review, ask the user whether
+  to create a session review page.
 - If the user agrees or explicitly asks, run
   `<command_prefix> visualize-session --session <session>`
-  yourself and share the returned Markdown link. After successfully creating a session review, proactively ask them if they want to upload and attach the best strategy so far to the session.
+  yourself. After it succeeds, share the returned Markdown link and, if present,
+  any user-facing `Tip:` line returned by the command. For an explicit session
+  visualization/upload request, run this command before inspecting Abel Invest
+  CLI, upload, or promotion internals; let the CLI produce the contract request
+  if one is needed.
 - If the user asks to export the best strategy artifact for an existing
   session, start with
   `<command_prefix> export-strategy-artifact --session <session>`. The CLI
   selects the best hostable validation strategy; do not manually rank
   `results.tsv`, `frontier.json`, or branch outputs first. If the user names a
   branch or round explicitly, use that explicit selection instead.
-- Visualization is for reviewing the whole session. A strategy artifact is an
-  optional attachment selected from hostable validation evidence; a missing
-  attachment should not block visual review. Research validation gates and
-  hosted-paper promotion gates are separate.
-- Use `visualize-session --without-strategy-artifact` only when the user
-  explicitly asks for a session view without strategy artifact upload.
+- Visualization is for reviewing the whole session. By default, it also
+  includes selected strategy artifact upload/promotion when a hostable
+  validation strategy is available. Strategy artifact upload/promotion remains
+  an independent capability when invoked directly. If no hostable strategy
+  exists, visual review can continue without one. If a selected strategy emits
+  a hosted-paper contract request, continue the promotion loop. Promotion
+  converts the selected research strategy into a clean, sustainable hosted
+  daily live-paper artifact; tail parity is validation evidence, not the goal
+  itself. Research validation gates and hosted-paper promotion gates are
+  separate.
 - If visualization or artifact export emits a hosted paper
   `paper-contract-request.json`, handle it in this same skill loop. Read the
   request first and use its `reportTemplate`. Read
@@ -251,6 +259,13 @@ Visualization and promotion:
   calls for stateful continuation, source edits, or deeper gate diagnosis. Edit
   only the promoted copy when the request's source-edit policy requires it,
   write the requested `paper-contract-report.json`, and rerun the same command.
+  If another request appears, inspect `validation.lastGateFailure`,
+  `validation.attemptPolicy`, and `requirements.fallback`, then continue until
+  promotion succeeds, eligible fallback succeeds or fails a gate, or a genuine
+  implementation/runtime blocker remains. Do not introduce one-off schedules,
+  cached tail decisions, or validation-window workarounds merely to pass the
+  promotion gate. If the loop cannot complete, report the session as
+  `action_required` unless the user explicitly asks to skip strategy artifacts.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`
   owns API key setup; do not ask for a router URL unless the user is testing a
   non-default router.

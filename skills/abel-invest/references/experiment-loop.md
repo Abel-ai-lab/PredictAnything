@@ -228,23 +228,27 @@ anchors, and interpretation. It is scout context, not validation evidence.
 ## Session Visualization
 
 Do not create an online session view automatically. When the strategy context
-is mature enough to be useful to review visually, ask the user whether to
-visualize the session. This can be after a strong candidate, after several
+is mature enough to be useful to review, ask the user whether to create a
+session review page. This can be after a strong candidate, after several
 informative candidate rounds, before promotion, or whenever the agent would
 naturally summarize that the exploration is worth a visual review. If the user
-agrees, or if the user explicitly asks to visualize the session, pass the
-session folder to the command:
+agrees, or if the user explicitly asks to create or publish the session review
+page, pass the session folder to the command:
 
 ```bash
 <command_prefix> visualize-session --session research/<ticker>/<exp_id>
 ```
 
-The command builds the online view from local session evidence. By default it
-also attaches the automatically selected best hostable validation strategy
-artifact when one is available; this attachment is selected by Sharpe, return,
-drawdown, and validation pass-rate. Research validation gates and hosted-paper
-promotion gates are separate; a missing strategy artifact should not block
-session visualization.
+The command builds the online view from local session evidence. By default,
+when the CLI selects a hostable validation strategy, that visualization also
+includes strategy artifact upload/promotion through the strategy-artifact
+capability. Strategy artifact upload/promotion remains an independent
+capability when invoked directly. If no hostable validation strategy exists,
+visual review can continue without an artifact. If a selected strategy emits a
+hosted-paper contract request, that session is
+`action_required` until the contract loop succeeds or a hard blocker remains.
+Do not pre-audit Abel Invest implementation internals before this command
+produces an actionable request.
 
 Use the entrypoint that matches the user's request. For session visualization
 or upload, keep using `visualize-session --session <session>` so the default
@@ -254,15 +258,15 @@ user-specified branch/round, use `promote-strategy --branch <branch> --round
 <round>`. Do not manually traverse `results.tsv` or branch directories to choose
 the best session strategy; the session-level commands own that selection.
 
-Use `visualize-session --without-strategy-artifact` only when the user explicitly
-asks for a session view without strategy artifact upload. If the command emits a
-hosted paper `paper-contract-request.json`, read the request first and use its
+If the command emits a hosted paper `paper-contract-request.json`, read the
+request first and use its
 `reportTemplate`. Open `contractGuide.referencePath` from the active Abel Invest
 skill when the request requires stateful continuation, source edits, or deeper
 gate diagnosis. Edit source only when `sourceEditPolicy` requires or genuinely
-allows it, write `paper-contract-report.json`, and rerun the same command. Do
-not start a separate agent process. The agent should not hand-assemble the
-payload or choose a router URL.
+allows it, write `paper-contract-report.json`, and rerun the same command.
+Leave contract-blocked sessions as `action_required` unless the user explicitly
+asks to skip strategy artifacts. Do not start a separate agent process. The
+agent should not hand-assemble the payload or choose a router URL.
 
 Default router base URL: `https://api.abel.ai/router/`.
 `abel-auth` is the canonical owner for API key setup. Maintainers should update
