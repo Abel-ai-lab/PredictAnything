@@ -26,7 +26,7 @@ Abel Strategy Research Skills turns AI agents into causal-graph-powered trading 
 - **Abel app handoff**  
   Upload mature strategy research into Abel for visualization, hosted review, paper tracking, and web-based sharing. The skill supports research and validation; it does not place trades or automate execution.
 
-## Example Workflows
+## Examples
 
 Ask your AI agent to:
 
