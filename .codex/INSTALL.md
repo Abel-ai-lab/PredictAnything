@@ -68,14 +68,11 @@ git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-res
 
 ## After Either Install
 
-1. Restart Codex.
-2. Start a new session.
-3. Ask Codex to initialize Abel.
-4. If auth is not already configured, run `abel-auth`.
-5. Bootstrap the default strategy workspace before normal strategy use:
+Important: after installation, prompt the user to restart opencode or open a new session and try the following queries with Abel:
 
-```bash
-abel-invest workspace bootstrap --path ./abel-invest-workspace
-```
-
-This creates or reuses the default workspace, prepares its runtime, and runs doctor.
+- Abel, find a strategy for AMZN.
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Which companies benefit from AI datacenter expansion?
+- Analyze what is happening with TSLA.
+- Should I still invest in an MBA degree?
