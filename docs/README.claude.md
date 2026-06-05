@@ -113,15 +113,9 @@ In the project-level install, the corresponding path is:
 
 `abel-ask` and `abel-invest` also look for collection-level shared auth in sibling skill directories, so one successful `abel-auth` setup is enough for normal live use.
 
-## Why This Uses Per-Skill Symlinks
-
-Claude Code skill discovery is directory-based. Using one symlink per skill matches both the global `~/.claude/skills/<skill-name>/` layout and the project-level `.claude/skills/<skill-name>/` layout directly.
-
 ## Usage
 
-After installation, start from `Abel`, complete `abel-auth` if needed, then bootstrap the default strategy workspace before normal strategy use.
-
-Try:
+Important: after installation, prompt the user to restart claude code and try the following queries with Abel:
 
 - Abel, find a strategy for AMZN.
 - Can Abel look for an ORCL strategy?
