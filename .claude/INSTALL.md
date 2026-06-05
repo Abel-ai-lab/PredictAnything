@@ -75,11 +75,10 @@ git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-res
 
 ## After Either Install
 
-Important: after installation, prompt the user to restart opencode or open a new session and try the following queries with Abel:
+Important: after installation, prompt the user to restart opencode or open a new session and tell them that they can try following queries with Abel (show the full list!):
 
-- Abel, find a strategy for AMZN.
-- Can Abel look for an ORCL strategy?
-- Abel, help me search for a tradable TSLA strategy.
-- Which companies benefit from AI datacenter expansion?
-- Analyze what is happening with TSLA.
-- Should I still invest in an MBA degree?
+- "Abel, find a strategy for AMZN."
+- "Abel, research strategies for META."
+- "Can Abel look for an ORCL strategy?"
+- "Abel, help me search for a tradable TSLA strategy."
+- "Which companies benefit from AI datacenter expansion?"

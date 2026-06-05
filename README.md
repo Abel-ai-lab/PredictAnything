@@ -31,6 +31,7 @@ Abel Strategy Research Skills turns AI agents into causal-graph-powered trading 
 Ask your AI agent to:
 
 - "Abel, find a strategy for AMZN."
+- "Abel, research strategies for META."
 - "Can Abel look for an ORCL strategy?"
 - "Abel, help me search for a tradable TSLA strategy."
 - "Which companies benefit from AI datacenter expansion?"
