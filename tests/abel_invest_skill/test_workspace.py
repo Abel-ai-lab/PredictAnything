@@ -6,14 +6,17 @@ from pathlib import Path
 
 import pytest
 
-import strategy_discovery_api as strategy_api
+from . import api as strategy_api
+from abel_invest import __version__ as ABEL_INVEST_VERSION
 from abel_invest.narrative_core.command_handlers import workspace as workspace_handlers
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
 from abel_invest.workspace_core.env import build_local_install_command, resolve_alpha_source
 from abel_invest.workspace_core.workspace import (
+    WORKSPACE_AGENTS_GUIDE_SCHEMA,
     build_default_manifest,
     render_workspace_status,
     scaffold_workspace,
+    workspace_agents_status,
 )
 
 
@@ -22,7 +25,13 @@ def test_scaffold_workspace_writes_alpha_owned_boundary_guidance(tmp_path: Path)
 
     readme = (root / "README.md").read_text(encoding="utf-8")
     agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+    readme_flat = readme.replace("\n", " ")
+    agents_flat = agents.replace("\n", " ")
 
+    assert agents.startswith(
+        f"<!-- {WORKSPACE_AGENTS_GUIDE_SCHEMA} version={ABEL_INVEST_VERSION} -->"
+    )
+    assert workspace_agents_status(root)["status"] == "current"
     assert "This workspace is for alpha-managed strategy search." in readme
     assert "Do not run `abel-edge init` inside this workspace." in readme
     assert "Do not bootstrap `./abel-invest-workspace` inside it." in readme
@@ -30,13 +39,21 @@ def test_scaffold_workspace_writes_alpha_owned_boundary_guidance(tmp_path: Path)
     assert "frontier.md" in readme
     assert "exploration_path.md" in readme
     assert "research_journal.md" not in readme
+    assert "best-strategy --session research/tsla/tsla-v1 --json" in readme
+    assert "without exporting, uploading, or promoting artifacts" in readme_flat
     assert "visualize-session" in readme
     assert "creates an online session view" in readme
+    assert "When exploration enters Completed" in readme
     assert "abel-auth" in readme
     assert "standalone `abel-edge init` project inside it" in agents
     assert "Do not create `./abel-invest-workspace` inside it." in agents
+    assert "`best-strategy --session <session> --json`" in agents
+    assert "does not export, upload, or promote artifacts" in agents_flat
     assert "visualize-session" in agents
     assert "online session view" in agents
+    assert "visualization is not a required step after every round" in agents_flat
+    assert "merely to compute the best strategy" in agents
+    assert "`render`, `status`, and `check` are audit actions only" in agents
     assert "exploration_path.md" in agents
     assert "research_journal.md" not in agents
     assert "abel-auth" in agents
@@ -45,6 +62,60 @@ def test_scaffold_workspace_writes_alpha_owned_boundary_guidance(tmp_path: Path)
     assert "edit research/" not in _bash_blocks(agents)
     assert "read research/" not in _bash_blocks(agents)
     assert "Report to the user" in agents
+
+
+def test_workspace_bootstrap_refreshes_stale_agents_guide(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    root = scaffold_workspace("trial-lab", target_root=tmp_path / "trial-lab")
+    (root / "AGENTS.md").write_text(
+        "# Old guide\nIf the command emits refactor-request.json, use it.\n",
+        encoding="utf-8",
+    )
+    assert workspace_agents_status(root)["status"] == "stale"
+
+    monkeypatch.setattr(
+        workspace_handlers,
+        "init_workspace_env",
+        lambda **_kwargs: argparse.Namespace(
+            python_path=root / ".venv/bin/python",
+            alpha_editable=True,
+            runtime_mode="existing_python",
+            venv_provider="test",
+        ),
+    )
+    monkeypatch.setattr(
+        workspace_handlers,
+        "run_doctor",
+        lambda _root: {
+            "status": "ready",
+            "workspace_mode": "alpha-managed strategy search",
+            "next_step": "abel-invest init-session --ticker <TICKER> --exp-id <session-id>",
+        },
+    )
+    args = argparse.Namespace(
+        workspace_command="bootstrap",
+        path=str(root),
+        name="trial-lab",
+        base_python=None,
+        alpha_source=None,
+        runtime_python=None,
+        no_editable=False,
+    )
+
+    assert strategy_api.handle_workspace_command(args) == 0
+    out = capsys.readouterr().out
+    agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+
+    assert "workspace_reuse: reused_existing_root" in out
+    assert "agents_guide: current (action=refreshed" in out
+    assert agents.startswith(
+        f"<!-- {WORKSPACE_AGENTS_GUIDE_SCHEMA} version={ABEL_INVEST_VERSION} -->"
+    )
+    assert "refactor-request.json" not in agents
+    assert workspace_agents_status(root)["status"] == "current"
 
 
 def _bash_blocks(text: str) -> str:
@@ -111,7 +182,7 @@ def test_render_workspace_status_reports_alpha_managed_mode(tmp_path: Path) -> N
 
 def test_resolve_alpha_source_defaults_to_skill_root() -> None:
     resolved = resolve_alpha_source()
-    expected = Path(__file__).resolve().parents[1] / "skills" / "abel-invest"
+    expected = Path(__file__).resolve().parents[2] / "skills" / "abel-invest"
 
     assert resolved == expected.resolve()
     assert (resolved / "pyproject.toml").exists()

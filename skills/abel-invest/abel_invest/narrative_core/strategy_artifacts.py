@@ -9,6 +9,7 @@ import hashlib
 from importlib.metadata import PackageNotFoundError, version
 import json
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any
 
@@ -26,20 +27,19 @@ from abel_invest.narrative_core.contracts.paths import (
 )
 from abel_invest.narrative_core.io import _now, read_tsv_rows
 from abel_invest.narrative_core.promotion import (
-    PROMOTION_ADAPTER_STATE_PATH,
     PROMOTION_GATE_FILENAME,
-    PROMOTION_MODE_AGENT_REFACTOR,
-    PROMOTION_MODE_AUTO_ADAPTER,
-    PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
+    PROMOTION_TAIL_TRACE_FILENAME,
+    PROMOTION_HOSTED_CONTRACT_SCOPE,
+    PROMOTION_MODE_AGENT_PAPER_CONTRACT,
+    PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED,
     PROMOTION_MODE_ZERO_CHANGE,
     PROMOTION_PATCH_FILENAME,
-    PROMOTION_REFACTOR_REPORT_FILENAME,
-    STATE_INTENT_FILENAME,
-    PromotionNeedsAgentRefactor,
+    PROMOTION_CONTRACT_REPORT_FILENAME,
+    PROMOTION_CONTRACT_REQUEST_FILENAME,
+    PromotionHostedPaperContractRequired,
     PromotionResult,
     prepare_promotion,
 )
-from abel_invest.narrative_core.promotion_replay import verify_promotion_replay
 from abel_invest.narrative_core.runtime.edge_commands import resolve_default_python_bin
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
 from abel_invest.workspace_core.edge_runtime import build_workspace_runtime_env
@@ -47,6 +47,21 @@ from abel_invest.workspace_core.workspace import find_workspace_root
 
 
 STRATEGY_ARTIFACT_SCHEMA = "abel-invest.strategy-artifact/v1"
+BEST_STRATEGY_REPORT_SCHEMA = "abel-invest.best-strategy/v1"
+USER_REPLY_REMINDER = {
+    "plainLanguage": (
+        "Report the selected strategy in plain language with total return, "
+        "Sharpe, max drawdown, and backtest period."
+    ),
+    "technicalDetails": (
+        "Do not lead with PASS, K, DSR, PositionIC, Edge verdict, selection "
+        "policy, file paths, or live quote context unless the user asks."
+    ),
+    "sessionReview": (
+        "If the session has any recorded strategy round, ask whether to "
+        "create the session review page."
+    ),
+}
 STRATEGY_ARTIFACT_ENTRYPOINT = "strategy/strategy.py"
 STRATEGY_ARTIFACT_CLASS_NAME = "BranchEngine"
 STRATEGY_ARTIFACT_PAPER_MODE = "paper_signal"
@@ -57,6 +72,7 @@ SELECTION_SCOPE_SESSION = "session"
 SELECTION_SCOPE_BRANCH = "branch"
 SELECTION_METRIC_ORDER = (
     "sharpe",
+    "near_tie_full_pass",
     "annual_return",
     "max_dd_abs",
     "pass_rate",
@@ -67,14 +83,15 @@ SELECTION_MANIFEST_METRIC_ORDER = (
     "calmar",
     "max_dd",
 )
-SELECTION_RULE_AUTO_BEST_PASS = (
-    "sharpe_desc_annual_return_desc_max_dd_abs_asc_pass_rate_desc_latest_v3"
-)
+SELECTION_NEAR_TIE_SHARPE_DELTA = 0.1
+SELECTION_RULE_AUTO_BEST_PASS = "sharpe_desc_near_tie_full_pass_v4"
 SELECTION_REASON_AUTO_BEST_PASS = (
-    "highest Sharpe, then highest annualized return, then least severe max "
-    "drawdown, then highest validation pass rate; ties use latest recorded round"
+    "Sharpe-first session selector; when Sharpe is within 0.10, use validation "
+    "reliability as a near-tie breaker, then annualized return, max-drawdown "
+    "magnitude, validation pass rate, and latest recorded round"
 )
 DEFAULT_PROMOTIONS_DIRNAME = "promotions"
+LEGACY_SESSION_ARTIFACT_DIRNAME = "paper_ready_artifact"
 RUNTIME_STATE_SCHEMA = "abel-invest.runtime-state/v1"
 DENYLISTED_STRATEGY_PARTS = {
     ".git",
@@ -97,7 +114,7 @@ DENYLISTED_STRATEGY_FILENAMES = {
     "id_rsa",
     "id_rsa.pub",
     "results.tsv",
-    STATE_INTENT_FILENAME,
+    "state_intent.json",
 }
 DENYLISTED_STRATEGY_SUFFIXES = {
     ".key",
@@ -125,6 +142,22 @@ ARTIFACT_NULL_METRIC_KEYS_BY_APPLICABILITY = (
         ("position_ic_stability", "position_ic_monthly_mean"),
     ),
     ("loss_years_applicable", ("loss_years",)),
+)
+STALE_STRATEGY_ARTIFACT_FILES = (
+    "artifact.zip",
+    "edge-result.artifact.json",
+    "edge-result.json",
+    "edge-validation.md",
+    "extra-source-map.json",
+    "manifest.json",
+    "metric-input.csv",
+    PROMOTION_GATE_FILENAME,
+    PROMOTION_TAIL_TRACE_FILENAME,
+    "trade-log.csv",
+)
+STALE_PROMOTED_GENERATED_FILES = (
+    PROMOTION_PATCH_FILENAME,
+    "paper-contract-report.artifact.json",
 )
 
 
@@ -231,11 +264,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
             eligible_count=0,
         )
 
-    ranked = sorted(
-        candidates,
-        key=_auto_best_strategy_rank_key,
-    )
-    selected = _with_rank(ranked[0], selection_rank=1)
+    selected = _with_rank(_select_auto_best_strategy(candidates), selection_rank=1)
     return StrategySelectionResult(
         selected=selected,
         skip_reason="",
@@ -315,6 +344,92 @@ def select_branch_promotion_candidate(
     )
 
 
+def best_strategy_report_payload(session: Path) -> dict[str, Any]:
+    """Return the read-only best strategy selection for stop reports."""
+
+    session = resolve_workspace_arg_path(session).resolve()
+    selection = select_best_pass_strategy(session)
+    selected = selection.selected
+    payload: dict[str, Any] = {
+        "schema": BEST_STRATEGY_REPORT_SCHEMA,
+        "session": str(session),
+        "status": "selected" if selected is not None else "skipped",
+        "skipReason": selection.skip_reason,
+        "selectionPolicy": {
+            "scope": SELECTION_SCOPE_SESSION,
+            "rule": SELECTION_RULE_AUTO_BEST_PASS,
+            "reason": SELECTION_REASON_AUTO_BEST_PASS,
+            "metricOrder": list(SELECTION_METRIC_ORDER),
+            "nearTieSharpeDelta": SELECTION_NEAR_TIE_SHARPE_DELTA,
+        },
+        "validationRoundCount": selection.validation_round_count,
+        "eligibleCount": selection.eligible_count,
+        "selectedBranchId": selection.selected_branch_id,
+        "selectedRoundId": selection.selected_round_id,
+        "selection": _selection_payload(selected),
+        "artifactExported": False,
+        "artifactUploadSkipped": True,
+        "promotionStarted": False,
+        "userReplyReminder": {
+            **USER_REPLY_REMINDER,
+            "sessionReviewEligible": selection.validation_round_count > 0,
+        },
+    }
+    if selected is None:
+        return payload
+
+    metrics = (
+        selected.edge_result.get("metrics")
+        if isinstance(selected.edge_result.get("metrics"), dict)
+        else {}
+    )
+    effective_window = (
+        selected.edge_result.get("effective_window")
+        if isinstance(selected.edge_result.get("effective_window"), dict)
+        else {}
+    )
+    requested_window = (
+        selected.edge_result.get("requested_window")
+        if isinstance(selected.edge_result.get("requested_window"), dict)
+        else {}
+    )
+    total_return = _to_float(metrics.get("total_return"))
+    payload.update(
+        {
+            "ticker": selected.ticker,
+            "branchId": selected.branch_id,
+            "roundId": selected.round_id,
+            "decision": selected.decision,
+            "verdict": _clean(selected.edge_result.get("verdict")),
+            "score": selected.score or _clean(selected.edge_result.get("score")),
+            "description": selected.description,
+            "metrics": {
+                "totalReturn": total_return,
+                "sharpe": selected.sharpe,
+                "maxDrawdown": selected.max_dd,
+                "loAdjusted": selected.lo_adjusted,
+                "annualReturn": selected.annual_return,
+                "calmar": selected.calmar,
+                "passRate": selected.pass_rate,
+            },
+            "backtestPeriod": {
+                "start": _clean(effective_window.get("start"))
+                or _clean(requested_window.get("start")),
+                "end": _clean(effective_window.get("end"))
+                or _clean(requested_window.get("end")),
+            },
+            "paths": {
+                "branch": str(selected.branch),
+                "engine": str(selected.strategy_source_path),
+                "edgeResult": str(selected.edge_result_path),
+                "edgeReport": str(selected.edge_report_path or ""),
+                "edgeHandoff": str(selected.edge_handoff_path or ""),
+            },
+        }
+    )
+    return payload
+
+
 def build_strategy_artifact_manifest(
     candidate: StrategyArtifactCandidate,
     *,
@@ -359,19 +474,17 @@ def build_strategy_artifact_manifest(
         field_name="backtest.effective_window.end",
     )
 
+    has_initial_state = (
+        promotion is not None
+        and any(_is_runtime_initial_state_file(item.artifact_path) for item in promotion.packaged_files)
+    )
     runtime_state = {
         "schema": RUNTIME_STATE_SCHEMA,
         "mode": "explicit_state_dir",
         "path": "state/",
         "bootstrap": {
-            "mode": "copy_from_base"
-            if promotion is not None
-            and any(entry.role == "initial_state" for entry in promotion.state_entries)
-            else "none",
-            "path": "runtime/initial-state/"
-            if promotion is not None
-            and any(entry.role == "initial_state" for entry in promotion.state_entries)
-            else None,
+            "mode": "copy_from_base" if has_initial_state else "none",
+            "path": "runtime/initial-state/" if has_initial_state else None,
         },
     }
     promotion_payload = _manifest_promotion_payload(candidate, promotion=promotion)
@@ -440,8 +553,8 @@ def build_strategy_artifact_manifest(
         ],
         "backtest": backtest_payload,
     }
-    if promotion is not None and promotion.state_intent_payload is not None:
-        manifest["stateIntent"] = promotion.state_intent_payload
+    if promotion is not None and promotion.paper_execution_profile:
+        manifest["runtime"]["paperExecutionProfile"] = promotion.paper_execution_profile
     manifest["promotion"] = promotion_payload
     return manifest
 
@@ -506,6 +619,7 @@ def _export_strategy_artifact_candidate(
     runner,
 ) -> dict[str, Any]:
     destination = _artifact_output_dir(candidate, output_dir=output_dir)
+    _cleanup_stale_strategy_artifact_outputs(candidate, destination=destination)
     python_bin = _normalize_python_bin(
         python_bin or resolve_default_python_bin(candidate.branch),
         anchor=candidate.session,
@@ -534,8 +648,6 @@ def _export_strategy_artifact_candidate(
         candidate,
         destination=destination,
         selection=selection,
-        python_bin=python_bin,
-        runner=runner,
     )
     if isinstance(promotion_or_result, dict):
         return promotion_or_result
@@ -567,19 +679,38 @@ def _export_strategy_artifact_candidate(
     )
 
     return {
+        "status": "exported",
+        "nextAction": "done",
         "artifactExported": True,
         "artifactUploadSkipped": False,
         "skipReason": "",
         "selectedBranchId": candidate.branch_id,
         "selectedRoundId": candidate.round_id,
+        "selection": _selection_payload(candidate),
         "manifestPath": str(manifest_path),
         "artifactPath": str(artifact_path),
         "tradeLogPath": str(trade_log_path),
         "artifactSha256": artifact_result.get("artifactSha256", ""),
         "artifactBytes": artifact_result.get("artifactBytes", 0),
         "fileCount": artifact_result.get("fileCount", 0),
+        "artifact": {
+            "path": str(artifact_path),
+            "sha256": artifact_result.get("artifactSha256", ""),
+            "bytes": artifact_result.get("artifactBytes", 0),
+            "fileCount": artifact_result.get("fileCount", 0),
+        },
         "promotionMode": promotion.mode,
         "promotionReport": promotion.report,
+        "promotion": _promotion_completion_payload(promotion),
+        "validation": _promotion_validation_payload(promotion),
+        "paths": {
+            "manifest": str(manifest_path),
+            "tradeLog": str(trade_log_path),
+            "gate": str(promotion.gate_path),
+            "trace": str(destination / PROMOTION_TAIL_TRACE_FILENAME)
+            if (destination / PROMOTION_TAIL_TRACE_FILENAME).is_file()
+            else "",
+        },
     }
 
 
@@ -588,8 +719,6 @@ def _prepare_promotion_for_export(
     *,
     destination: Path,
     selection: StrategySelectionResult,
-    python_bin: str,
-    runner,
 ) -> PromotionResult | dict[str, Any]:
     try:
         return prepare_promotion(
@@ -598,36 +727,42 @@ def _prepare_promotion_for_export(
             strategy_entrypoint=STRATEGY_ARTIFACT_ENTRYPOINT,
             is_denylisted_source=_is_denylisted_strategy_source,
             sha256_file=_sha256_file,
-            verify_promotion=lambda **kwargs: verify_promotion_replay(
-                python_bin=python_bin,
-                runner=runner,
-                run_edge_metric_input_export=_run_edge_metric_input_export,
-                sha256_file=_sha256_file,
-                clean=_clean,
-                **kwargs,
-            ),
+            runtime_env=_runtime_env(candidate.branch),
         )
-    except PromotionNeedsAgentRefactor as exc:
-        request_path = _promotion_refactor_request_path(destination)
+    except PromotionHostedPaperContractRequired as exc:
+        request_path = _promotion_contract_request_path(destination)
         result = _artifact_skip_result(
-            PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
+            PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED,
             selection=selection,
         )
-        result["promotionMode"] = PROMOTION_MODE_NEEDS_AGENT_REFACTOR
+        result["promotionMode"] = PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED
         result["promotionReport"] = {
-            "mode": PROMOTION_MODE_NEEDS_AGENT_REFACTOR,
+            "mode": PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED,
             "reason": str(exc),
         }
         if request_path.is_file():
             result["promotionReport"]["requestPath"] = str(request_path)
+            request_payload = _load_json_object(request_path)
+            result["requestPath"] = str(request_path)
+            result["sourcePath"] = _clean(request_payload.get("sourcePath"))
+            output = (
+                request_payload.get("output")
+                if isinstance(request_payload.get("output"), dict)
+                else {}
+            )
+            result["reportPath"] = _clean(output.get("reportPath"))
+            result["rerunCommand"] = _promotion_rerun_command(candidate)
         gate_path = destination / PROMOTION_GATE_FILENAME
         if gate_path.is_file():
             result["promotionReport"]["gatePath"] = str(gate_path)
+            result["gatePath"] = str(gate_path)
+            result["failureSummary"] = _gate_failure_summary(gate_path)
+            result["nextAction"] = "fix_paper_contract_and_rerun"
         return result
 
 
-def _promotion_refactor_request_path(destination: Path) -> Path:
-    return destination / "promoted" / "refactor-request.json"
+def _promotion_contract_request_path(destination: Path) -> Path:
+    return destination / "promoted" / PROMOTION_CONTRACT_REQUEST_FILENAME
 
 
 def export_strategy_artifact_command(args) -> int:
@@ -641,6 +776,49 @@ def export_strategy_artifact_command(args) -> int:
         python_bin=args.python_bin,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def best_strategy_command(args) -> int:
+    """CLI adapter for read-only session best-strategy selection."""
+
+    session = resolve_workspace_arg_path(args.session).resolve()
+    payload = best_strategy_report_payload(session)
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if payload.get("status") != "selected":
+        print(
+            "No best strategy selected "
+            f"(reason={payload.get('skipReason') or 'unknown'})."
+        )
+        print("Read-only selection: no artifact export, upload, or promotion was run.")
+        return 0
+
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    period = (
+        payload.get("backtestPeriod")
+        if isinstance(payload.get("backtestPeriod"), dict)
+        else {}
+    )
+    print(f"Selected strategy: {payload.get('branchId')}/{payload.get('roundId')}")
+    print(
+        "Backtest: "
+        f"{period.get('start') or 'unknown'} -> {period.get('end') or 'unknown'}"
+    )
+    print(
+        "Metrics: "
+        f"total_return={metrics.get('totalReturn')}, "
+        f"sharpe={metrics.get('sharpe')}, "
+        f"max_drawdown={metrics.get('maxDrawdown')}"
+    )
+    print("Read-only selection: no artifact export, upload, or promotion was run.")
+    print(
+        "User reply reminder: use plain language with total return, Sharpe, "
+        "max drawdown, and backtest period; avoid PASS/K/DSR/PositionIC/Edge "
+        "verdict or live quote context unless asked; ask about the session "
+        "review page when a recorded strategy round exists."
+    )
     return 0
 
 
@@ -701,6 +879,11 @@ def _candidate_from_row(
     session_round_index: int = 0,
 ) -> StrategyArtifactCandidate | None:
     result_path = _resolve_session_relative_path(session, row.get("result_path"))
+    round_id = _clean(row.get("round_id"))
+    if result_path is None and round_id:
+        inferred_result_path = branch / "outputs" / f"{round_id}-edge-result.json"
+        if inferred_result_path.is_file():
+            result_path = inferred_result_path
     if result_path is None or not result_path.is_file():
         return None
 
@@ -731,7 +914,11 @@ def _candidate_from_row(
         return None
 
     report_path = _existing_optional_path(session, row.get("report_path"))
+    if report_path is None and round_id:
+        report_path = _existing_optional_file(branch / "outputs" / f"{round_id}-edge-validation.md")
     handoff_path = _existing_optional_path(session, row.get("handoff_path"))
+    if handoff_path is None and round_id:
+        handoff_path = _existing_optional_file(branch / "outputs" / f"{round_id}-edge-handoff.json")
     metric_input_path = _infer_metric_input_path(result_path)
     return StrategyArtifactCandidate(
         session=session,
@@ -744,7 +931,7 @@ def _candidate_from_row(
         source_session_id=_clean(row.get("exp_id")) or session.name,
         ticker=_clean(row.get("ticker")) or session.parent.name.upper(),
         branch_id=_clean(row.get("branch_id")) or branch.name,
-        round_id=_clean(row.get("round_id")),
+        round_id=round_id,
         decision=_clean(row.get("decision")),
         mode=_clean(row.get("mode")),
         description=_clean(row.get("description")),
@@ -787,6 +974,32 @@ def _auto_best_strategy_rank_key(
     )
 
 
+def _select_auto_best_strategy(
+    candidates: list[StrategyArtifactCandidate],
+) -> StrategyArtifactCandidate:
+    ranked = sorted(candidates, key=_auto_best_strategy_rank_key)
+    top = ranked[0]
+    if _is_full_pass_candidate(top):
+        return top
+
+    near_tie_full_pass = [
+        item
+        for item in ranked
+        if _is_full_pass_candidate(item)
+        and top.sharpe - item.sharpe <= SELECTION_NEAR_TIE_SHARPE_DELTA + 1e-9
+    ]
+    if near_tie_full_pass:
+        return near_tie_full_pass[0]
+    return top
+
+
+def _is_full_pass_candidate(item: StrategyArtifactCandidate) -> bool:
+    return (
+        _clean(item.edge_result.get("verdict")).upper() == "PASS"
+        and item.pass_rate >= 1.0
+    )
+
+
 def _artifact_skip_result(
     skip_reason: str,
     *,
@@ -794,7 +1007,9 @@ def _artifact_skip_result(
     selected_branch_id: str | None = None,
     selected_round_id: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    selected = selection.selected if selection else None
+    action_required = skip_reason == PROMOTION_STATUS_HOSTED_PAPER_CONTRACT_REQUIRED
+    result = {
         "artifactExported": False,
         "artifactUploadSkipped": True,
         "skipReason": skip_reason,
@@ -803,6 +1018,121 @@ def _artifact_skip_result(
         "selectedRoundId": (selection.selected_round_id if selection else None)
         or selected_round_id,
     }
+    if action_required:
+        result["status"] = "action_required"
+        result["nextAction"] = "write_paper_contract_report"
+        result["selection"] = _selection_payload(selected) if selected is not None else {}
+    return result
+
+
+def _selection_payload(candidate: StrategyArtifactCandidate | None) -> dict[str, Any]:
+    if candidate is None:
+        return {}
+    mode = (
+        "auto_best"
+        if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS
+        else "explicit"
+    )
+    return {
+        "mode": mode,
+        "rawMode": candidate.selection_mode,
+        "scope": candidate.selection_scope,
+        "branchId": candidate.branch_id,
+        "roundId": candidate.round_id,
+        "rank": candidate.selection_rank,
+        "rule": SELECTION_RULE_AUTO_BEST_PASS if mode == "auto_best" else "",
+        "reason": SELECTION_REASON_AUTO_BEST_PASS if mode == "auto_best" else "",
+    }
+
+
+def _promotion_rerun_command(candidate: StrategyArtifactCandidate) -> str:
+    if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS:
+        return f"abel-invest export-strategy-artifact --session {candidate.session}"
+    command = f"abel-invest promote-strategy --branch {candidate.branch}"
+    if candidate.round_id:
+        command += f" --round {candidate.round_id}"
+    return command
+
+
+def _promotion_completion_payload(promotion: PromotionResult) -> dict[str, Any]:
+    report = promotion.report if isinstance(promotion.report, dict) else {}
+    return {
+        "mode": promotion.mode,
+        "sourceEdit": {
+            "changed": bool(
+                report.get("replacementCount") or report.get("contractReplacementCount")
+            )
+        },
+        "continuationMethod": _promotion_continuation_method(report),
+        "paperExecutionProfile": promotion.paper_execution_profile or {},
+        "initialStateFileCount": report.get("initialStateFileCount", 0),
+        "packagedFileCount": report.get("packagedFileCount", 0),
+    }
+
+
+def _promotion_validation_payload(promotion: PromotionResult) -> dict[str, Any]:
+    gate = _load_json_object(promotion.gate_path)
+    paper_gate = _paper_dry_run_gate(gate)
+    smoke = (
+        paper_gate.get("details", {}).get("smoke")
+        if isinstance(paper_gate.get("details"), dict)
+        else {}
+    )
+    tail = smoke.get("tailConsistency") if isinstance(smoke, dict) else {}
+    return {
+        "gateStatus": _clean(gate.get("status")) or "unknown",
+        "paperDryRun": _clean(paper_gate.get("status")) or "unknown",
+        "tailParity": {
+            "status": _clean(tail.get("status")) if isinstance(tail, dict) else "",
+            "mismatchCount": tail.get("mismatchCount")
+            if isinstance(tail, dict)
+            else None,
+            "comparisonCount": tail.get("comparisonCount")
+            if isinstance(tail, dict)
+            else None,
+        },
+        "smokeElapsedSeconds": smoke.get("elapsedSeconds")
+        if isinstance(smoke, dict)
+        else None,
+        "idempotent": smoke.get("sameResult") if isinstance(smoke, dict) else None,
+        "generatedInitialStateFileCount": smoke.get("generatedInitialStateFileCount")
+        if isinstance(smoke, dict)
+        else 0,
+    }
+
+
+def _gate_failure_summary(gate_path: Path) -> dict[str, Any]:
+    gate = _load_json_object(gate_path)
+    failed = []
+    for item in gate.get("gates") if isinstance(gate.get("gates"), list) else []:
+        if not isinstance(item, dict) or item.get("status") == "passed":
+            continue
+        details = item.get("details") if isinstance(item.get("details"), dict) else {}
+        failed.append(
+            {
+                "name": _clean(item.get("name")),
+                "status": _clean(item.get("status")),
+                "method": _clean(item.get("method")),
+                "reason": _clean(details.get("reason") or item.get("reason")),
+            }
+        )
+    return {"status": _clean(gate.get("status")), "failedGates": failed}
+
+
+def _paper_dry_run_gate(gate: dict[str, Any]) -> dict[str, Any]:
+    for item in gate.get("gates") if isinstance(gate.get("gates"), list) else []:
+        if isinstance(item, dict) and item.get("name") == "paper_dry_run":
+            return item
+    return {}
+
+
+def _promotion_continuation_method(report: dict[str, Any]) -> str:
+    profile = report.get("paperExecutionProfile")
+    if not isinstance(profile, dict):
+        return ""
+    # The report keeps the canonical profile, but method lives in the gate
+    # details. The top-level mode remains the stable completion signal here.
+    return _clean(report.get("continuationMethod"))
 
 
 def _artifact_output_dir(
@@ -820,6 +1150,62 @@ def _artifact_output_dir(
         )
     destination.mkdir(parents=True, exist_ok=True)
     return destination
+
+
+def _cleanup_stale_strategy_artifact_outputs(
+    candidate: StrategyArtifactCandidate,
+    *,
+    destination: Path,
+) -> None:
+    legacy_session_artifact = candidate.session / LEGACY_SESSION_ARTIFACT_DIRNAME
+    if legacy_session_artifact.is_dir():
+        shutil.rmtree(legacy_session_artifact)
+    elif legacy_session_artifact.exists():
+        legacy_session_artifact.unlink()
+
+    active_contract = _destination_has_active_agent_contract(destination)
+    for name in STALE_STRATEGY_ARTIFACT_FILES:
+        path = destination / name
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+    promoted_dir = destination / "promoted"
+    if not promoted_dir.exists():
+        return
+    if not active_contract:
+        shutil.rmtree(promoted_dir)
+        return
+    for name in STALE_PROMOTED_GENERATED_FILES:
+        path = promoted_dir / name
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+
+
+def _destination_has_active_agent_contract(destination: Path) -> bool:
+    promoted_dir = destination / "promoted"
+    promoted_source = promoted_dir / "engine.py"
+    report = promoted_dir / PROMOTION_CONTRACT_REPORT_FILENAME
+    if not promoted_source.is_file() or not report.is_file():
+        return False
+    gate_status = _promotion_gate_status(destination / PROMOTION_GATE_FILENAME)
+    if gate_status == "failed":
+        return True
+    if gate_status == "passed":
+        return False
+    if (destination / "artifact.zip").exists() or (destination / "manifest.json").exists():
+        return False
+    return True
+
+
+def _promotion_gate_status(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return _clean(payload.get("status"))
 
 
 def _ensure_metric_input_for_artifact(
@@ -1109,18 +1495,17 @@ def _manifest_promotion_payload(
             else None,
         },
     }
-    if mode == PROMOTION_MODE_AUTO_ADAPTER:
-        payload["adapter"] = {
-            "kind": PROMOTION_ADAPTER_STATE_PATH,
-            "scope": "state_path_normalization",
+    if mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
+        contract = {
+            "kind": PROMOTION_HOSTED_CONTRACT_SCOPE,
+            "summary": promotion.report.get("contractSummary")
+            if promotion is not None
+            else "Agent declared the hosted paper contract.",
+            "reportPath": f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}",
         }
-    if mode == PROMOTION_MODE_AGENT_REFACTOR:
-        payload["refactor"] = {
-            "kind": "agent_assisted",
-            "summary": "Refactored dynamic state path construction to ctx.state_dir.",
-            "patchPath": f"edge/{PROMOTION_PATCH_FILENAME}",
-            "reportPath": f"edge/{PROMOTION_REFACTOR_REPORT_FILENAME}",
-        }
+        if promotion is not None and promotion.patch_path is not None:
+            contract["patchPath"] = f"edge/{PROMOTION_PATCH_FILENAME}"
+        payload["contract"] = contract
     return payload
 
 
@@ -1147,23 +1532,26 @@ def _required_artifact_source_files(
 
     files = strategy_files + files
     if promotion is not None:
-        for entry in promotion.state_entries:
-            if entry.role == "initial_state":
-                files.append((f"runtime/initial-state/{entry.path}", entry.source_path))
-            elif entry.role == "runtime_asset":
-                files.append((f"strategy/{entry.path}", entry.source_path))
+        for item in promotion.packaged_files:
+            if any(existing_path == item.artifact_path for existing_path, _ in files):
+                continue
+            files.append((item.artifact_path, item.source_path))
         files.append((f"edge/{PROMOTION_GATE_FILENAME}", promotion.gate_path))
         if promotion.patch_path is not None:
             files.append((f"edge/{PROMOTION_PATCH_FILENAME}", promotion.patch_path))
-        if promotion.mode == PROMOTION_MODE_AGENT_REFACTOR:
-            if promotion.refactor_report_path is None:
-                raise RuntimeError("agent_refactor promotion is missing refactor evidence")
+        if promotion.mode == PROMOTION_MODE_AGENT_PAPER_CONTRACT:
+            if promotion.contract_report_path is None:
+                raise RuntimeError("agent_paper_contract promotion is missing contract evidence")
             files.append(
                 (
-                    f"edge/{PROMOTION_REFACTOR_REPORT_FILENAME}",
-                    promotion.refactor_report_path,
+                    f"edge/{PROMOTION_CONTRACT_REPORT_FILENAME}",
+                    promotion.contract_report_path,
                 )
             )
+        for artifact_path, source_path in sorted(promotion.extra_source_map.items()):
+            if any(existing_path == artifact_path for existing_path, _ in files):
+                continue
+            files.append((artifact_path, source_path))
     seen_paths: set[str] = set()
     for artifact_path, source_path in files:
         if artifact_path in seen_paths:
@@ -1185,21 +1573,40 @@ def _strategy_source_files(
         promotion.strategy_source_path if promotion is not None else candidate.strategy_source_path
     )
     files = [(STRATEGY_ARTIFACT_ENTRYPOINT, strategy_source_path)]
-    promoted_state_paths = {
-        Path(entry.path)
-        for entry in (promotion.state_entries if promotion is not None else ())
-        if entry.role in {"initial_state", "runtime_asset"}
-    }
+    packaged_branch_sources = _packaged_branch_sources(candidate, promotion=promotion)
     for source_path in sorted(path for path in candidate.branch.rglob("*") if path.is_file()):
         if source_path == candidate.strategy_source_path:
             continue
         relative = source_path.relative_to(candidate.branch)
-        if relative in promoted_state_paths:
+        if source_path.resolve() in packaged_branch_sources:
             continue
         if _is_denylisted_strategy_source(relative):
             continue
         files.append((f"strategy/{relative.as_posix()}", source_path))
     return files
+
+
+def _is_runtime_initial_state_file(artifact_path: str) -> bool:
+    return str(artifact_path or "").startswith("runtime/initial-state/")
+
+
+def _packaged_branch_sources(
+    candidate: StrategyArtifactCandidate,
+    *,
+    promotion: PromotionResult | None,
+) -> set[Path]:
+    if promotion is None:
+        return set()
+    branch_root = candidate.branch.resolve()
+    sources: set[Path] = set()
+    for item in promotion.packaged_files:
+        try:
+            source = item.source_path.resolve()
+            source.relative_to(branch_root)
+        except ValueError:
+            continue
+        sources.add(source)
+    return sources
 
 
 def _is_denylisted_strategy_source(relative: Path) -> bool:
@@ -1300,6 +1707,10 @@ def _existing_optional_path(session: Path, value: str | None) -> Path | None:
     if path is None or not path.is_file():
         return None
     return path
+
+
+def _existing_optional_file(path: Path) -> Path | None:
+    return path if path.is_file() else None
 
 
 def _manifest_backtest_metrics(

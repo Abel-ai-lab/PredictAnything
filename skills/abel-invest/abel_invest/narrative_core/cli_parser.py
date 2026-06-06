@@ -343,14 +343,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build and print the payload without sending it.",
     )
     visualize_session.add_argument(
-        "--without-strategy-artifact",
-        action="store_true",
-        help=(
-            "Upload only the narrative session view and skip strategy artifact "
-            "preparation/upload."
-        ),
-    )
-    visualize_session.add_argument(
         "--artifact-output-dir",
         default=None,
         help="Optional local directory for generated strategy artifact files.",
@@ -361,11 +353,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Interpreter used to run Abel-edge artifact helpers (defaults to workspace python).",
     )
 
+    best_strategy = sub.add_parser(
+        "best-strategy",
+        help=(
+            "Select the current best session strategy without exporting, "
+            "uploading, or promoting artifacts"
+        ),
+    )
+    best_strategy.add_argument(
+        "--session",
+        required=True,
+        help="Session directory. Selection is read-only and uses the session default policy.",
+    )
+    best_strategy.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON instead of a compact text summary.",
+    )
+
     export_strategy_artifact = sub.add_parser(
         "export-strategy-artifact",
-        help="Export the best ranked hostable strategy artifact for a session without uploading it",
+        help=(
+            "Export the CLI-selected best hostable validation strategy artifact "
+            "for a session without uploading it"
+        ),
     )
-    export_strategy_artifact.add_argument("--session", required=True)
+    export_strategy_artifact.add_argument(
+        "--session",
+        required=True,
+        help=(
+            "Session directory. The CLI selects the best hostable validation "
+            "strategy when no explicit branch/round is provided."
+        ),
+    )
     export_strategy_artifact.add_argument(
         "--output-dir",
         default=None,

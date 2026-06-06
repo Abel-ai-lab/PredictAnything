@@ -131,19 +131,17 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
     workspace_root = find_workspace_root(session)
     base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
-    artifact_export_result = None
-    if not getattr(args, "without_strategy_artifact", False):
-        artifact_export_result = export_selected_strategy_artifact(
-            session,
-            output_dir=Path(args.artifact_output_dir)
-            if getattr(args, "artifact_output_dir", None)
-            else None,
-            python_bin=getattr(args, "python_bin", None),
-        )
-        skipped = artifact_export_result.get("artifactUploadSkipped")
-        skip_reason = artifact_export_result.get("skipReason")
-        if skipped and skip_reason == "needs_agent_refactor":
-            raise RuntimeError(_strategy_artifact_preupload_error(artifact_export_result))
+    artifact_export_result = export_selected_strategy_artifact(
+        session,
+        output_dir=Path(args.artifact_output_dir)
+        if getattr(args, "artifact_output_dir", None)
+        else None,
+        python_bin=getattr(args, "python_bin", None),
+    )
+    skipped = artifact_export_result.get("artifactUploadSkipped")
+    skip_reason = artifact_export_result.get("skipReason")
+    if skipped and skip_reason == "hosted_paper_contract_required":
+        raise RuntimeError(_strategy_artifact_preupload_error(artifact_export_result))
     result = post_skill_dashboard_session(
         base_url=base_url,
         api_key=api_key,

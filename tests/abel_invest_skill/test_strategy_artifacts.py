@@ -1,0 +1,1090 @@
+from __future__ import annotations
+
+import ast
+from contextlib import contextmanager
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from abel_invest.narrative_core.contracts.constants import EVENTS_HEADER, RESULTS_HEADER
+from abel_invest.narrative_core.io import write_tsv_rows
+from abel_invest.narrative_core.promotion import (
+    PromotionHostedPaperContractRequired,
+)
+from abel_invest.narrative_core.promotion import source_scan
+from abel_invest.narrative_core.promotion.paper.smoke import (
+    _paper_smoke_context,
+    _run_paper_validation_state_bootstrap,
+)
+from abel_invest.narrative_core.promotion.request import (
+    _write_hosted_paper_contract_request,
+)
+from abel_invest.narrative_core.promotion.tail_oracle import (
+    paper_tail_oracle_rows,
+    paper_tail_position_change_count,
+    paper_tail_selection_reason,
+    select_paper_tail_oracle_sample,
+)
+from abel_invest.narrative_core.promotion.validation import (
+    _validate_agent_paper_signal_contract,
+)
+from abel_invest.narrative_core.strategy_artifact_upload import (
+    _strategy_artifact_preupload_error,
+    render_strategy_artifact_upload_lines,
+)
+from abel_invest.narrative_core.strategy_artifacts import (
+    SELECTION_METRIC_ORDER,
+    _cleanup_stale_strategy_artifact_outputs,
+    best_strategy_report_payload,
+    select_best_pass_strategy,
+)
+
+
+def _write_candidate(
+    session,
+    *,
+    branch_id: str,
+    round_id: str,
+    lo_adjusted: float,
+    sharpe: float,
+    annual_return: float,
+    pass_score: str,
+    verdict: str = "PASS",
+    calmar: float = 1.0,
+    max_dd: float = -0.2,
+):
+    branch = session / "branches" / branch_id
+    result_path = branch / "outputs" / f"{round_id}-edge-result.json"
+    branch.mkdir(parents=True)
+    (branch / "engine.py").write_text("class BranchEngine:\n    pass\n", encoding="utf-8")
+    result_path.parent.mkdir(parents=True)
+    result_path.write_text(
+        json.dumps(
+            {
+                "verdict": verdict,
+                "score": pass_score,
+                "metrics": {
+                    "lo_adjusted": lo_adjusted,
+                    "sharpe": sharpe,
+                    "annual_return": annual_return,
+                    "calmar": calmar,
+                    "max_dd": max_dd,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    write_tsv_rows(
+        branch / "results.tsv",
+        RESULTS_HEADER,
+        [
+            {
+                "exp_id": session.name,
+                "ticker": "META",
+                "branch_id": branch_id,
+                "round_id": round_id,
+                "decision": "keep",
+                "lo_adj": f"{lo_adjusted:.3f}",
+                "sharpe": f"{sharpe:.3f}",
+                "max_dd": f"{max_dd:.4f}",
+                "score": pass_score,
+                "verdict": verdict,
+                "result_path": str(result_path.relative_to(session)),
+            }
+        ],
+    )
+
+
+def test_select_best_pass_strategy_prefers_full_pass_within_sharpe_near_tie(tmp_path):
+    session = tmp_path / "research" / "meta" / "session-a"
+    session.mkdir(parents=True)
+    _write_candidate(
+        session,
+        branch_id="all-gates-lower-objective",
+        round_id="r1",
+        lo_adjusted=1.8,
+        sharpe=1.5,
+        annual_return=0.80,
+        pass_score="4/4",
+    )
+    _write_candidate(
+        session,
+        branch_id="full-pass-lower-sharpe",
+        round_id="r2",
+        lo_adjusted=2.0,
+        sharpe=2.4,
+        annual_return=0.15,
+        pass_score="4/4",
+    )
+    _write_candidate(
+        session,
+        branch_id="near-pass-higher-annual-return",
+        round_id="r3",
+        lo_adjusted=1.9,
+        sharpe=2.5,
+        annual_return=0.30,
+        pass_score="3/4",
+        verdict="FAIL",
+    )
+    write_tsv_rows(
+        session / "events.tsv",
+        EVENTS_HEADER,
+        [
+            {
+                "event": "round_recorded",
+                "branch_id": "all-gates-lower-objective",
+                "round_id": "r1",
+            },
+            {
+                "event": "round_recorded",
+                "branch_id": "full-pass-lower-sharpe",
+                "round_id": "r2",
+            },
+            {
+                "event": "round_recorded",
+                "branch_id": "near-pass-higher-annual-return",
+                "round_id": "r3",
+            },
+        ],
+    )
+
+    selection = select_best_pass_strategy(session)
+
+    assert selection.selected is not None
+    assert selection.selected.branch_id == "full-pass-lower-sharpe"
+    assert tuple(SELECTION_METRIC_ORDER) == (
+        "sharpe",
+        "near_tie_full_pass",
+        "annual_return",
+        "max_dd_abs",
+        "pass_rate",
+    )
+    assert selection.selected.selection_metric_values["sharpe"] == 2.4
+    assert selection.selected.selection_metric_values["pass_rate"] == 1.0
+
+
+def test_select_best_validation_strategy_keeps_high_sharpe_when_gap_is_material(tmp_path):
+    session = tmp_path / "research" / "meta" / "session-b"
+    session.mkdir(parents=True)
+    _write_candidate(
+        session,
+        branch_id="lower-sharpe-pass",
+        round_id="r1",
+        lo_adjusted=1.8,
+        sharpe=1.8,
+        annual_return=0.25,
+        pass_score="9/9",
+        verdict="PASS",
+    )
+    _write_candidate(
+        session,
+        branch_id="higher-sharpe-near-pass",
+        round_id="r2",
+        lo_adjusted=2.5,
+        sharpe=2.9,
+        annual_return=0.40,
+        pass_score="8/9",
+        verdict="FAIL",
+    )
+    write_tsv_rows(
+        session / "events.tsv",
+        EVENTS_HEADER,
+        [
+            {
+                "event": "round_recorded",
+                "branch_id": "lower-sharpe-pass",
+                "round_id": "r1",
+            },
+            {
+                "event": "round_recorded",
+                "branch_id": "higher-sharpe-near-pass",
+                "round_id": "r2",
+            },
+        ],
+    )
+
+    selection = select_best_pass_strategy(session)
+
+    assert selection.selected is not None
+    assert selection.selected.branch_id == "higher-sharpe-near-pass"
+    assert selection.selected.edge_result["verdict"] == "FAIL"
+    assert selection.selected.selection_metric_values["pass_rate"] == 8 / 9
+
+
+def test_select_best_strategy_near_tie_boundary_is_tenth_sharpe(tmp_path):
+    session = tmp_path / "research" / "meta" / "session-c"
+    session.mkdir(parents=True)
+    _write_candidate(
+        session,
+        branch_id="full-pass-boundary",
+        round_id="r1",
+        lo_adjusted=2.2,
+        sharpe=2.8,
+        annual_return=0.28,
+        pass_score="9/9",
+        verdict="PASS",
+    )
+    _write_candidate(
+        session,
+        branch_id="near-pass-top",
+        round_id="r2",
+        lo_adjusted=2.4,
+        sharpe=2.9,
+        annual_return=0.42,
+        pass_score="8/9",
+        verdict="FAIL",
+    )
+    write_tsv_rows(
+        session / "events.tsv",
+        EVENTS_HEADER,
+        [
+            {
+                "event": "round_recorded",
+                "branch_id": "full-pass-boundary",
+                "round_id": "r1",
+            },
+            {
+                "event": "round_recorded",
+                "branch_id": "near-pass-top",
+                "round_id": "r2",
+            },
+        ],
+    )
+
+    selection = select_best_pass_strategy(session)
+
+    assert selection.selected is not None
+    assert selection.selected.branch_id == "full-pass-boundary"
+
+
+def test_best_strategy_payload_includes_user_reply_reminder(tmp_path):
+    session = tmp_path / "research" / "meta" / "session-reminder"
+    session.mkdir(parents=True)
+    _write_candidate(
+        session,
+        branch_id="selected",
+        round_id="r1",
+        lo_adjusted=2.0,
+        sharpe=2.2,
+        annual_return=0.30,
+        pass_score="9/9",
+        verdict="PASS",
+    )
+    write_tsv_rows(
+        session / "events.tsv",
+        EVENTS_HEADER,
+        [
+            {
+                "event": "round_recorded",
+                "branch_id": "selected",
+                "round_id": "r1",
+            },
+        ],
+    )
+
+    payload = best_strategy_report_payload(session)
+
+    reminder = payload["userReplyReminder"]
+    assert reminder["sessionReviewEligible"] is True
+    assert "plain language" in reminder["plainLanguage"]
+    assert "PASS" in reminder["technicalDetails"]
+    assert "live quote" in reminder["technicalDetails"]
+    assert "session review page" in reminder["sessionReview"]
+
+
+def test_strategy_artifact_skip_line_keeps_session_view_language():
+    lines = render_strategy_artifact_upload_lines(
+        {
+            "artifactUploadSkipped": True,
+            "skipReason": "no_hostable_validation_strategy",
+        }
+    )
+
+    assert lines == [
+        "Session view created without a strategy artifact: recorded validation rounds "
+        "exist, but none currently has the files needed for a hostable strategy artifact"
+    ]
+    assert "skipped" not in lines[0].lower()
+
+
+def test_strategy_artifact_success_lines_include_strategy_detail_tip():
+    lines = render_strategy_artifact_upload_lines(
+        {
+            "artifactUploadId": "upload_1",
+            "admissionStatus": "accepted",
+            "selectedBranchId": "momentum_lead",
+            "selectedRoundId": "round-006",
+        }
+    )
+
+    assert lines == [
+        "Strategy artifact uploaded: upload_1 "
+        "(admission=accepted, selected=momentum_lead/round-006)",
+        "Tip: On the session review page, scroll to Session strategies near the "
+        "bottom and click View Strategy to open the bound strategy detail page.",
+    ]
+
+
+def test_artifact_export_cleanup_removes_legacy_and_completed_outputs(tmp_path):
+    session = tmp_path / "research" / "meta" / "session"
+    session.mkdir(parents=True)
+    legacy = session / "paper_ready_artifact"
+    legacy.mkdir()
+    (legacy / "old.txt").write_text("old", encoding="utf-8")
+    destination = tmp_path / "artifact"
+    promoted = destination / "promoted"
+    promoted.mkdir(parents=True)
+    (destination / "artifact.zip").write_text("zip", encoding="utf-8")
+    (destination / "manifest.json").write_text("{}", encoding="utf-8")
+    (destination / "promotion-gate.json").write_text(
+        json.dumps({"status": "passed"}),
+        encoding="utf-8",
+    )
+    (destination / "promotion-tail-trace.json").write_text(
+        json.dumps({"status": "passed"}),
+        encoding="utf-8",
+    )
+    (promoted / "engine.py").write_text("class BranchEngine: pass\n", encoding="utf-8")
+    (promoted / "paper-contract-report.json").write_text("{}", encoding="utf-8")
+
+    _cleanup_stale_strategy_artifact_outputs(
+        SimpleNamespace(session=session),
+        destination=destination,
+    )
+
+    assert not legacy.exists()
+    assert not (destination / "artifact.zip").exists()
+    assert not (destination / "promotion-tail-trace.json").exists()
+    assert not promoted.exists()
+
+
+def test_artifact_export_cleanup_preserves_active_agent_contract(tmp_path):
+    session = tmp_path / "research" / "meta" / "session"
+    session.mkdir(parents=True)
+    destination = tmp_path / "artifact"
+    promoted = destination / "promoted"
+    promoted.mkdir(parents=True)
+    (destination / "artifact.zip").write_text("stale", encoding="utf-8")
+    (destination / "promotion-gate.json").write_text(
+        json.dumps({"status": "failed"}),
+        encoding="utf-8",
+    )
+    (promoted / "engine.py").write_text("class BranchEngine: pass\n", encoding="utf-8")
+    (promoted / "paper-contract-report.json").write_text("{}", encoding="utf-8")
+    (promoted / "promotion.patch").write_text("old patch", encoding="utf-8")
+
+    _cleanup_stale_strategy_artifact_outputs(
+        SimpleNamespace(session=session),
+        destination=destination,
+    )
+
+    assert not (destination / "artifact.zip").exists()
+    assert (promoted / "engine.py").is_file()
+    assert (promoted / "paper-contract-report.json").is_file()
+    assert not (promoted / "promotion.patch").exists()
+
+
+def test_contract_request_is_slim_and_marks_training_stateful(tmp_path):
+    branch = tmp_path / "branch"
+    promoted = tmp_path / "artifact" / "promoted"
+    promoted.mkdir(parents=True)
+    branch.mkdir()
+    source = promoted / "engine.py"
+    source.write_text("class BranchEngine: pass\n", encoding="utf-8")
+
+    request_path = _write_hosted_paper_contract_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan={
+            "sourceScan": {
+                "positiveFindings": {
+                    "observedFitCalls": ["model.fit"],
+                }
+            },
+            "backtestWindow": {
+                "effectiveWindow": {"start": "2024-01-01", "end": "2024-02-01"}
+            },
+        },
+        signals=[],
+    )
+
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    assert payload["requirements"]["statefulContinuationRequired"] is True
+    assert payload["requirements"]["continuationMethod"] == "stateful_continuation"
+    assert payload["requirements"]["expectedAction"] == "implement_stateful_continuation"
+    decision_rule = payload["facts"]["historyProfile"]["decisionRule"]
+    assert "market-data window" in decision_rule
+    assert "design.calendar" in decision_rule
+    assert "persisted state" in decision_rule
+    assert "fitted calendars" not in decision_rule
+    paper_signal = payload["reportTemplate"]["paperSignal"]
+    history_reason = paper_signal["design"]["history"]["reason"]
+    calendar_reason = paper_signal["design"]["calendar"]["reason"]
+    assert "market-data window" in history_reason
+    assert "design.calendar" in history_reason
+    assert "persisted state" in history_reason
+    assert "retrain/refit cadence" in calendar_reason
+    assert "row ordinals" in calendar_reason
+    scaffold = payload["scaffolds"][0]
+    assert scaffold["name"] == "stateful_continuation_paper_state_store"
+    assert scaffold["statePath"] == "strategy/paper_state.pkl"
+    assert "build_paper_initial_state" in scaffold["code"]
+    assert "_build_cutover_state" in scaffold["code"]
+    assert "_build_state_through" not in scaffold["code"]
+    assert "get_paper_signal" in scaffold["code"]
+    assert "PaperStateStore.from_context" in scaffold["code"]
+    assert "runtime/initial-state/**" in scaffold["gateHandoff"]
+    assert "contractGuide" in payload
+    assert "path" not in payload["contractGuide"]
+    assert payload["contractGuide"]["type"] == "skill_reference"
+    assert payload["contractGuide"]["skill"] == "abel-invest"
+    assert payload["contractGuide"]["referencePath"] == "references/hosted-paper-contract.md"
+    assert "reportContract" not in payload
+    assert "gateContract" not in payload
+    assert "runtimeApiFacts" not in payload
+
+
+def test_stateless_contract_request_requires_agent_boundary_choice(tmp_path):
+    branch = tmp_path / "branch"
+    promoted = tmp_path / "artifact" / "promoted"
+    promoted.mkdir(parents=True)
+    branch.mkdir()
+    source = promoted / "engine.py"
+    source.write_text("class BranchEngine: pass\n", encoding="utf-8")
+    dependency_scan = {
+        "temporalDependencies": {
+            "historyBoundaryCandidates": {
+                "fixedLookback": {
+                    "candidate": True,
+                    "confidence": "medium",
+                    "suggestedBars": 40,
+                    "evidence": ["rolling: series.rolling(window=40) line 7"],
+                    "risks": [],
+                },
+                "originAnchored": {"candidate": True, "evidence": []},
+            }
+        }
+    }
+
+    request_path = _write_hosted_paper_contract_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan=dependency_scan,
+        signals=[],
+    )
+
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    assert payload["requirements"]["expectedAction"] == "write_profile_report_only"
+    assert payload["requirements"]["continuationMethod"] == "stateless_recompute"
+    assert payload["requirements"]["sourceEditPolicy"]["required"] is False
+    assert "signals" not in payload
+    assert "contractGuide" not in payload
+    assert "factSidecars" not in payload
+    assert "validation" not in payload
+    assert "selection" not in payload
+    assert payload["reportTemplate"]["sourceEdit"]["changed"] is False
+    paper_signal = payload["reportTemplate"]["paperSignal"]
+    assert paper_signal["continuation"] == {"method": "stateless_recompute"}
+    assert "implemented" not in paper_signal
+    assert "incrementalReady" not in paper_signal
+    assert "evidence" not in paper_signal
+    assert "state" not in paper_signal["design"]
+    history = payload["reportTemplate"]["paperSignal"]["design"]["history"]
+    assert history["boundary"] == ""
+    assert "source-backed reason" in history["reason"]
+    assert "ISO YYYY-MM-DD" in history["reason"]
+    candidates = payload["facts"]["historyProfile"]["temporalHints"][
+        "historyBoundaryCandidates"
+    ]
+    assert candidates["fixedLookback"]["suggestedBars"] == 40
+    assert "observations, not answers" in payload["facts"]["historyProfile"][
+        "decisionRule"
+    ]
+
+
+def test_stateless_minimal_contract_report_validates():
+    report = {
+        "schema": "abel-invest.agent-paper-contract-report/v1",
+        "kind": "hosted_paper_contract",
+        "scope": "hosted_paper_contract",
+        "sourceEdit": {"changed": False},
+        "paperSignal": {
+            "continuation": {"method": "stateless_recompute"},
+            "design": {
+                "history": {
+                    "boundary": "fixed_lookback",
+                    "lookbackBars": 41,
+                    "reason": "rolling source window",
+                }
+            },
+        },
+    }
+
+    _validate_agent_paper_signal_contract(
+        report,
+        "class BranchEngine: pass\n",
+        require_paper_signal=True,
+    )
+
+
+def test_tail_oracle_sample_uses_dynamic_holdout_window():
+    comparable = [
+        {
+            "decisionIndex": idx,
+            "asOf": f"2024-01-{idx + 1:02d}",
+            "expectedNextPosition": float(idx % 2),
+        }
+        for idx in range(40)
+    ]
+
+    selected = select_paper_tail_oracle_sample(comparable)
+
+    assert len(selected) == 20
+    assert selected[0]["decisionIndex"] == 19
+    assert selected[-1]["decisionIndex"] == 38
+    assert paper_tail_selection_reason(comparable, selected) == "target_tail_window"
+
+
+def test_tail_oracle_sample_expands_to_recent_position_change():
+    comparable = [
+        {
+            "decisionIndex": idx,
+            "asOf": f"2024-03-{idx + 1:02d}",
+            "expectedNextPosition": 0.0 if idx < 75 else 1.0,
+        }
+        for idx in range(100)
+    ]
+
+    selected = select_paper_tail_oracle_sample(comparable)
+
+    assert len(selected) == 24
+    assert selected[0]["decisionIndex"] == 75
+    assert paper_tail_position_change_count(
+        selected,
+        prior=comparable[74],
+    ) == 1
+    assert (
+        paper_tail_selection_reason(comparable, selected)
+        == "expanded_to_recent_position_change"
+    )
+
+
+def test_tail_oracle_excludes_selected_round_terminal_ledger_row(tmp_path):
+    trade_log = tmp_path / "trade-log.csv"
+    trade_log.write_text(
+        "date,next_position\n"
+        "2024-01-01,0\n"
+        "2024-01-02,0\n"
+        "2024-01-03,1\n",
+        encoding="utf-8",
+    )
+
+    rows = paper_tail_oracle_rows(trade_log)
+
+    assert [row["asOf"] for row in rows] == ["2024-01-02"]
+    assert rows[-1]["asOf"] != "2024-01-03"
+    assert rows[0]["validationCutoverAsOf"] == "2024-01-01"
+    assert rows[0]["selectionReason"] == "target_tail_window"
+
+
+def _write_market_feed(path, symbol: str, closes: list[float]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["timestamp,symbol,open,high,low,close,volume"]
+    for idx, close in enumerate(closes, start=1):
+        lines.append(
+            f"2024-01-{idx:02d}T00:00:00Z,{symbol},{close},{close},{close},{close},1000"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_paper_smoke_context_uses_prepared_cache_feeds(tmp_path):
+    branch = tmp_path / "branch"
+    runtime = tmp_path / "runtime"
+    strategy = tmp_path / "strategy"
+    state = tmp_path / "state"
+    source_aapl = tmp_path / "cache" / "AAPL.csv"
+    source_msft = tmp_path / "cache" / "MSFT.csv"
+    _write_market_feed(source_aapl, "AAPL", [10.0, 11.0])
+    _write_market_feed(source_msft, "MSFT", [20.0, 21.0])
+    (branch / "inputs").mkdir(parents=True)
+    runtime.mkdir(parents=True)
+    (runtime / "dependencies.json").write_text(
+        json.dumps(
+            {
+                "target": "AAPL",
+                "target_node": "AAPL.price",
+                "selected_inputs": ["MSFT"],
+                "data_requirements": {"timeframe": "1d", "fields": ["close"]},
+                "requested_start": "2024-01-01",
+                "cache": {
+                    "results": [
+                        {"symbol": "AAPL", "ok": True, "data_path": str(source_aapl)},
+                        {"symbol": "MSFT", "ok": True, "data_path": str(source_msft)},
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    context = _paper_smoke_context(
+        SimpleNamespace(
+            branch=branch,
+            branch_id="candidate",
+            ticker="AAPL",
+            edge_result={"effective_window": {"end": "2024-01-02"}},
+        ),
+        strategy_dir=strategy,
+        runtime_dir=runtime,
+        state_dir=state,
+        workspace_dir=tmp_path / "workspace",
+    )
+
+    primary = context["_feeds"]["primary"]["path"]
+    msft = context["_feeds"]["MSFT"]["path"]
+    primary_text = Path(primary).read_text(encoding="utf-8")
+    msft_text = Path(msft).read_text(encoding="utf-8")
+    assert "11.0" in primary_text
+    assert "21.0" in msft_text
+    assert "11.0" not in msft_text
+    assert context["_promotion_validation"]["feedMode"] == "prepared_cache"
+
+
+def test_paper_smoke_context_rejects_missing_prepared_feed(tmp_path):
+    branch = tmp_path / "branch"
+    runtime = tmp_path / "runtime"
+    (branch / "inputs").mkdir(parents=True)
+    runtime.mkdir(parents=True)
+    (runtime / "dependencies.json").write_text(
+        json.dumps(
+            {
+                "target": "AAPL",
+                "selected_inputs": ["MSFT"],
+                "cache": {
+                    "results": [
+                        {
+                            "symbol": "AAPL",
+                            "ok": True,
+                            "data_path": str(tmp_path / "missing-aapl.csv"),
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing prepared market data"):
+        _paper_smoke_context(
+            SimpleNamespace(branch=branch, branch_id="candidate", ticker="AAPL", edge_result={}),
+            strategy_dir=tmp_path / "strategy",
+            runtime_dir=runtime,
+            state_dir=tmp_path / "state",
+            workspace_dir=tmp_path / "workspace",
+        )
+
+
+def test_ml_training_source_rejects_stateless_recompute_report():
+    report = {
+        "schema": "abel-invest.agent-paper-contract-report/v1",
+        "kind": "hosted_paper_contract",
+        "scope": "hosted_paper_contract",
+        "summary": "paper signal",
+        "paths": {"packagedFiles": [], "initialStateFiles": []},
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "continuation": {
+                "method": "stateless_recompute",
+                "reason": "recompute from bars",
+                "futureDailyFlow": "load bars and compute signal",
+            },
+            "design": {
+                "history": {
+                    "boundary": "fixed_lookback",
+                    "minBars": 10,
+                    "reason": "rolling input window",
+                },
+                "state": {
+                    "usesPersistentState": False,
+                    "stateFiles": [],
+                    "reason": "none",
+                },
+                "calendar": {
+                    "usesAbsoluteDecisionOrdinal": False,
+                    "reason": "none",
+                },
+                "cutover": {
+                    "requiresStartupState": False,
+                    "mode": "none",
+                    "reason": "none",
+                },
+                "dailyStep": {"reason": "one as_of call"},
+            },
+            "evidence": {
+                "observations": ["source read"],
+                "whySufficient": "same formula",
+            },
+        },
+    }
+    source = """
+class BranchEngine:
+    def get_paper_signal(self, *, as_of=None):
+        return {"next_position": 0.0}
+"""
+
+    with pytest.raises(PromotionHostedPaperContractRequired, match="stateful_continuation"):
+        _validate_agent_paper_signal_contract(
+            report,
+            source,
+            require_paper_signal=True,
+            source_dependency_scan={
+                "sourceScan": {
+                    "positiveFindings": {
+                        "observedFitCalls": ["model.fit"],
+                    }
+                }
+            },
+        )
+
+
+def _stateful_training_report(*, state_reason: str) -> dict:
+    return {
+        "schema": "abel-invest.agent-paper-contract-report/v1",
+        "kind": "hosted_paper_contract",
+        "scope": "hosted_paper_contract",
+        "summary": "stateful paper signal",
+        "paths": {
+            "packagedFiles": [],
+            "initialStateFiles": [],
+        },
+        "paperSignal": {
+            "implemented": True,
+            "incrementalReady": True,
+            "continuation": {
+                "method": "stateful_continuation",
+                "reason": "continue fitted training state",
+                "futureDailyFlow": "load state and advance one as_of",
+            },
+            "design": {
+                "history": {
+                    "boundary": "origin_anchored",
+                    "minBars": 20,
+                    "origin": "2024-01-01",
+                    "reason": "ordinal calendar",
+                },
+                "state": {
+                    "usesPersistentState": True,
+                    "stateFiles": ["strategy/paper-state.pkl"],
+                    "schema": "paper-state/v1",
+                    "validThrough": "2024-02-01",
+                    "reason": state_reason,
+                },
+                "calendar": {
+                    "usesAbsoluteDecisionOrdinal": True,
+                    "origin": "2024-01-01",
+                    "reason": "row ordinal",
+                },
+                "cutover": {
+                    "requiresStartupState": True,
+                    "mode": "minimal_cutover_state",
+                    "dataHistoryStart": "2024-01-01",
+                    "stateEnd": "2024-02-01",
+                    "bootstrapHook": "build_paper_initial_state",
+                    "reason": "startup state is valid through cutover",
+                },
+                "dailyStep": {"reason": "advance from the persisted state"},
+            },
+            "evidence": {
+                "observations": ["source read"],
+                "whySufficient": "same state schema is used by bootstrap and paper",
+            },
+        },
+    }
+
+
+def _stateful_source() -> str:
+    return """
+from abel_edge.runtime_paths import context_runtime_paths
+
+class BranchEngine:
+    def __init__(self, context=None):
+        self.context = context or {}
+
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        return {}
+
+    def get_paper_signal(self, *, as_of=None):
+        paths = context_runtime_paths(self.context)
+        state_path = paths.state / "strategy" / "paper-state.pkl"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text("state")
+        return {"next_position": 0.0}
+"""
+
+
+class _ScopedBootstrapEngine:
+    def __init__(self):
+        self.active_cutover = None
+        self.seen_cutover = None
+
+    @contextmanager
+    def paper_bootstrap_cutover_scope(self, cutover_as_of):
+        previous = self.active_cutover
+        self.active_cutover = cutover_as_of
+        try:
+            yield
+        finally:
+            self.active_cutover = previous
+
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        self.seen_cutover = (cutover_as_of, self.active_cutover)
+        return {"cutover": cutover_as_of}
+
+
+class _UnscopedBootstrapEngine:
+    def build_paper_initial_state(self, *, cutover_as_of=None):
+        return {}
+
+
+def test_stateful_bootstrap_runs_inside_edge_cutover_scope(tmp_path):
+    engine = _ScopedBootstrapEngine()
+
+    result = _run_paper_validation_state_bootstrap(
+        engine,
+        state_dir=tmp_path / "state",
+        oracle_rows=[{"validationCutoverAsOf": "2026-04-16"}],
+        required=True,
+    )
+
+    assert result["status"] == "passed"
+    assert engine.seen_cutover == ("2026-04-16", "2026-04-16")
+
+
+def test_stateful_bootstrap_requires_edge_cutover_scope(tmp_path):
+    result = _run_paper_validation_state_bootstrap(
+        _UnscopedBootstrapEngine(),
+        state_dir=tmp_path / "state",
+        oracle_rows=[{"validationCutoverAsOf": "2026-04-16"}],
+        required=True,
+    )
+
+    assert result["status"] == "failed"
+    assert "paper_bootstrap_cutover_scope" in result["reason"]
+
+
+def test_ml_training_stateful_contract_does_not_gate_on_prose_keywords():
+    _validate_agent_paper_signal_contract(
+        _stateful_training_report(
+            state_reason=(
+                "paper state stores last as_of, last next_position, and row cursor"
+            )
+        ),
+        _stateful_source(),
+        require_paper_signal=True,
+        source_dependency_scan={
+            "sourceScan": {"positiveFindings": {"observedFitCalls": ["model.fit"]}}
+        },
+    )
+
+
+def test_paper_signal_full_runtime_path_follows_self_helper():
+    source = (
+        "from abel_edge.engine.base import StrategyEngine\n"
+        "class BranchEngine(StrategyEngine):\n"
+        "    def _paper_runtime_output(self, *, as_of=None):\n"
+        "        return self.compute_runtime_output(end=as_of)\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        compiled = self._paper_runtime_output(as_of=as_of)\n"
+        "        return {'next_position': float(compiled.next_position[-1])}\n"
+    )
+
+    assert source_scan.paper_signal_full_runtime_compute_path(source) == [
+        "BranchEngine.get_paper_signal",
+        "BranchEngine._paper_runtime_output",
+        "compute_runtime_output",
+    ]
+    assert source_scan.paper_signal_uses_full_runtime_compute(source) is True
+
+
+def test_paper_signal_full_runtime_path_follows_top_level_helper():
+    source = (
+        "def paper_runtime(engine, as_of=None):\n"
+        "    return engine.compute_signals()\n"
+        "class BranchEngine:\n"
+        "    def get_paper_signal(self, *, as_of=None):\n"
+        "        positions, dates, prices = paper_runtime(self, as_of=as_of)\n"
+        "        return {'next_position': float(positions[-1])}\n"
+    )
+
+    assert source_scan.paper_signal_full_runtime_compute_path(source) == [
+        "BranchEngine.get_paper_signal",
+        "paper_runtime",
+        "compute_signals",
+    ]
+
+
+def test_temporal_scan_emits_boundary_candidates_not_answers():
+    source = (
+        "class BranchEngine:\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        momentum = ctx.target.close.pct_change(20)\n"
+        "        smooth = momentum.rolling(window=40).mean()\n"
+        "        return smooth.shift(1)\n"
+    )
+
+    facts = source_scan.source_temporal_dependency_facts(source, ast.parse(source))
+    candidates = facts["historyBoundaryCandidates"]
+
+    assert candidates["fixedLookback"]["candidate"] is True
+    assert candidates["fixedLookback"]["suggestedBars"] == 40
+    assert candidates["originAnchored"]["candidate"] is True
+    assert "Candidate facts only" in candidates["fixedLookback"]["note"]
+
+
+def test_temporal_scan_keeps_fixed_candidate_with_positional_risk():
+    source = (
+        "class BranchEngine:\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        signal = ctx.target.close.rolling(window=40).mean()\n"
+        "        signal.iloc[0] = 0.0\n"
+        "        return signal\n"
+    )
+
+    facts = source_scan.source_temporal_dependency_facts(source, ast.parse(source))
+    candidates = facts["historyBoundaryCandidates"]
+
+    assert candidates["fixedLookback"]["candidate"] is True
+    assert candidates["fixedLookback"]["confidence"] == "low"
+    assert candidates["fixedLookback"]["suggestedBars"] == 40
+    assert any("positionalIndexing" in item for item in candidates["fixedLookback"]["risks"])
+    assert candidates["originAnchored"]["candidate"] is True
+
+
+def test_temporal_scan_does_not_suggest_lookback_from_min_periods_only():
+    source = (
+        "class BranchEngine:\n"
+        "    def compute_decisions(self, ctx):\n"
+        "        window = self.window\n"
+        "        return ctx.target.close.rolling(window=window, min_periods=max(1, window // 2)).mean()\n"
+    )
+
+    facts = source_scan.source_temporal_dependency_facts(source, ast.parse(source))
+    candidates = facts["historyBoundaryCandidates"]
+
+    assert candidates["fixedLookback"]["candidate"] is True
+    assert candidates["fixedLookback"]["suggestedBars"] is None
+    assert any("min_periods" in item["expression"] for item in facts["parameterHints"])
+
+
+def test_contract_request_budget_can_open_fallback_before_third_live_failure(tmp_path):
+    branch = tmp_path / "branch"
+    promoted = tmp_path / "artifact" / "promoted"
+    promoted.mkdir(parents=True)
+    branch.mkdir()
+    source = promoted / "engine.py"
+    source.write_text("class BranchEngine: pass\n", encoding="utf-8")
+    dependency_scan = {
+        "sourceScan": {"positiveFindings": {"observedFitCalls": ["model.fit"]}},
+    }
+    validation_failure = {"failedGates": [{"name": "paper_dry_run"}]}
+
+    request_path = _write_hosted_paper_contract_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan=dependency_scan,
+        signals=[],
+    )
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    policy = payload["validation"]["attemptPolicy"]
+    assert policy["contractRequestRefreshes"] == 1
+    assert policy["fullReplayFallbackEligible"] is False
+
+    _write_hosted_paper_contract_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan=dependency_scan,
+        signals=[],
+        validation_failure=validation_failure,
+    )
+    request_path = _write_hosted_paper_contract_request(
+        promoted,
+        branch=branch,
+        source_path=source,
+        dependency_scan=dependency_scan,
+        signals=[],
+        validation_failure=validation_failure,
+    )
+    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    policy = payload["validation"]["attemptPolicy"]
+    assert policy["liveContractFailures"] == 2
+    assert policy["contractRequestRefreshes"] == 3
+    assert policy["fullReplayFallbackEligible"] is True
+    assert policy["fallbackEligibilityReason"] == "contract_request_budget"
+    assert payload["requirements"]["statefulContinuationRequired"] is False
+    assert (
+        payload["requirements"]["continuationMethod"]
+        == "stateful_continuation_or_full_replay_fallback"
+    )
+    assert payload["requirements"]["fallback"]["fullReplayFallbackMaxSeconds"] == 120.0
+    assert "full_replay_fallback" in payload["requirements"]["sourceEditPolicy"][
+        "allowedReasons"
+    ]
+
+
+def test_strategy_artifact_preupload_error_includes_contract_loop_status(tmp_path):
+    request_path = tmp_path / "paper-contract-request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "requirements": {
+                    "expectedAction": "implement_stateful_continuation",
+                    "continuationMethod": "stateful_continuation",
+                },
+                "validation": {
+                    "attemptPolicy": {
+                        "contractRequestRefreshes": 2,
+                        "liveContractFailures": 1,
+                        "fullReplayFallbackEligible": False,
+                        "fallbackAfterRequestRefreshes": 3,
+                        "fallbackAfterFailures": 3,
+                    },
+                    "lastGateFailure": {
+                        "failedGates": [
+                            {
+                                "name": "paper_dry_run",
+                                "reason": "tail parity mismatch",
+                            }
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    message = _strategy_artifact_preupload_error(
+        {
+            "skipReason": "hosted_paper_contract_required",
+            "promotionReport": {
+                "reason": "promotion gate did not pass",
+                "requestPath": str(request_path),
+            },
+        }
+    )
+
+    assert "expectedAction=implement_stateful_continuation" in message
+    assert "continuationMethod=stateful_continuation" in message
+    assert "contractRequestRefreshes=2" in message
+    assert "liveContractFailures=1" in message
+    assert "fullReplayFallbackEligible=false" in message
+    assert "fallbackAfterRequestRefreshes" not in message
+    assert "fallbackAfterFailures" not in message
+    assert "lastGateFailure=paper_dry_run:tail parity mismatch" in message
+    assert "nextAction=write_or_repair_paper_contract_report" in message

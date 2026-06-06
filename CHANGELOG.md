@@ -4,6 +4,23 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.4.3] - 2026-06-06
+
+### Added
+
+- Added Abel Invest benchmark evidence to the README, comparing Abel Invest with a no-skill LLM workflow across 1,000 tickers.
+- Added Abel Invest hosted paper tracking, validation packaging, source-scan facts, tail-smoke traces, and promotion work-order coverage.
+- Added release-facing repository docs, contribution/security guidance, and refreshed install docs for OpenCode, Codex, Claude, and OpenClaw users.
+- Added Abel Ask intent references for candidate discovery, direct graph reads, general causal reads, and life-investment decisions.
+
+### Changed
+
+- Updated Abel Invest to version `3.7.2` and raised the Abel Edge runtime dependency to `>=0.8.9,<0.9.0`.
+- Refactored Abel Invest strategy promotion into a package of focused modules for cleanup, facts, gates, packaging, hosted-paper requests, reporting, and validation.
+- Refined Abel Invest exploration completion, best-strategy selection, workspace guide refresh, benchmark reporting, and hosted promotion guidance.
+- Moved Abel Invest tests out of the skill package into the repository test suite and expanded coverage for artifacts, bootstrap, CLI guidance, hosted paper contracts, workspace behavior, and strategy selection.
+- Refined Abel routing guidance for strategy validation, stock-options handling, Abel Ask handoff boundaries, and direct starter prompts after installation.
+
 ## [1.4.2] - 2026-05-25
 
 ### Changed

@@ -21,12 +21,14 @@ from abel_invest.workspace_core.workspace import (
     inspect_workspace_bootstrap_target,
     is_workspace_root,
     load_workspace_manifest,
+    refresh_workspace_agents,
     resolve_workspace_entry,
     render_workspace_status,
     resolve_runtime_cli,
     resolve_runtime_python,
     resolve_workspace_paths,
     scaffold_workspace,
+    workspace_agents_status,
 )
 
 
@@ -134,6 +136,7 @@ def handle_workspace_command(args: argparse.Namespace) -> int:
             runtime_python=args.runtime_python,
             alpha_editable=not args.no_editable,
         )
+        agents_refresh = refresh_workspace_agents(root)
         doctor_result = run_doctor(root)
 
         print(
@@ -152,6 +155,12 @@ def handle_workspace_command(args: argparse.Namespace) -> int:
         print(
             "  workspace_reuse: "
             + ("reused_existing_root" if reused_workspace else "created_new_root")
+        )
+        print(
+            "  agents_guide: "
+            f"{agents_refresh['status']} "
+            f"(action={agents_refresh['action']}, "
+            f"expected abel-invest {agents_refresh['expectedVersion']})"
         )
         print(f"  research: {resolved['research_root']}")
         print(f"  docs: {resolved['docs_root']}")
@@ -220,6 +229,7 @@ def build_workspace_context(start: Path) -> dict[str, object]:
     doctor_result = run_doctor(root)
     cli_path = resolve_runtime_cli(root, manifest)
     command_prefix = str(doctor_result.get("command_prefix") or workspace_command(root, manifest))
+    agents_status = workspace_agents_status(root)
     return {
         "entry_path": str(entry_path),
         "workspace_resolution": resolution_mode,
@@ -230,6 +240,10 @@ def build_workspace_context(start: Path) -> dict[str, object]:
         "command_prefix": command_prefix,
         "doctor_status": str(doctor_result.get("status") or "unknown"),
         "workspace_mode": doctor_result.get("workspace_mode"),
+        "agents_guide_status": agents_status["status"],
+        "agents_guide_path": agents_status["path"],
+        "agents_guide_expected_version": agents_status["expectedVersion"],
+        "agents_guide_found_version": agents_status["foundVersion"],
         "default_workspace_path": str(default_workspace_path(entry_path)),
         "session_command_prefix": f"{command_prefix} init-session",
         "next_step": doctor_result.get("next_step"),
@@ -252,6 +266,7 @@ def render_workspace_context(context: dict[str, object]) -> str:
                 f"CLI path: {context.get('cli_path')}",
                 f"Command prefix: {context.get('command_prefix')}",
                 f"Doctor status: {context.get('doctor_status')}",
+                f"Agents guide status: {context.get('agents_guide_status')}",
                 f"Session command prefix: {context.get('session_command_prefix')}",
             ]
         )

@@ -127,7 +127,7 @@ def test_validate_connectivity_shortcut_is_not_registered() -> None:
     assert "validate-connectivity" not in graph_probe.COMMANDS
     assert not hasattr(graph_probe, "_cmd_validate_connectivity")
 
-    parser = graph_probe._build_parser()
+    parser = graph_probe._build_parser(include_hidden=True)
     with pytest.raises(SystemExit):
         parser.parse_args(["validate-connectivity", "CPI", "NVDA"])
 
@@ -409,7 +409,7 @@ def test_build_payload_rejects_conflicting_graph_version_between_flag_and_contex
 def test_parser_accepts_global_graph_version_after_command() -> None:
     graph_probe = _load_graph_probe_module()
 
-    parser = graph_probe._build_parser()
+    parser = graph_probe._build_parser(include_hidden=True)
     args = parser.parse_args(
         graph_probe._normalize_argv(
             ["observe", "BTCUSD.volume", "--graph-version", "CausalNodeV2"]
@@ -456,6 +456,20 @@ def test_common_subcommand_help_mentions_global_envelope_flags(
     help_text = capsys.readouterr().out
     assert "--graph-version" in help_text
     assert "--context-json" in help_text
+
+
+def test_common_help_hides_model_effect_shortcuts(capsys) -> None:
+    graph_probe = _load_graph_probe_module()
+
+    parser = graph_probe._build_parser()
+
+    help_text = parser.format_help()
+    assert "observe" not in help_text
+    assert "observe-dual" not in help_text
+    assert "observe.predict" not in help_text
+    assert "intervene-do" not in help_text
+    assert "intervene-time-lag" not in help_text
+    assert "counterfactual-preview" not in help_text
 
 
 def test_main_appends_v2_retry_hint_for_v3_prediction_unavailable(

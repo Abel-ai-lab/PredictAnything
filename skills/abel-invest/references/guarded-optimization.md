@@ -55,12 +55,13 @@ Submit selected candidates through Abel Invest / Edge:
 `N` is this round's effective search width only: every variant tried to select
 the submitted candidate for this round, not a cumulative campaign total.
 
-Only report, promote, or visualize as a robust candidate after the selected
-strategy passes the required validation.
+Only report or promote a selected strategy as robust after it has enough
+validation evidence. Session visualization may still review the full exploration
+record, including weak attempts and near-passes.
 
 ## Gate
 
-Final reported candidates must pass the applicable validation profile:
+Final robust-success claims require the applicable validation profile:
 
 1. semantic preflight and legal reads
 2. recorded gate / DSR / triangle profile
@@ -68,10 +69,10 @@ Final reported candidates must pass the applicable validation profile:
 4. walk-forward or requested-window validation
 5. final-K accounting when the candidate was selected from a broader search
 
-Failing a gate disqualifies the candidate from robust reporting, but it does not
-invalidate the usefulness of the search path. A high-Sharpe/high-return
-near-pass is often a better lead than a low-objective candidate that is merely
-easy to validate.
+Insufficient validation evidence disqualifies the candidate from final robust
+reporting, but it does not invalidate the usefulness of the search path. A
+high-Sharpe/high-return near-pass is often a better lead than a low-objective
+candidate that is merely easy to validate.
 
 K accounting makes the search reportable. It should not make the agent avoid a
 promising high-capacity lead; it should make the reported claim honest.
@@ -100,9 +101,10 @@ Report the null honestly when no candidate passes final-K validation.
 ## Honest Outcomes
 
 - A candidate that passes validation at final K and meets the objective -> report it.
-- A raw-metric winner that fails validation -> report it as a failed or
-  near-pass candidate, not success.
-- None clears after a bounded, K-accounted search -> report the null honestly.
+- A raw-metric winner without enough robustness evidence -> report it as a
+  promising but not final-success strategy in the completed stop report.
+- None clears after a bounded, K-accounted search -> report the null honestly,
+  with the current best available strategy and its limits.
 
 ## Anti-Patterns
 

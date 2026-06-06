@@ -7,8 +7,12 @@ from pathlib import Path
 
 import yaml
 
+from abel_invest import __version__ as ABEL_INVEST_VERSION
+
 MANIFEST_NAME = "alpha.workspace.yaml"
 DEFAULT_WORKSPACE_NAME = "abel-invest-workspace"
+WORKSPACE_AGENTS_GUIDE_SCHEMA = "abel-invest.workspace-agents/v1"
+WORKSPACE_AGENTS_GUIDE_VERSION = ABEL_INVEST_VERSION
 
 
 def find_workspace_root(start: Path | None = None) -> Path | None:
@@ -217,6 +221,7 @@ def render_workspace_status(root: Path, manifest: dict | None = None) -> str:
     manifest = manifest or load_workspace_manifest(root)
     resolved = resolve_workspace_paths(root, manifest)
     runtime_python = resolve_runtime_python(root, manifest)
+    agents_status = workspace_agents_status(root)
     lines = [
         f"Workspace: {manifest.get('workspace', {}).get('name', root.name)}",
         f"Root: {root}",
@@ -230,6 +235,11 @@ def render_workspace_status(root: Path, manifest: dict | None = None) -> str:
         f"Venv: {resolved['venv']}",
         f"Runtime python: {runtime_python}",
         f"Runtime python exists: {'yes' if runtime_python.exists() else 'no'}",
+        (
+            "Agents guide: "
+            f"{agents_status['status']} "
+            f"(expected abel-invest {agents_status['expectedVersion']})"
+        ),
         "Edge dependency: managed by abel-invest package dependencies",
     ]
     return "\n".join(lines)
@@ -283,7 +293,18 @@ After every recorded round, keep `exploration_path.md` covered with ledger ref,
 chosen path, compact reason, Edge feedback, and artifact refs before another
 recorded round.
 
-Only after asking the user and getting agreement for visual review, run:
+When exploration enters Completed, if at least one real candidate strategy round
+has been recorded, summarize the best strategy with the read-only selector:
+
+```bash
+./.venv/bin/abel-invest best-strategy --session research/tsla/tsla-v1 --json
+```
+
+This command is read-only: it selects the current best session strategy without
+exporting, uploading, or promoting artifacts.
+
+Then ask the user whether to create a session review page. Only after getting
+agreement, run:
 
 ```bash
 ./.venv/bin/abel-invest visualize-session --session research/tsla/tsla-v1
@@ -329,11 +350,17 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `prepare-branch` should run before a recorded round
 - `frontier.md` reports input realization: declared graph-supported inputs only
   count as realized when the engine reads prepared graph inputs
-- `visualize-session` creates an online session view from the session folder;
-  it includes the selected best ranked hostable strategy artifact when one is
-  available by default, selected from validation evidence rather than requiring
-  every gate to pass. Use `--without-strategy-artifact` only for narrative-only
-  views
+- `best-strategy` is the read-only entrypoint for stop reports: it selects the
+  current best session strategy, including near-tie reliability tie-breaks,
+  without exporting, uploading, or promoting artifacts
+- `visualize-session` is the default composite entrypoint for session
+  visualization: it creates an online session view and, when a hostable
+  validation strategy is available, includes selected strategy artifact
+  upload/promotion through the strategy-artifact capability. Direct artifact
+  export/promotion remain independent commands. If no hostable strategy artifact
+  is available, the session view can still be created without one. If a selected
+  strategy emits a hosted-paper contract request, continue that loop; if it
+  cannot complete, report the session as `action_required`
 - session `backtest_start` is a default target; branch `requested_start` can override it explicitly
 - the generated `engine.py` is a starter wiring scaffold for the first end-to-end run, not a finished strategy
 
@@ -367,7 +394,8 @@ before opening a session.
 
 def render_workspace_agents() -> str:
     """Render the starter AGENTS guide for a new workspace."""
-    return """# AGENTS.md — Abel Invest Alpha Search Workspace
+    return f"""<!-- {WORKSPACE_AGENTS_GUIDE_SCHEMA} version={WORKSPACE_AGENTS_GUIDE_VERSION} -->
+# AGENTS.md — Abel Invest Alpha Search Workspace
 
 Use this workspace as the default place to continue alpha search for this working
 area. The CLI commands below are tools for operating inside this workspace, but
@@ -442,15 +470,45 @@ as the single human-facing exploration log: record each chosen path, compact
 reason, Edge feedback, and ledger ref. Read `exploration_path.md` and the latest
 Edge result before choosing the next Edge run; after Edge feedback, keep the
 path updated. Check path coverage before starting another round. Check input
-realization before claiming graph-derived contribution. Do not create the online
-session view automatically; when the exploration is mature enough for review,
-ask the user first. If the user agrees or explicitly asks to publish the session
-view, `visualize-session --session <session>` builds the view from the session
-folder and attaches the selected hostable validation strategy artifact when one
-is available. If the command reports `needs_agent_refactor`, read the emitted
-`refactor-request.json`, edit only the promoted copy named there, write
-`refactor-report.json`, and rerun the same command. Do not start a separate
-agent process. Use `--without-strategy-artifact` only for narrative-only views.
+realization before claiming graph-derived contribution. Stay in Exploring until
+the objective is met or the ledger supports unable-to-reach; if a concrete next
+search action remains, keep Exploring. Treat Edge failures as diagnostics, not
+the next objective; when return or Sharpe remain weak, do not only repair gates
+into conservative branches. When either normal ending holds, enter Completed.
+If interrupted or blocked, do not enter Completed or ask for visualization.
+`render`, `status`, and `check` are audit actions only. Do not create
+the online session view automatically; a recorded candidate strategy round makes
+the session eligible for visualization, but visualization is not a required step
+after every round. When exploration enters Completed, use
+`best-strategy --session <session> --json` to select the best strategy for the
+stop report; it is read-only and does not export, upload, or promote artifacts.
+Report its selected branch/round exactly instead of manually walking
+`results.tsv` or branch folders to choose the best session strategy. Ask the
+user whether to create a session review page if a recorded candidate exists. If
+the user agrees or explicitly asks to publish the session review page, run
+`visualize-session --session <session>` before inspecting Abel Invest
+implementation internals. It builds the view from the session folder and, when
+available, includes selected strategy artifact upload/promotion; if no hostable
+strategy artifact is available, the session view can still be created without
+one. If the user asks only for a local strategy artifact export or a promotion
+validation probe, use `export-strategy-artifact --session <session>`. If the
+user explicitly names a branch or round, use `promote-strategy --branch
+<branch> --round <round>`. Do not run `visualize-session` or
+`export-strategy-artifact` merely to compute the best strategy.
+If a visualization, export, or promotion command emits a hosted paper
+`paper-contract-request.json`, read the request first and use its
+`reportTemplate`; when `contractGuide` is needed, open its `referencePath` from
+the active Abel Invest skill, not from the workspace or CLI package path.
+Edit only when `sourceEditPolicy` says a source edit is required or genuinely
+allowed, and declare the paper history boundary in `paper-contract-report.json`.
+Rerun the same command afterward. If another request appears, inspect
+`validation.lastGateFailure`, `validation.attemptPolicy`, and
+`requirements.fallback`, then continue until promotion succeeds, fallback is
+eligible and succeeds or fails a gate, or a hard blocker remains. Promotion
+converts the selected research strategy into a clean hosted daily live-paper
+artifact; do not add one-off schedules or cached tail decisions merely to pass
+the gate. Do not start a separate agent process. Leave contract-blocked sessions
+as `action_required` unless the user explicitly asks to skip strategy artifacts.
 This workspace is for alpha-managed strategy search, so do not create a
 standalone `abel-edge init` project inside it. Put standalone edge work in a
 separate directory.
@@ -481,6 +539,58 @@ separate directory.
 - if you are in the parent launch directory, reuse its `abel-invest-workspace` child before creating another one
 - run `./.venv/bin/abel-invest workspace context --path . --json` before creating a session
 """
+
+
+def workspace_agents_status(root: Path) -> dict[str, str]:
+    """Return whether the workspace AGENTS guide matches this Abel Invest version."""
+    path = root / "AGENTS.md"
+    expected = render_workspace_agents()
+    if not path.exists():
+        return {
+            "status": "missing",
+            "path": str(path),
+            "schema": WORKSPACE_AGENTS_GUIDE_SCHEMA,
+            "expectedVersion": WORKSPACE_AGENTS_GUIDE_VERSION,
+            "foundVersion": "",
+        }
+    actual = path.read_text(encoding="utf-8")
+    found_version = _workspace_agents_found_version(actual)
+    status = (
+        "current"
+        if _normalize_generated_text(actual) == _normalize_generated_text(expected)
+        else "stale"
+    )
+    return {
+        "status": status,
+        "path": str(path),
+        "schema": WORKSPACE_AGENTS_GUIDE_SCHEMA,
+        "expectedVersion": WORKSPACE_AGENTS_GUIDE_VERSION,
+        "foundVersion": found_version,
+    }
+
+
+def refresh_workspace_agents(root: Path) -> dict[str, str]:
+    """Refresh the generated workspace AGENTS guide when it is missing or stale."""
+    before = workspace_agents_status(root)
+    if before["status"] == "current":
+        return {**before, "action": "unchanged", "previousStatus": before["status"]}
+    (root / "AGENTS.md").write_text(render_workspace_agents(), encoding="utf-8")
+    after = workspace_agents_status(root)
+    action = "created" if before["status"] == "missing" else "refreshed"
+    return {**after, "action": action, "previousStatus": before["status"]}
+
+
+def _workspace_agents_found_version(text: str) -> str:
+    prefix = f"<!-- {WORKSPACE_AGENTS_GUIDE_SCHEMA} version="
+    lines = text.splitlines()
+    first_line = lines[0].strip() if lines else ""
+    if not first_line.startswith(prefix) or not first_line.endswith("-->"):
+        return ""
+    return first_line.removeprefix(prefix).removesuffix("-->").strip()
+
+
+def _normalize_generated_text(text: str) -> str:
+    return text.replace("\r\n", "\n").rstrip() + "\n"
 
 
 def render_gitignore() -> str:

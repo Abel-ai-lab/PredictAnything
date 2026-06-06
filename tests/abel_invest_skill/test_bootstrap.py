@@ -1,4 +1,5 @@
 import ast
+import importlib.util
 import subprocess
 import sys
 import tomllib
@@ -9,13 +10,13 @@ import pytest
 from abel_invest.narrative_core.cli_parser import build_parser
 
 
-def test_strategy_discovery_bootstrap_script_exists() -> None:
-    script = Path(__file__).resolve().parents[1] / "skills" / "abel-invest" / "scripts" / "bootstrap_workspace.py"
+def test_abel_invest_bootstrap_script_exists() -> None:
+    script = Path(__file__).resolve().parents[2] / "skills" / "abel-invest" / "scripts" / "bootstrap_workspace.py"
     assert script.exists(), "bootstrap script is missing"
 
 
-def test_strategy_discovery_bootstrap_script_is_preinstall_entrypoint() -> None:
-    script = Path(__file__).resolve().parents[1] / "skills" / "abel-invest" / "scripts" / "bootstrap_workspace.py"
+def test_abel_invest_bootstrap_script_is_preinstall_entrypoint() -> None:
+    script = Path(__file__).resolve().parents[2] / "skills" / "abel-invest" / "scripts" / "bootstrap_workspace.py"
     source = script.read_text(encoding="utf-8")
     tree = ast.parse(source)
 
@@ -48,15 +49,33 @@ def test_strategy_discovery_bootstrap_script_is_preinstall_entrypoint() -> None:
     assert "--edge-spec" not in result.stdout
 
 
-def test_strategy_discovery_dependencies_constrain_edge_major_version() -> None:
-    pyproject = Path(__file__).resolve().parents[1] / "skills" / "abel-invest" / "pyproject.toml"
+def test_abel_invest_bootstrap_fallback_agents_guide_uses_project_version() -> None:
+    skill_root = Path(__file__).resolve().parents[2] / "skills" / "abel-invest"
+    script = skill_root / "scripts" / "bootstrap_workspace.py"
+    spec = importlib.util.spec_from_file_location("bootstrap_workspace", script)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    data = tomllib.loads((skill_root / "pyproject.toml").read_text(encoding="utf-8"))
+
+    agents = module.render_agents(skill_root)
+
+    assert agents.startswith(
+        "<!-- abel-invest.workspace-agents/v1 "
+        f"version={data['project']['version']} -->"
+    )
+
+
+def test_abel_invest_dependencies_constrain_edge_major_version() -> None:
+    pyproject = Path(__file__).resolve().parents[2] / "skills" / "abel-invest" / "pyproject.toml"
     data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
 
-    assert "abel-edge>=0.8.6,<0.9.0" in data["project"]["dependencies"]
+    assert "abel-edge>=0.8.9,<0.9.0" in data["project"]["dependencies"]
 
 
-def test_strategy_discovery_bootstrap_lets_pyproject_install_dependencies() -> None:
-    script = Path(__file__).resolve().parents[1] / "skills" / "abel-invest" / "scripts" / "bootstrap_workspace.py"
+def test_abel_invest_bootstrap_lets_pyproject_install_dependencies() -> None:
+    script = Path(__file__).resolve().parents[2] / "skills" / "abel-invest" / "scripts" / "bootstrap_workspace.py"
     source = script.read_text(encoding="utf-8")
 
     assert "git+https://github.com/Abel-ai-lab/Abel-edge.git@main" not in source
@@ -66,7 +85,7 @@ def test_strategy_discovery_bootstrap_lets_pyproject_install_dependencies() -> N
     assert "eager" in source
 
 
-def test_strategy_discovery_cli_hides_edge_install_overrides() -> None:
+def test_abel_invest_cli_hides_edge_install_overrides() -> None:
     parser = build_parser()
 
     with pytest.raises(SystemExit):
@@ -84,7 +103,7 @@ def test_strategy_discovery_cli_hides_edge_install_overrides() -> None:
         parser.parse_args(["env", "init", "--edge-spec", "abel-edge==0.8.0"])
 
 
-def test_strategy_discovery_cli_rejects_non_positive_public_limits() -> None:
+def test_abel_invest_cli_rejects_non_positive_public_limits() -> None:
     parser = build_parser()
 
     with pytest.raises(SystemExit):
@@ -124,7 +143,7 @@ def test_strategy_discovery_cli_rejects_non_positive_public_limits() -> None:
         )
 
 
-def test_strategy_discovery_cli_exposes_env_refresh() -> None:
+def test_abel_invest_cli_exposes_env_refresh() -> None:
     parser = build_parser()
 
     args = parser.parse_args(["env", "refresh", "--path", "abel-invest-workspace"])
@@ -134,23 +153,29 @@ def test_strategy_discovery_cli_exposes_env_refresh() -> None:
     assert args.path == "abel-invest-workspace"
 
 
-def test_visualize_session_strategy_artifact_is_default_with_session_only_opt_out() -> None:
+def test_visualize_session_strategy_artifact_is_default_and_opt_out_is_rejected(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     parser = build_parser()
 
     default_args = parser.parse_args(
         ["visualize-session", "--session", "research/tsla/tsla-v1"]
     )
-    opt_out_args = parser.parse_args(
-        [
-            "visualize-session",
-            "--session",
-            "research/tsla/tsla-v1",
-            "--without-strategy-artifact",
-        ]
-    )
 
-    assert default_args.without_strategy_artifact is False
-    assert opt_out_args.without_strategy_artifact is True
+    assert not hasattr(default_args, "without_strategy_artifact")
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "visualize-session",
+                "--session",
+                "research/tsla/tsla-v1",
+                "--without-strategy-artifact",
+            ]
+        )
+    with pytest.raises(SystemExit):
+        parser.parse_args(["visualize-session", "--help"])
+    help_text = capsys.readouterr().out
+    assert "--without-strategy-artifact" not in help_text
     with pytest.raises(SystemExit):
         parser.parse_args(
             [
@@ -160,3 +185,15 @@ def test_visualize_session_strategy_artifact_is_default_with_session_only_opt_ou
                 "--with-strategy-artifact",
             ]
         )
+
+
+def test_best_strategy_is_read_only_session_selector() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        ["best-strategy", "--session", "research/tsla/tsla-v1", "--json"]
+    )
+
+    assert args.command == "best-strategy"
+    assert args.session == "research/tsla/tsla-v1"
+    assert args.json is True

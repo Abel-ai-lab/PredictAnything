@@ -26,23 +26,28 @@ Use it to:
 
 - get a fast first narrative read on a concrete candidate
 - disambiguate a concrete entity or ticker only when the next step actually needs it
-- open a provider-owned session when a deeper narrative workflow is actually needed
+- find candidate anchors for broad themes when graph anchors are not obvious
 
 Do not use it to:
 
 - replace graph CAP for graph-backed verdicts
-- present narrative output as observational or interventional proof
-- keep drilling into provider-owned handles when graph CAP already gives the answer
+- present narrative output as graph proof
+- advertise full-market coverage; narrative graph coverage may be limited and
+  should be treated as a scout, not a complete universe
 
 Default progression:
 
 1. if the entity is already clear and the user mainly wants a first read, start with `narrate`
 2. add `query-node` or `resolve-entity` only when the entity is ambiguous, you need an id, or the next step needs stronger disambiguation
 3. for broad theme exploration, rewrite the query first, then use `query-node` before `narrate`
-4. `search-prepare` only if you need provider-owned session or graph handles for a deeper follow-up
+4. use `search-prepare` only when steps 1-3 are too thin and you need a richer
+   seed bundle or mapping status before graph validation
 5. shift back to graph CAP as soon as the shortlist or anchor set is good enough for graph validation
 
-For broad-theme, shortlist, or first-round screening prompts, steps 1-3 are a hard gate, not a suggestion. Do not start deep graph discovery or a wide web evidence sweep until at least one narrative CAP scout call has either returned anchors or clearly failed.
+For broad-theme, shortlist, or first-round screening prompts, steps 1-3 are the
+preferred scout path when coverage is likely. If narrative coverage is thin,
+rewrite once, then continue with graph plus web without claiming narrative
+coverage.
 
 ## Broad Theme Rule
 
@@ -104,10 +109,14 @@ python scripts/narrative_cap_probe.py query-node --query "beneficiaries of AI da
 python scripts/narrative_cap_probe.py narrate --query "NVDA and AI datacenter demand"
 ```
 
-Need deeper provider-owned handles:
+Broad theme remains thin after query rewrite:
 
 ```bash
-python scripts/narrative_cap_probe.py search-prepare --query "NVDA and AI datacenter demand" --intent read
+python scripts/narrative_cap_probe.py search-prepare \
+  --query "AI datacenter demand beneficiaries" \
+  --intent read \
+  --max-hops 2 \
+  --max-nodes 80
 ```
 
 Stop after this phase if you already have enough concrete anchors to move into graph CAP.
@@ -141,14 +150,6 @@ python scripts/narrative_cap_probe.py resolve-entity --query "NVDA"
 python scripts/narrative_cap_probe.py resolve-entity --query "Supermicro" --search-mode hybrid --top-k 5
 ```
 
-Use `--advanced-json` only when you need stronger provider-side filtering:
-
-```bash
-python scripts/narrative_cap_probe.py resolve-entity \
-  --query "NVDA" \
-  --advanced-json '{"symbols":["NVDA"],"claim_types":["PREDICTION"]}'
-```
-
 Do not put this in the default loop just because the entity is already named. Start with it only when ambiguity or coverage checks are the actual blocker.
 
 If `resolution_status` is ambiguous or the provider locks onto the wrong symbol, rewrite the query before continuing.
@@ -159,125 +160,42 @@ Use when you want raw candidate retrieval and seed visibility instead of a narra
 
 ```bash
 python scripts/narrative_cap_probe.py query-node --query "NVDA"
-python scripts/narrative_cap_probe.py query-node \
-  --query "NVDA" \
-  --advanced-json '{"symbols":["NVDA"],"claim_types":["PREDICTION"]}'
 ```
 
 Prefer this over `resolve-entity` when:
 
 - the query is concept-heavy
 - you want to inspect raw seed candidates
-- you need to confirm whether prediction claims exist before deeper workflow steps
 - the prompt is broad, theme-first, or likely to overfit to a symbol-like token
-
-### `explain-read-bundle`
-
-Use when you want a read bundle, but still stay stateless.
-
-```bash
-python scripts/narrative_cap_probe.py explain-read-bundle \
-  --query "NVDA" \
-  --question-type directional \
-  --strictness exploratory \
-  --include-layer supporting_evidence \
-  --include-layer top_tailwinds
-```
-
-Treat this as exploratory. If it only returns a skeleton or thin layers, do not force it into the final answer.
 
 ### `search-prepare`
 
-Use only when you need a session or handle for deeper provider-owned workflow.
+Use only as a richer scout when `query-node` / `narrate` did not produce enough
+usable anchors for graph CAP.
 
 ```bash
 python scripts/narrative_cap_probe.py search-prepare \
-  --query "NVDA and AI datacenter demand" \
+  --query "AI datacenter demand beneficiaries" \
   --intent read \
   --max-hops 2 \
-  --max-nodes 120
+  --max-nodes 80
 ```
 
-This is the normal bridge into:
+Extract only what helps the Ask workflow:
 
-- `predict`
-- `what-if`
-- provider-owned graph handles exposed in `recommended_next_actions`
+- candidate items and variables
+- seed descriptions
+- mapping status
+- recommended graph-inspection next actions
 
-Do not default to this for every proxy-routed question.
-
-## Advanced Follow-On Commands
-
-These are valid tools, but not the default first pass.
-
-### `explain-outcome`
-
-One-shot deeper workflow that can create a session, execution handle, candidate outcome, and driver summary.
-
-```bash
-python scripts/narrative_cap_probe.py explain-outcome \
-  --query "AI datacenter demand and NVDA" \
-  --focus-strategy auto \
-  --focus-top-n 12 \
-  --top-driver-count 5 \
-  --max-paths 3 \
-  --max-hops 3 \
-  --include-bayes-evidence
-```
-
-Use only when:
-
-- the query is already concrete enough
-- you explicitly want a deeper provider-native explanation
-- you are prepared to inspect whether the chosen outcome drifted off-target
-
-### `observe-predict`
-
-Core CAP observational helper.
-
-```bash
-python scripts/narrative_cap_probe.py observe-predict \
-  --target-node "bayes:NVDA:PREDICTION:057dc3989741c21fb4a209f9f2c6af02cabbcb3b"
-```
-
-### `intervene-do`
-
-Core CAP interventional helper.
-
-```bash
-python scripts/narrative_cap_probe.py intervene-do \
-  --treatment-node "bayes:NVDA:PREDICTION:4fd6098dd0558ec52ed360c09f13de224eddefb6" \
-  --treatment-value 0.1 \
-  --outcome-node "bayes:NVDA:PREDICTION:057dc3989741c21fb4a209f9f2c6af02cabbcb3b"
-```
-
-Use these only when:
-
-- you already trust the provider-native node refs
-- you understand the result is still provider-specific narrative evidence, not graph CAP validation
-
-### `predict` and `what-if`
-
-These depend on a prior `search-prepare` session:
-
-```bash
-python scripts/narrative_cap_probe.py predict \
-  --session-handle "alb:session:..." \
-  --node-ref "n78"
-
-python scripts/narrative_cap_probe.py what-if \
-  --session-handle "alb:session:..." \
-  --treatment-node-ref "n104" \
-  --treatment-value 0.01 \
-  --outcome-node-ref "n106"
-```
-
-Do not recommend these in the default user-facing flow unless the user explicitly wants a deeper narrative workflow.
+Then return to graph CAP. Do not follow the session into scoring or simulation
+workflows.
 
 ## Stop Rules
 
 - Stop at `resolve-entity` or `narrate` if you already have a concrete shortlist to validate in graph CAP.
-- Stop at `search-prepare` if the only purpose was to confirm that provider-owned handles exist.
+- Stop at `search-prepare` once you have anchor candidates, mapping status, or
+  a graph-inspection next action.
 - Stop and rewrite the query if the provider keeps anchoring to a wrong symbol-like token.
 - Stop and say the answer is still at the narrative-scout / shortlist stage if graph CAP cannot meaningfully carry the discovered anchors.
 

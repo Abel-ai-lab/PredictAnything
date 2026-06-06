@@ -156,6 +156,10 @@ def print_graph_frontier_status(session: Path) -> None:
     print(f"Unexpanded nodes: {facts['unexpanded_node_count']}")
     print(f"Fields: {render_inline_counts(facts['field_counts'])}")
     print(f"Roles: {render_inline_counts(facts['role_counts'])}")
+    print(
+        "Search boundary: frontier coverage is context, not exhaustion; "
+        "before stopping below target, check whether higher-ceiling search axes remain."
+    )
 
 
 def graph_frontier_facts(frontier: dict) -> dict[str, object]:

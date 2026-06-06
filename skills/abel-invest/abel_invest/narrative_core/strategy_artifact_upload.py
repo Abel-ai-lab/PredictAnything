@@ -12,6 +12,11 @@ from urllib.request import Request, urlopen
 from abel_invest.narrative_core.strategy_artifacts import export_selected_strategy_artifact
 from abel_invest.narrative_core.upload_transport import build_multipart_form_data
 
+STRATEGY_DETAIL_ENTRY_TIP = (
+    "Tip: On the session review page, scroll to Session strategies near the bottom "
+    "and click View Strategy to open the bound strategy detail page."
+)
+
 
 def post_strategy_artifact_upload(
     *,
@@ -115,14 +120,107 @@ def _strategy_artifact_preupload_error(export_result: dict) -> str:
     reason = str(promotion_report.get("reason") or "").strip()
     request_path = str(promotion_report.get("requestPath") or "").strip()
     message = (
-        "Strategy artifact publish requires skill-level agent refactor before "
+        "Strategy artifact publish requires a hosted paper contract before "
         f"upload: {skip_reason}"
     )
     if reason:
         message += f"; reason={reason}"
     if request_path:
         message += f"; requestPath={request_path}"
+    request_details = _contract_request_error_details(request_path)
+    if request_details:
+        message += "; " + "; ".join(request_details)
     return message
+
+
+def _contract_request_error_details(request_path: str) -> list[str]:
+    if not request_path:
+        return []
+    path = Path(request_path)
+    if not path.is_file():
+        return []
+    try:
+        request = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(request, dict):
+        return []
+    requirements = (
+        request.get("requirements")
+        if isinstance(request.get("requirements"), dict)
+        else {}
+    )
+    validation = (
+        request.get("validation")
+        if isinstance(request.get("validation"), dict)
+        else {}
+    )
+    attempt_policy = (
+        validation.get("attemptPolicy")
+        if isinstance(validation.get("attemptPolicy"), dict)
+        else {}
+    )
+    details: list[str] = []
+    expected_action = _contract_request_scalar(requirements.get("expectedAction"))
+    if expected_action:
+        details.append(f"expectedAction={expected_action}")
+    continuation_method = _contract_request_scalar(
+        requirements.get("continuationMethod")
+    )
+    if continuation_method:
+        details.append(f"continuationMethod={continuation_method}")
+    policy_details = _attempt_policy_error_details(attempt_policy)
+    if policy_details:
+        details.append(f"attemptPolicy({', '.join(policy_details)})")
+    gate_details = _last_gate_failure_error_details(validation.get("lastGateFailure"))
+    if gate_details:
+        details.append(gate_details)
+    details.append(
+        "nextAction=write_or_repair_paper_contract_report_and_rerun_same_command"
+    )
+    return details
+
+
+def _attempt_policy_error_details(attempt_policy: dict) -> list[str]:
+    details: list[str] = []
+    for key in (
+        "contractRequestRefreshes",
+        "liveContractFailures",
+        "fullReplayFallbackEligible",
+    ):
+        value = _contract_request_scalar(attempt_policy.get(key))
+        if value:
+            details.append(f"{key}={value}")
+    return details
+
+
+def _last_gate_failure_error_details(last_gate_failure: object) -> str:
+    if not isinstance(last_gate_failure, dict):
+        return ""
+    failed_gates = last_gate_failure.get("failedGates")
+    if not isinstance(failed_gates, list):
+        return ""
+    compact: list[str] = []
+    for gate in failed_gates:
+        if not isinstance(gate, dict):
+            continue
+        name = _contract_request_scalar(gate.get("name"))
+        reason = _contract_request_scalar(gate.get("reason"))
+        if name and reason:
+            compact.append(f"{name}:{reason}")
+        elif name:
+            compact.append(name)
+    if not compact:
+        return ""
+    return f"lastGateFailure={','.join(compact[:3])}"
+
+
+def _contract_request_scalar(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return " ".join(str(value).strip().split())
 
 
 def upload_prepared_strategy_artifact_for_session(
@@ -207,7 +305,7 @@ def render_strategy_artifact_upload_lines(artifact_result: dict | None) -> list[
         details.append(f"selected={branch_id}/{round_id}")
     if details:
         summary += f" ({', '.join(details)})"
-    return [summary]
+    return [summary, STRATEGY_DETAIL_ENTRY_TIP]
 
 
 def _strategy_artifact_skip_line(artifact_result: dict) -> str:

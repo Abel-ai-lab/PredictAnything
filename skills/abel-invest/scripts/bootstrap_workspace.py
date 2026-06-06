@@ -7,19 +7,21 @@ import argparse
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from shutil import which
 
 
 MANIFEST_NAME = "alpha.workspace.yaml"
 DEFAULT_WORKSPACE_NAME = "abel-invest-workspace"
+WORKSPACE_AGENTS_GUIDE_SCHEMA = "abel-invest.workspace-agents/v1"
 
 
 def main() -> int:
     args = build_parser().parse_args()
     skill_root = resolve_skill_root(args.alpha_source)
     target_root = Path(args.path).expanduser().resolve()
-    root = ensure_workspace_scaffold(target_root, args.name)
+    root = ensure_workspace_scaffold(target_root, args.name, skill_root=skill_root)
     python_path = ensure_workspace_runtime(
         root=root,
         skill_root=skill_root,
@@ -91,7 +93,7 @@ def resolve_skill_root(explicit: str | None) -> Path:
     return root
 
 
-def ensure_workspace_scaffold(target_root: Path, name: str) -> Path:
+def ensure_workspace_scaffold(target_root: Path, name: str, *, skill_root: Path) -> Path:
     target_state, related_root = inspect_workspace_bootstrap_target(target_root)
     if target_state == "nested_workspace" and related_root is not None:
         raise SystemExit(
@@ -125,7 +127,7 @@ def ensure_workspace_scaffold(target_root: Path, name: str) -> Path:
     write_text(target_root / ".env.example", render_env_example())
     write_text(target_root / ".env", "")
     write_text(target_root / "README.md", render_readme(name))
-    write_text(target_root / "AGENTS.md", render_agents())
+    write_text(target_root / "AGENTS.md", render_agents(skill_root))
     print(f"Created Abel strategy discovery workspace at {target_root}")
     return target_root
 
@@ -273,8 +275,10 @@ feedback, and artifact refs before running another recorded round.
 """
 
 
-def render_agents() -> str:
-    return """# AGENTS.md - Abel strategy discovery Workspace
+def render_agents(skill_root: Path) -> str:
+    version = local_project_version(skill_root)
+    return f"""<!-- {WORKSPACE_AGENTS_GUIDE_SCHEMA} version={version} -->
+# AGENTS.md - Abel strategy discovery Workspace
 
 Use this directory as the workspace root. If `alpha.workspace.yaml` is present,
 do not create a child `abel-invest-workspace` here. Run
@@ -330,6 +334,13 @@ def default_activate_command() -> str:
     if os.name == "nt":
         return ".venv\\Scripts\\Activate.ps1"
     return "source .venv/bin/activate"
+
+
+def local_project_version(skill_root: Path) -> str:
+    pyproject = skill_root / "pyproject.toml"
+    with pyproject.open("rb") as file:
+        data = tomllib.load(file)
+    return str(data["project"]["version"])
 
 
 def write_text(path: Path, content: str) -> None:
