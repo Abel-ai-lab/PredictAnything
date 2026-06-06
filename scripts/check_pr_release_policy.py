@@ -97,7 +97,7 @@ def detect_changed_source_version_files(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Check Abel-skills pull request branching and release policy."
+        description="Check Abel Strategy Research Skills pull request branching and release policy."
     )
     parser.add_argument("--base-branch", required=True, help="Pull request base branch.")
     parser.add_argument(

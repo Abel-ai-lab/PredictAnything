@@ -1,4 +1,4 @@
-This `AGENTS.md` applies to everything under `Abel-skills/`.
+This `AGENTS.md` applies to everything under `abel-strategy-research-skills/`.
 
 Rules:
 

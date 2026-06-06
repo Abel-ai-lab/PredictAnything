@@ -1,4 +1,6 @@
-# Installing Abel Skills for OpenCode
+# Installing Abel Strategy Research Skills for OpenCode
+
+Enable Abel strategy discovery workflows through the OpenCode plugin config.
 
 Ask user to choose one install scope:
 
@@ -11,7 +13,7 @@ Add Abel to your global OpenCode config:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/Abel-skills.git"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git"]
 }
 ```
 
@@ -21,7 +23,7 @@ Add Abel to the `plugin` array in the current project's `opencode.json`:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/Abel-skills.git"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git"]
 }
 ```
 
@@ -29,7 +31,7 @@ To pin a specific release tag, branch, or ref, add it after `#`:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-causality/Abel-skills.git#v1.2.0"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-causality/abel-strategy-research-skills.git#v1.4.2"]
 }
 ```
 
@@ -37,11 +39,10 @@ Release tags are the recommended stable pin target.
 
 ## After Either Install
 
-1. Restart OpenCode after editing the config.
-2. Ask OpenCode to initialize Abel.
-3. If auth is not already configured, run `abel-auth`.
-4. Bootstrap the default strategy workspace:
+Important: after installation, prompt the user to restart opencode or open a new session and tell them that they can try following queries with Abel (show the full list!):
 
-```bash
-abel-invest workspace bootstrap --path ./abel-invest-workspace
-```
+- "Abel, find a strategy for AMZN."
+- "Abel, research strategies for META."
+- "Can Abel look for an ORCL strategy?"
+- "Abel, help me search for a tradable TSLA strategy."
+- "Which companies benefit from AI datacenter expansion?"

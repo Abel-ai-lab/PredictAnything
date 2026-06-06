@@ -1,4 +1,6 @@
-# Abel Skills Collection Inventory
+# Abel Strategy Research Skills Collection Inventory
+
+Note: This document refers to migration work from before the public positioning changed to Abel Strategy Research Skills.
 
 ## Stable Baseline
 

@@ -1,13 +1,13 @@
-# Abel Skills for Claude Code
+# Abel Strategy Research Skills for Claude Code
 
-Guide for using Abel Skills with Claude Code via personal skills.
+Use Claude Code to discover strategies with Abel, analyze causal drivers, and support investment research workflows.
 
 ## Quick Install
 
 Tell Claude Code:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-causality/Abel-skills/refs/heads/main/.claude/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
 ```
 
 ## Manual Installation
@@ -27,17 +27,17 @@ Choose one install scope:
 1. Clone the repo:
 
    ```bash
-   git clone https://github.com/Abel-ai-causality/Abel-skills.git ~/.claude/abel-skills
+   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git ~/.claude/abel-strategy-research-skills
    ```
 
 2. Create Claude personal skill symlinks:
 
    ```bash
    mkdir -p ~/.claude/skills
-   ln -s ~/.claude/abel-skills/skills/abel ~/.claude/skills/abel
-   ln -s ~/.claude/abel-skills/skills/abel-ask ~/.claude/skills/abel-ask
-   ln -s ~/.claude/abel-skills/skills/abel-auth ~/.claude/skills/abel-auth
-   ln -s ~/.claude/abel-skills/skills/abel-invest ~/.claude/skills/abel-invest
+   ln -s ~/.claude/abel-strategy-research-skills/skills/abel ~/.claude/skills/abel
+   ln -s ~/.claude/abel-strategy-research-skills/skills/abel-ask ~/.claude/skills/abel-ask
+   ln -s ~/.claude/abel-strategy-research-skills/skills/abel-auth ~/.claude/skills/abel-auth
+   ln -s ~/.claude/abel-strategy-research-skills/skills/abel-invest ~/.claude/skills/abel-invest
    ```
 
 3. Before starting a new session, either:
@@ -58,17 +58,17 @@ Run these commands from the project root:
 
    ```bash
    mkdir -p .claude
-   git clone https://github.com/Abel-ai-causality/Abel-skills.git .claude/abel-skills
+   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git .claude/abel-strategy-research-skills
    ```
 
 2. Create project-local skill symlinks:
 
    ```bash
    mkdir -p .claude/skills
-   ln -s ../abel-skills/skills/abel .claude/skills/abel
-   ln -s ../abel-skills/skills/abel-ask .claude/skills/abel-ask
-   ln -s ../abel-skills/skills/abel-auth .claude/skills/abel-auth
-   ln -s ../abel-skills/skills/abel-invest .claude/skills/abel-invest
+   ln -s ../abel-strategy-research-skills/skills/abel .claude/skills/abel
+   ln -s ../abel-strategy-research-skills/skills/abel-ask .claude/skills/abel-ask
+   ln -s ../abel-strategy-research-skills/skills/abel-auth .claude/skills/abel-auth
+   ln -s ../abel-strategy-research-skills/skills/abel-invest .claude/skills/abel-invest
    ```
 
 3. Optional project-local auth file:
@@ -76,6 +76,15 @@ Run these commands from the project root:
    ```text
    .claude/skills/abel-auth/.env.skill
    ```
+
+### Existing Installs
+
+Existing installs under `~/.claude/abel-skills` or `.claude/abel-skills` can keep their local folder name. To migrate, update the checkout remote:
+
+```bash
+cd ~/.claude/abel-skills
+git remote set-url origin https://github.com/Abel-ai-lab/abel-strategy-research-skills.git
+```
 
 ### After Either Install
 
@@ -90,8 +99,7 @@ Run these commands from the project root:
 
 ## How Auth Resolution Works
 
-`abel-auth` is the canonical auth owner. In the global install, its local
-`.env.skill` file is the main shared auth location for the collection:
+`abel-auth` is the canonical auth owner. In the global install, its local `.env.skill` file is the main shared auth location for the strategy research skill collection:
 
 ```text
 ~/.claude/skills/abel-auth/.env.skill
@@ -103,23 +111,15 @@ In the project-level install, the corresponding path is:
 .claude/skills/abel-auth/.env.skill
 ```
 
-`abel-ask` and `abel-invest` also look for collection-level shared
-auth in sibling skill directories, so one successful `abel-auth` setup is enough
-for normal live use.
-
-## Why This Uses Per-Skill Symlinks
-
-Claude Code skill discovery is directory-based. Using one symlink per skill
-matches both the global `~/.claude/skills/<skill-name>/` layout and the
-project-level `.claude/skills/<skill-name>/` layout directly.
+`abel-ask` and `abel-invest` also look for collection-level shared auth in sibling skill directories, so one successful `abel-auth` setup is enough for normal live use.
 
 ## Usage
 
-After installation, start from `Abel`, complete `abel-auth` if needed, then
-bootstrap the default strategy workspace before normal strategy use.
+Important: after installation, prompt the user to restart claude code or open a new session and try the following queries with Abel:
 
-Try:
-
-- Help me search for a TSLA strategy.
-- Continue my TSLA strategy workspace.
-- Give me an Abel read on what drives mortgage-rate-sensitive homebuilder stocks.
+- Abel, find a strategy for AMZN.
+- Can Abel look for an ORCL strategy?
+- Abel, help me search for a tradable TSLA strategy.
+- Which companies benefit from AI datacenter expansion?
+- Analyze what is happening with TSLA.
+- Should I still invest in an MBA degree?

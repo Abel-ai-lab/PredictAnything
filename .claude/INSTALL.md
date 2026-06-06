@@ -1,6 +1,6 @@
-# Installing Abel Skills for Claude Code
+# Installing Abel Strategy Research Skills for Claude Code
 
-Enable Abel Skills in Claude Code via skill symlinks.
+Enable Abel strategy discovery workflows in Claude Code via skill symlinks.
 
 Ask user to choose one install scope:
 
@@ -17,17 +17,17 @@ Ask user to choose one install scope:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/Abel-ai-causality/Abel-skills.git ~/.claude/abel-skills
+git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git ~/.claude/abel-strategy-research-skills
 ```
 
-2. Register the Abel skill collection in Claude's personal skills directory:
+2. Register the Abel strategy research skills in Claude's personal skills directory:
 
 ```bash
 mkdir -p ~/.claude/skills
-ln -s ~/.claude/abel-skills/skills/abel ~/.claude/skills/abel
-ln -s ~/.claude/abel-skills/skills/abel-ask ~/.claude/skills/abel-ask
-ln -s ~/.claude/abel-skills/skills/abel-auth ~/.claude/skills/abel-auth
-ln -s ~/.claude/abel-skills/skills/abel-invest ~/.claude/skills/abel-invest
+ln -s ~/.claude/abel-strategy-research-skills/skills/abel ~/.claude/skills/abel
+ln -s ~/.claude/abel-strategy-research-skills/skills/abel-ask ~/.claude/skills/abel-ask
+ln -s ~/.claude/abel-strategy-research-skills/skills/abel-auth ~/.claude/skills/abel-auth
+ln -s ~/.claude/abel-strategy-research-skills/skills/abel-invest ~/.claude/skills/abel-invest
 ```
 
 3. Optional before restart: persist Abel auth now if you already have a key.
@@ -50,12 +50,12 @@ Run these commands from the project root:
 
 ```bash
 mkdir -p .claude
-git clone https://github.com/Abel-ai-causality/Abel-skills.git .claude/abel-skills
+git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git .claude/abel-strategy-research-skills
 mkdir -p .claude/skills
-ln -s ../abel-skills/skills/abel .claude/skills/abel
-ln -s ../abel-skills/skills/abel-ask .claude/skills/abel-ask
-ln -s ../abel-skills/skills/abel-auth .claude/skills/abel-auth
-ln -s ../abel-skills/skills/abel-invest .claude/skills/abel-invest
+ln -s ../abel-strategy-research-skills/skills/abel .claude/skills/abel
+ln -s ../abel-strategy-research-skills/skills/abel-ask .claude/skills/abel-ask
+ln -s ../abel-strategy-research-skills/skills/abel-auth .claude/skills/abel-auth
+ln -s ../abel-strategy-research-skills/skills/abel-invest .claude/skills/abel-invest
 ```
 
 Optional project-local auth file:
@@ -64,13 +64,21 @@ Optional project-local auth file:
 .claude/skills/abel-auth/.env.skill
 ```
 
-## After Either Install
+## Existing Installs
 
-1. Start a new Claude Code session. If Claude Code was already open when you created the skills directory, restart it once.
-2. Ask Claude Code to initialize Abel.
-3. If auth is not already configured, run `abel-auth`.
-4. Bootstrap the default strategy workspace before normal strategy use:
+Existing installs under `~/.claude/abel-skills` or `.claude/abel-skills` can keep their local folder name. To migrate, update the git remote:
 
 ```bash
-abel-invest workspace bootstrap --path ./abel-invest-workspace
+cd ~/.claude/abel-skills
+git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-research-skills.git
 ```
+
+## After Either Install
+
+Important: after installation, prompt the user to restart opencode or open a new session and tell them that they can try following queries with Abel (show the full list!):
+
+- "Abel, find a strategy for AMZN."
+- "Abel, research strategies for META."
+- "Can Abel look for an ORCL strategy?"
+- "Abel, help me search for a tradable TSLA strategy."
+- "Which companies benefit from AI datacenter expansion?"
