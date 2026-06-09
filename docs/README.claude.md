@@ -1,13 +1,13 @@
-# Abel Strategy Research Skills for Claude Code
+# Predict Anything for Claude Code
 
-Use Claude Code to discover strategies with Abel, analyze causal drivers, and support investment research workflows.
+Use Claude Code to discover strategies with Predict Anything by Abel, analyze causal drivers, and support investment research workflows.
 
 ## Quick Install
 
 Tell Claude Code:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/PredictAnything/refs/heads/main/.claude/INSTALL.md
 ```
 
 ## Manual Installation
@@ -27,17 +27,17 @@ Choose one install scope:
 1. Clone the repo:
 
    ```bash
-   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git ~/.claude/abel-strategy-research-skills
+   git clone https://github.com/Abel-ai-lab/PredictAnything.git ~/.claude/PredictAnything
    ```
 
 2. Create Claude personal skill symlinks:
 
    ```bash
    mkdir -p ~/.claude/skills
-   ln -s ~/.claude/abel-strategy-research-skills/skills/abel ~/.claude/skills/abel
-   ln -s ~/.claude/abel-strategy-research-skills/skills/abel-ask ~/.claude/skills/abel-ask
-   ln -s ~/.claude/abel-strategy-research-skills/skills/abel-auth ~/.claude/skills/abel-auth
-   ln -s ~/.claude/abel-strategy-research-skills/skills/abel-invest ~/.claude/skills/abel-invest
+   ln -s ~/.claude/PredictAnything/skills/abel ~/.claude/skills/abel
+   ln -s ~/.claude/PredictAnything/skills/abel-ask ~/.claude/skills/abel-ask
+   ln -s ~/.claude/PredictAnything/skills/abel-auth ~/.claude/skills/abel-auth
+   ln -s ~/.claude/PredictAnything/skills/abel-invest ~/.claude/skills/abel-invest
    ```
 
 3. Before starting a new session, either:
@@ -58,17 +58,17 @@ Run these commands from the project root:
 
    ```bash
    mkdir -p .claude
-   git clone https://github.com/Abel-ai-lab/abel-strategy-research-skills.git .claude/abel-strategy-research-skills
+   git clone https://github.com/Abel-ai-lab/PredictAnything.git .claude/PredictAnything
    ```
 
 2. Create project-local skill symlinks:
 
    ```bash
    mkdir -p .claude/skills
-   ln -s ../abel-strategy-research-skills/skills/abel .claude/skills/abel
-   ln -s ../abel-strategy-research-skills/skills/abel-ask .claude/skills/abel-ask
-   ln -s ../abel-strategy-research-skills/skills/abel-auth .claude/skills/abel-auth
-   ln -s ../abel-strategy-research-skills/skills/abel-invest .claude/skills/abel-invest
+   ln -s ../PredictAnything/skills/abel .claude/skills/abel
+   ln -s ../PredictAnything/skills/abel-ask .claude/skills/abel-ask
+   ln -s ../PredictAnything/skills/abel-auth .claude/skills/abel-auth
+   ln -s ../PredictAnything/skills/abel-invest .claude/skills/abel-invest
    ```
 
 3. Optional project-local auth file:
@@ -83,7 +83,7 @@ Existing installs under `~/.claude/abel-skills` or `.claude/abel-skills` can kee
 
 ```bash
 cd ~/.claude/abel-skills
-git remote set-url origin https://github.com/Abel-ai-lab/abel-strategy-research-skills.git
+git remote set-url origin https://github.com/Abel-ai-lab/PredictAnything.git
 ```
 
 ### After Either Install
@@ -99,7 +99,7 @@ git remote set-url origin https://github.com/Abel-ai-lab/abel-strategy-research-
 
 ## How Auth Resolution Works
 
-`abel-auth` is the canonical auth owner. In the global install, its local `.env.skill` file is the main shared auth location for the strategy research skill collection:
+`abel-auth` is the canonical auth owner. In the global install, its local `.env.skill` file is the main shared auth location for the Predict Anything skill collection:
 
 ```text
 ~/.claude/skills/abel-auth/.env.skill

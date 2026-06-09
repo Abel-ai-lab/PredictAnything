@@ -1,6 +1,6 @@
-# Abel Strategy Research
+# Predict Anything Strategy Research
 
-Abel Strategy Research Skills are AI agent skills for strategy discovery with Abel: explore market ideas, analyze causal drivers, and develop investment strategies.
+Predict Anything is an AI agent skill collection for strategy discovery with Abel: explore market ideas, analyze causal drivers, and develop investment strategies.
 
 ## Strategy Discovery, Not Trade Execution
 

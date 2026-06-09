@@ -2,7 +2,7 @@
 
 ## GitHub Direct Install
 
-`main` is the stable direct-install source for Abel Strategy Research Skills.
+`main` is the stable direct-install source for Predict Anything.
 
 ## Release Tags
 
@@ -14,7 +14,7 @@ OpenCode can pin a release tag, branch, or other git ref with:
 
 ```json
 {
-  "plugin": ["abel@git+https://github.com/Abel-ai-lab/abel-strategy-research-skills.git#v1.4.2"]
+  "plugin": ["abel@git+https://github.com/Abel-ai-lab/PredictAnything.git#v1.4.2"]
 }
 ```
 

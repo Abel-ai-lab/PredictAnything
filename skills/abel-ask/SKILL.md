@@ -14,7 +14,7 @@ metadata:
       bins:
         - python3
     primaryEnv: ABEL_API_KEY
-    homepage: https://github.com/Abel-ai-lab/abel-strategy-research-skills
+    homepage: https://github.com/Abel-ai-lab/PredictAnything
 ---
 
 Abel Ask explains mechanisms, candidate lists, and decision rules. Finance and

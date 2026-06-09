@@ -11,7 +11,7 @@ metadata:
       bins:
         - python3
     primaryEnv: ABEL_API_KEY
-    homepage: https://github.com/Abel-ai-lab/abel-strategy-research-skills
+    homepage: https://github.com/Abel-ai-lab/PredictAnything
 ---
 
 Use `Abel` as the main entrypoint.

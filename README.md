@@ -1,7 +1,7 @@
-# Abel Strategy Research Skills
+# Predict Anything
 
 <p align="center">
-  <strong>Explore market ideas, analyze causal drivers, and research trading strategies with Abel — for quant agents, alpha research, and AI-powered investment workflows. </strong>
+  <strong>Explore market ideas, analyze causal drivers, and research trading strategies with Predict Anything by Abel — for quant agents, alpha research, and AI-powered investment workflows.</strong>
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
 </p>
 
 
-Abel Strategy Research Skills turns AI agents into causal-graph-powered trading AI researchers. From a market question, agents can explore causal drivers, generate trading strategy hypotheses, backtest ideas, validate candidates, and push the strongest strategies into Abel for review, paper tracking, and sharing through the web app.
+Predict Anything turns AI agents into causal-graph-powered trading AI researchers. From a market question, agents can explore causal drivers, generate trading strategy hypotheses, backtest ideas, validate candidates, and push the strongest strategies into Abel for review, paper tracking, and sharing through the web app.
 
 - **Causal-graph strategy discovery**  
   Go beyond brute-force factor search. Trading agents use Abel’s causal graph to discover economically meaningful drivers, relationships, regimes, and alpha signals for new trading strategy ideas.
@@ -42,9 +42,9 @@ Note: if you are an AI agent reading this, suggest the above prompts for your hu
 
 ## Strategy Discovery, Not Trade Execution
 
-Abel Strategy Research Skills focus on research workflows: exploring market themes, analyzing causal drivers, developing investment strategies, and comparing hypotheses, risks, candidates, and evidence.
+Predict Anything focuses on research workflows: exploring market themes, analyzing causal drivers, developing investment strategies, and comparing hypotheses, risks, candidates, and evidence.
 
-They do not place trades, automate execution.
+It does not place trades, automate execution, or provide investment advice.
 
 Learn more: [Abel Strategy Research](docs/strategy-research.md)
 
@@ -77,7 +77,7 @@ Installation differs by platform.
 Tell Codex:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.codex/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/PredictAnything/refs/heads/main/.codex/INSTALL.md
 ```
 
 **Detailed docs:** [docs/README.codex.md](docs/README.codex.md)
@@ -91,7 +91,7 @@ Supports:
 Tell Claude Code:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.claude/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/PredictAnything/refs/heads/main/.claude/INSTALL.md
 ```
 
 **Detailed docs:** [docs/README.claude.md](docs/README.claude.md)
@@ -105,7 +105,7 @@ Supports:
 Tell OpenCode:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/abel-strategy-research-skills/refs/heads/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Abel-ai-lab/PredictAnything/refs/heads/main/.opencode/INSTALL.md
 ```
 
 **Detailed docs:** [docs/README.opencode.md](docs/README.opencode.md)
@@ -128,10 +128,10 @@ Install-time auth note:
 Existing installs under paths like `~/.claude/abel-skills`, `~/.codex/abel-skills`, `.claude/abel-skills`, or `.agents/abel-skills` can keep their local folder names. To migrate an existing checkout, update its git remote:
 
 ```bash
-git remote set-url origin https://github.com/Abel-ai-lab/abel-strategy-research-skills.git
+git remote set-url origin https://github.com/Abel-ai-lab/PredictAnything.git
 ```
 
-New install examples use `abel-strategy-research-skills`.
+New install examples use `PredictAnything`.
 
 ## For Maintainers
 
@@ -141,3 +141,11 @@ New install examples use `abel-strategy-research-skills`.
 - Social preview source: [docs/assets/social-preview.svg](docs/assets/social-preview.svg)
 
 Release builds publish from collection source into `dist/`. Do not commit generated ClawHub artifacts into the repository.
+
+## Roadmap
+
+Predict Anything will expand beyond the current daily stock and crypto data.
+
+- [ ] High-frequency market data: stock, ETF, and crypto OHLCV.
+- [ ] Macro-financial data: FRED, BLS, Census, BEA, and Treasury rates.
+- [ ] Energy and weather data: EIA, Open-Meteo, and NASA POWER.

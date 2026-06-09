@@ -38,7 +38,7 @@ def test_dry_run_uses_clawhub_package_publish_for_bundle(
             encoding="utf-8",
         )
         (artifact_dir / "openclaw.plugin.json").write_text(
-            '{"id":"abel","name":"Abel","skills":["./skills"],"configSchema":{"type":"object","properties":{}}}\n',
+            '{"id":"abel","name":"Predict Anything","skills":["./skills"],"configSchema":{"type":"object","properties":{}}}\n',
             encoding="utf-8",
         )
         return artifact_dir
@@ -48,7 +48,7 @@ def test_dry_run_uses_clawhub_package_publish_for_bundle(
         publish,
         "detect_git_source_metadata",
         lambda _source_dir: {
-            "source_repo": "Abel-ai-lab/abel-strategy-research-skills",
+            "source_repo": "Abel-ai-lab/PredictAnything",
             "source_commit": "abc123",
             "source_ref": "develop",
             "source_path": "",
@@ -71,9 +71,9 @@ def test_dry_run_uses_clawhub_package_publish_for_bundle(
     expected_version = publish.load_skill_metadata(REPO_ROOT / "skills" / "abel")["version"]
     assert "clawhub package publish" in out
     assert "--name abel" in out
-    assert "--display-name \"Abel Strategy Research Skills\"" in out
+    assert "--display-name \"Predict Anything\"" in out
     assert f"--version {expected_version}" in out
-    assert "--source-repo Abel-ai-lab/abel-strategy-research-skills" in out
+    assert "--source-repo Abel-ai-lab/PredictAnything" in out
     assert "--source-commit abc123" in out
     assert "--source-ref develop" in out
     assert "--tags latest" in out

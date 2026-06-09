@@ -1,6 +1,6 @@
 # Developer Builds
 
-This page is for maintainers who need to build local Abel Strategy Research Skills artifacts from repository source.
+This page is for maintainers who need to build local Predict Anything artifacts from repository source.
 
 ## Build The Abel Strategy Research Skill Collection
 

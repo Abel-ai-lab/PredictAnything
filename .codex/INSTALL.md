@@ -1,6 +1,6 @@
-# Installing Abel Strategy Research Skills for Codex
+# Installing Predict Anything for Codex
 
-Enable Abel strategy discovery workflows in Codex via native skill discovery.
+Enable Predict Anything strategy discovery workflows in Codex via native skill discovery.
 
 Ask user to choose one install scope:
 
@@ -16,14 +16,14 @@ Ask user to choose one install scope:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git ~/.codex/abel-strategy-research-skills
+git clone https://github.com/Abel-ai-lab/PredictAnything.git ~/.codex/PredictAnything
 ```
 
 2. Register the full skills directory:
 
 ```bash
 mkdir -p ~/.agents/skills
-ln -s ~/.codex/abel-strategy-research-skills/skills ~/.agents/skills/abel
+ln -s ~/.codex/PredictAnything/skills ~/.agents/skills/abel
 ```
 
 3. Optional before restart: persist Abel auth now if you already have a key.
@@ -31,7 +31,7 @@ ln -s ~/.codex/abel-strategy-research-skills/skills ~/.agents/skills/abel
 Canonical shared auth file:
 
 ```text
-~/.codex/abel-strategy-research-skills/skills/abel-auth/.env.skill
+~/.codex/PredictAnything/skills/abel-auth/.env.skill
 ```
 
 Example:
@@ -46,15 +46,15 @@ Run these commands from the project root:
 
 ```bash
 mkdir -p .agents
-git clone https://github.com/Abel-ai-causality/abel-strategy-research-skills.git .agents/abel-strategy-research-skills
+git clone https://github.com/Abel-ai-lab/PredictAnything.git .agents/PredictAnything
 mkdir -p .agents/skills
-ln -s ../abel-strategy-research-skills/skills .agents/skills/abel
+ln -s ../PredictAnything/skills .agents/skills/abel
 ```
 
 Optional project-local auth file:
 
 ```text
-.agents/abel-strategy-research-skills/skills/abel-auth/.env.skill
+.agents/PredictAnything/skills/abel-auth/.env.skill
 ```
 
 ## Existing Installs
@@ -63,7 +63,7 @@ Existing installs under `~/.codex/abel-skills` or `.agents/abel-skills` can keep
 
 ```bash
 cd ~/.codex/abel-skills
-git remote set-url origin https://github.com/Abel-ai-causality/abel-strategy-research-skills.git
+git remote set-url origin https://github.com/Abel-ai-lab/PredictAnything.git
 ```
 
 ## After Either Install

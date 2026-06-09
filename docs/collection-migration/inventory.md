@@ -1,6 +1,6 @@
-# Abel Strategy Research Skills Collection Inventory
+# Predict Anything Collection Inventory
 
-Note: This document refers to migration work from before the public positioning changed to Abel Strategy Research Skills.
+Note: This document refers to migration work from before the public positioning changed to Predict Anything.
 
 ## Stable Baseline
 
