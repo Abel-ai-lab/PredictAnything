@@ -48,9 +48,10 @@ outputs are not validation evidence; they help choose what is worth formal,
 audited validation.
 
 Use scratch to compare construction axes, not to create paperwork. A compact
-first-look scout should score candidate-shaped variants closely enough to
-choose what deserves formal validation. Prefer a ranked table over a prose-only
-memo: target baselines, graph single-feature shapes, feature factories,
+first-look scout should spend about 5 minutes scoring plausible target, graph,
+and construction shapes closely enough to choose what deserves formal
+validation. Prefer a ranked table over a prose-only memo: target baselines,
+graph single-feature shapes, feature factories,
 model-family variants, ensembles, filters, or sizing variants should be
 compared with objective metrics such as Sharpe, total return, drawdown, and
 turnover when feasible.

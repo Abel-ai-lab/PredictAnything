@@ -646,6 +646,7 @@ def build_context_guide_markdown(
         "- temporary scripts, feature screens, model comparisons, and summaries may live in the session `scratch/` directory",
         "- for a fresh or unfamiliar ticker, the first serious recorded alpha candidate should normally be probe-informed",
         "- use this prepared branch's data/cache and `inputs/` for any first-look scout that needs market data",
+        "- spend about 5 minutes on the first-look scout: score plausible target, graph, and construction shapes, then rank what looks worth formal validation before broad recorded work",
         "- a prepared scout branch can be prepare-only; do not run a flat/no-signal materialization round",
         "- IC/correlation/feature-importance tables are diagnostics; a first-look scout should rank scored candidate-shaped variants when graph/model construction is available",
         "- scratch/probe outputs are search workbench material, not validation evidence",
