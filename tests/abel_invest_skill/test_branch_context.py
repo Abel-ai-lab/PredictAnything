@@ -309,12 +309,13 @@ def test_init_session_output_uses_data_led_graph_enriched_alpha_search() -> None
     assert "disposable probes may live in research/tsla/demo/scratch" in rendered
     assert "equivalent heredoc/notebook/query cell" in rendered
     assert "first serious recorded alpha candidate should normally be probe-informed" in rendered
-    assert "prepare a narrow scout/candidate branch before measuring market data" in rendered
+    assert "prepare a scout/candidate branch before measuring market data" in rendered
     assert "prepare-only scout branches are fine" in rendered
     assert "do not run flat/no-signal rounds" in rendered
     assert "after prepare-branch, disposable probes may live" in rendered
-    assert "score candidate-shaped target baselines" in rendered
-    assert "ranked shortlist" in rendered
+    assert "expect the first-look scout to take roughly 5 minutes" in rendered
+    assert "score plausible target, graph, and construction shapes" in rendered
+    assert "let it finish naturally before deciding what to validate" in rendered
     assert "run broad candidates only after data/cache are prepared" in rendered
     assert "simple hand-written rules are diagnostics or refinements" in rendered
     assert "validation gates estimate reliability" in rendered

@@ -321,8 +321,9 @@ def handle_env_command(args: argparse.Namespace) -> int:
     print(f"  {cli_path} doctor")
     print(f"  {default_activate_command()}")
     print(
-        "  # once doctor is ready: init-session -> init narrow scout/candidate branch -> "
-        "prepare-branch -> first-look scout before any broad run -> "
+        "  # once doctor is ready: init-session -> init scout/candidate branch -> "
+        "prepare-branch -> first-look scout with roughly 5-minute expected runtime; "
+        "let progressing scout work finish naturally -> "
         "use frontier facts and exploration_path.md to guide pivots"
     )
     return 0

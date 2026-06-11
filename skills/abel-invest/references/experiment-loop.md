@@ -53,9 +53,9 @@ experiment loop means learning the data shape, not immediately recording the
 first broad branch.
 
 This is not a request to measure data before data exists. `init-session`
-provides graph frontier and readiness facts. Use those facts to choose a
-bounded scout universe, then create and `prepare-branch` a narrow scout or
-candidate branch so Edge materializes cache plus `inputs/data_manifest.json`,
+provides graph frontier and readiness facts. Use those facts to choose a scout
+universe, then create and `prepare-branch` a scout or candidate branch so Edge
+materializes cache plus `inputs/data_manifest.json`,
 `inputs/probe_samples.json`, and `inputs/context_guide.md`. Run the first-look
 scout from those prepared inputs or the warmed cache before deciding what
 deserves `debug-branch` / `run-branch`.
@@ -64,9 +64,14 @@ Do not run a flat or no-signal materialization branch just to warm cache or make
 the scout official. A prepared branch may be prepare-only; `run-branch` is for
 meaningful candidates, controls, diagnostics, or ablations.
 
-Use a compact scored scout to choose, not just describe. The useful output is a
-ranked short list of candidate-shaped variants with objective metrics such as
+Use a compact scored scout to choose, not just describe. Expect the first-look
+scout to take roughly 5 minutes: score plausible target, graph, and construction
+shapes, then rank what looks worth formal validation before broad recorded work. Use
+objective metrics such as
 Sharpe, total return, drawdown, and turnover:
+
+If the scout script is still making progress, let it finish naturally before
+deciding what to validate.
 
 - target-only scored baselines: trend, momentum, reversal, and volatility
   regime
@@ -83,7 +88,7 @@ been scored or intentionally ruled out.
 
 Store temporary scripts or summaries in `research/<ticker>/<exp_id>/scratch/`
 when useful. If the runtime discourages files, use an equivalent one-off shell
-heredoc, notebook cell, or query cell. Promote only the best 1-2 shapes into
+heredoc, notebook cell, or query cell. Promote the strongest shapes into
 recorded branch work, and account for any selection width that materially chose
 the submitted candidate.
 

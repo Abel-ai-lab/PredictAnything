@@ -120,10 +120,14 @@ Always:
   status, blockers, what evidence exists, and the next action you will take.
 - Treat `agent_context.md` as the compact factual resume surface,
   `exploration_path.md` as the human-facing chosen-path and Edge-feedback log.
-- On a fresh or unfamiliar ticker, use the compact first-look scout in
-  `experiment-loop.md` before the first broad recorded candidate unless the user
-  gave a narrow path or continuation. Its output should be a ranked short list
-  of scored candidate shapes, not only diagnostics or an analysis memo.
+- On a fresh or unfamiliar ticker, use the compact first-look data scout in
+  `experiment-loop.md` before the first serious recorded alpha candidate unless
+  the user gave a narrow path or continuation. Expect the scout to take roughly
+  5 minutes: score plausible target, graph, and construction shapes, then rank
+  what looks worth formal validation before broad recorded work. If the scout
+  script is still making progress, let it finish naturally before deciding what
+  to validate. Put temporary scout scripts or summaries under
+  `research/<ticker>/<session_id>/scratch/` when files are useful.
 
 Never:
 
@@ -180,8 +184,9 @@ Core search invariants:
   are degrees of freedom, not a scripted route.
 - Fresh or unfamiliar tickers should normally use the prepared first-look scout
   sequence in `experiment-loop.md` before the first broad recorded candidate.
-  Its practical output is a ranked short list of scored candidate shapes, not
-  only an analysis memo. Direct recorded branches remain valid for
+  Its practical output is scored target, graph, and construction shapes ranked
+  by what looks worth formal validation, not only an analysis memo. Direct
+  recorded branches remain valid for
   user-specified strategies, existing leads, baselines, controls,
   continuations, or very narrow diagnostics.
 - Live graph discovery is the default high-value alpha universe when available.
@@ -190,10 +195,9 @@ Core search invariants:
   denoise, node subsets, lags, regimes, sizing, filters, and ensembles.
 - Target-only work is a baseline, seed, ablation, or competitor. A
   graph-supported branch is not automatically data-driven: runtime graph reads
-  prove input realization, not construction breadth. Hand-written
-  single-mechanism branches are diagnostics, controls, ablations, or refinements
-  around empirical construction, not the default search posture when live
-  graph-derived data is available.
+  prove input realization, not construction breadth. Hand-written single-mechanism branches are diagnostics,
+  controls, ablations, or refinements around empirical construction, not the
+  default search posture when live graph-derived data is available.
 - A hard user metric target (Sharpe / MaxDD / PnL) is an optimization request.
   Search is expected: use target/baseline context, graph-derived features,
   feature factories, ensembles, parameter search, model-family comparison, HPO,
