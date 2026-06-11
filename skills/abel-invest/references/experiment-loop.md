@@ -64,14 +64,14 @@ Do not run a flat or no-signal materialization branch just to warm cache or make
 the scout official. A prepared branch may be prepare-only; `run-branch` is for
 meaningful candidates, controls, diagnostics, or ablations.
 
-Use a compact scored scout to choose, not just describe. Spend about 5 minutes
-on the first-look scout: score plausible target, graph, and construction shapes,
-then rank what looks worth formal validation before broad recorded work. Use
+Use a compact scored scout to choose, not just describe. Expect the first-look
+scout to take roughly 5 minutes: score plausible target, graph, and construction
+shapes, then rank what looks worth formal validation before broad recorded work. Use
 objective metrics such as
 Sharpe, total return, drawdown, and turnover:
 
-Let the scout script run up to about 5 minutes; do not stop it early while it is
-still within that window.
+If the scout script is still making progress, let it finish naturally before
+deciding what to validate.
 
 - target-only scored baselines: trend, momentum, reversal, and volatility
   regime

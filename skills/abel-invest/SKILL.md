@@ -122,11 +122,11 @@ Always:
   `exploration_path.md` as the human-facing chosen-path and Edge-feedback log.
 - On a fresh or unfamiliar ticker, use the compact first-look data scout in
   `experiment-loop.md` before the first serious recorded alpha candidate unless
-  the user gave a narrow path or continuation. Spend about 5 minutes on the
-  scout: score plausible target, graph, and construction shapes, then rank what
-  looks worth formal validation before broad recorded work. Let the scout script
-  run up to about 5 minutes; do not stop it early while it is still within that
-  window. Put temporary scout scripts or summaries under
+  the user gave a narrow path or continuation. Expect the scout to take roughly
+  5 minutes: score plausible target, graph, and construction shapes, then rank
+  what looks worth formal validation before broad recorded work. If the scout
+  script is still making progress, let it finish naturally before deciding what
+  to validate. Put temporary scout scripts or summaries under
   `research/<ticker>/<session_id>/scratch/` when files are useful.
 
 Never:

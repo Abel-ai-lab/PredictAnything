@@ -313,9 +313,9 @@ def test_init_session_output_uses_data_led_graph_enriched_alpha_search() -> None
     assert "prepare-only scout branches are fine" in rendered
     assert "do not run flat/no-signal rounds" in rendered
     assert "after prepare-branch, disposable probes may live" in rendered
-    assert "spend about 5 minutes on the first-look scout" in rendered
+    assert "expect the first-look scout to take roughly 5 minutes" in rendered
     assert "score plausible target, graph, and construction shapes" in rendered
-    assert "do not stop it early while it is still within that window" in rendered
+    assert "let it finish naturally before deciding what to validate" in rendered
     assert "run broad candidates only after data/cache are prepared" in rendered
     assert "simple hand-written rules are diagnostics or refinements" in rendered
     assert "validation gates estimate reliability" in rendered
