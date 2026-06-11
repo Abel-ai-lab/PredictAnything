@@ -59,13 +59,16 @@ The script searches shared Abel auth locations for `ABEL_API_KEY` or
 
 1. Run `catalog` first. Treat the response as the current key's visible dataset
    list.
-2. Use the returned dataset `name` exactly as provided. Do not infer table
+2. If `catalog` returns an empty dataset list, stop immediately. This is a
+   hard stop, not a soft warning: do not call `schema`, do not call `records`,
+   and do not use dataset names from examples, memory, another environment, or
+   another key. An empty catalog usually means the key, such as a free-tier key,
+   has no currently visible supplemental datasets.
+3. Use the returned dataset `name` exactly as provided. Do not infer table
    names.
-3. Run `schema <name>` before querying records.
-4. Query `records <name>` with schema-declared filters and date bounds.
-5. Follow `nextCursor` until absent when more rows are needed.
-6. A blank catalog means the key has no currently visible supplemental
-   datasets. It is not a transport failure.
+4. Run `schema <name>` before querying records.
+5. Query `records <name>` with schema-declared filters and date bounds.
+6. Follow `nextCursor` until absent when more rows are needed.
 7. A 403 from `schema` or `records` means the key cannot access that dataset.
 8. Inspect `ok`, `status_code`, and `message` before trusting returned data.
 

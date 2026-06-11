@@ -44,3 +44,15 @@ def test_data_api_reference_includes_operational_guardrails():
     assert "--compact" in reference_text
     assert "--pick-fields" in reference_text
     assert "--cursor <nextCursor>" in reference_text
+
+
+def test_data_api_reference_stops_after_blank_catalog():
+    reference_text = (
+        REPO_ROOT / "skills" / "abel-ask" / "references" / "data-api-usage.md"
+    ).read_text(encoding="utf-8")
+    normalized = " ".join(reference_text.split())
+
+    assert "If `catalog` returns an empty dataset list, stop immediately" in normalized
+    assert "hard stop" in normalized
+    assert "do not call `schema`, do not call `records`" in normalized
+    assert "do not use dataset names from examples, memory, another environment, or another key" in normalized
