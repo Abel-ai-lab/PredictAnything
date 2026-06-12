@@ -30,14 +30,12 @@ from abel_invest.narrative_core.contracts.constants import (
 )
 from abel_invest.narrative_core.runtime.context import build_branch_context
 from abel_invest.narrative_core.dashboard import (
-    post_skill_dashboard_bundle,
     post_skill_dashboard_session,
     render_skill_dashboard_session_upload_result,
     resolve_skill_dashboard_base_url,
     upload_skill_dashboard_session,
 )
 from abel_invest.narrative_core.dashboard_payload import (
-    build_skill_dashboard_bundle,
     build_skill_dashboard_session_bundle,
 )
 from abel_invest.narrative_core.strategy_artifact_upload import (

@@ -110,28 +110,6 @@ def test_dashboard_payload_accepts_ticker_directory_with_one_session(
     assert bundle["payload"]["session"]["ticker"] == "ORCL"
 
 
-def test_post_skill_dashboard_bundle_sends_api_key_header() -> None:
-    calls = []
-
-    def fake_opener(request, timeout):
-        calls.append((request, timeout))
-        return _JsonResponse(b'{"code": 200, "data": {"bundleId": "bundle-1"}}')
-
-    result = ni.post_skill_dashboard_bundle(
-        base_url="https://router.example",
-        api_key="secret-key",
-        bundle={"sessionId": "s1", "branchId": "b1", "payload": {"branch": {}}},
-        opener=fake_opener,
-    )
-
-    request, timeout = calls[0]
-    assert result["data"]["bundleId"] == "bundle-1"
-    assert request.full_url == "https://router.example/web/skill-dashboard/bundles"
-    assert request.get_header("Api-key") == "secret-key"
-    assert request.get_header("Content-type") == "application/json"
-    assert timeout == 60
-
-
 def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
     calls = []
 
