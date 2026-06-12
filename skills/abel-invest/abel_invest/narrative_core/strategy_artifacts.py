@@ -47,15 +47,16 @@ from abel_invest.workspace_core.workspace import find_workspace_root
 
 
 STRATEGY_ARTIFACT_SCHEMA = "abel-invest.strategy-artifact/v1"
-BEST_STRATEGY_REPORT_SCHEMA = "abel-invest.best-strategy/v1"
-USER_REPLY_REMINDER = {
-    "plainLanguage": (
-        "Report the selected strategy in plain language with total return, "
-        "Sharpe, max drawdown, and backtest period."
+BEST_STRATEGY_REPORT_SCHEMA = "abel-invest.best-strategy-report/v1"
+REPORT_GUIDANCE = {
+    "tone": "plain_language_user_report",
+    "summary": (
+        "Explain the selected strategy idea in plain language with total return, "
+        "Sharpe, max drawdown, and the backtest period."
     ),
-    "technicalDetails": (
-        "Do not lead with PASS, K, DSR, PositionIC, Edge verdict, selection "
-        "policy, file paths, or live quote context unless the user asks."
+    "validationFraming": (
+        "Describe robustness checks as confidence and limitations rather than "
+        "as a binary outcome."
     ),
     "sessionReview": (
         "If the session has any recorded strategy round, ask whether to "
@@ -345,37 +346,21 @@ def select_branch_promotion_candidate(
 
 
 def best_strategy_report_payload(session: Path) -> dict[str, Any]:
-    """Return the read-only best strategy selection for stop reports."""
+    """Return the compact final-report handoff for stop reports."""
 
     session = resolve_workspace_arg_path(session).resolve()
     selection = select_best_pass_strategy(session)
     selected = selection.selected
     payload: dict[str, Any] = {
         "schema": BEST_STRATEGY_REPORT_SCHEMA,
-        "session": str(session),
-        "status": "selected" if selected is not None else "skipped",
-        "skipReason": selection.skip_reason,
-        "selectionPolicy": {
-            "scope": SELECTION_SCOPE_SESSION,
-            "rule": SELECTION_RULE_AUTO_BEST_PASS,
-            "reason": SELECTION_REASON_AUTO_BEST_PASS,
-            "metricOrder": list(SELECTION_METRIC_ORDER),
-            "nearTieSharpeDelta": SELECTION_NEAR_TIE_SHARPE_DELTA,
-        },
-        "validationRoundCount": selection.validation_round_count,
-        "eligibleCount": selection.eligible_count,
-        "selectedBranchId": selection.selected_branch_id,
-        "selectedRoundId": selection.selected_round_id,
-        "selection": _selection_payload(selected),
-        "artifactExported": False,
-        "artifactUploadSkipped": True,
-        "promotionStarted": False,
-        "userReplyReminder": {
-            **USER_REPLY_REMINDER,
+        "status": "selected" if selected is not None else "not_ready",
+        "reportGuidance": {
+            **REPORT_GUIDANCE,
             "sessionReviewEligible": selection.validation_round_count > 0,
         },
     }
     if selected is None:
+        payload["message"] = _best_strategy_no_selection_message(selection.skip_reason)
         return payload
 
     metrics = (
@@ -397,20 +382,15 @@ def best_strategy_report_payload(session: Path) -> dict[str, Any]:
     payload.update(
         {
             "ticker": selected.ticker,
-            "branchId": selected.branch_id,
-            "roundId": selected.round_id,
-            "decision": selected.decision,
-            "verdict": _clean(selected.edge_result.get("verdict")),
-            "score": selected.score or _clean(selected.edge_result.get("score")),
-            "description": selected.description,
+            "strategy": {
+                "idea": selected.description,
+                "branchId": selected.branch_id,
+                "roundId": selected.round_id,
+            },
             "metrics": {
                 "totalReturn": total_return,
                 "sharpe": selected.sharpe,
                 "maxDrawdown": selected.max_dd,
-                "loAdjusted": selected.lo_adjusted,
-                "annualReturn": selected.annual_return,
-                "calmar": selected.calmar,
-                "passRate": selected.pass_rate,
             },
             "backtestPeriod": {
                 "start": _clean(effective_window.get("start"))
@@ -418,16 +398,46 @@ def best_strategy_report_payload(session: Path) -> dict[str, Any]:
                 "end": _clean(effective_window.get("end"))
                 or _clean(requested_window.get("end")),
             },
-            "paths": {
-                "branch": str(selected.branch),
-                "engine": str(selected.strategy_source_path),
-                "edgeResult": str(selected.edge_result_path),
-                "edgeReport": str(selected.edge_report_path or ""),
-                "edgeHandoff": str(selected.edge_handoff_path or ""),
-            },
+            "robustness": _best_strategy_robustness_payload(selected),
         }
     )
     return payload
+
+
+def _best_strategy_no_selection_message(skip_reason: str) -> str:
+    if skip_reason == "no_validation_strategy":
+        return "No recorded strategy candidate is ready to summarize yet."
+    if skip_reason == "no_hostable_validation_strategy":
+        return (
+            "Recorded strategy rounds exist, but none currently has enough "
+            "local evidence for a clear final summary."
+        )
+    return "No strategy candidate is ready to summarize yet."
+
+
+def _best_strategy_robustness_payload(
+    selected: StrategyArtifactCandidate,
+) -> dict[str, Any]:
+    verdict = _clean(selected.edge_result.get("verdict")).upper()
+    limitations = ["Backtest evidence is not a live-trading guarantee."]
+    if verdict != "PASS":
+        limitations.append(
+            "Some robustness checks surfaced limitations; present the result "
+            "with caveats."
+        )
+        summary = (
+            "The candidate has useful return/risk evidence, with limitations "
+            "that should be explained clearly."
+        )
+    else:
+        summary = (
+            "The recorded checks look supportive for this candidate, while the "
+            "figures remain backtest evidence."
+        )
+    return {
+        "summary": summary,
+        "limitations": limitations,
+    }
 
 
 def build_strategy_artifact_manifest(
@@ -789,19 +799,22 @@ def best_strategy_command(args) -> int:
         return 0
     if payload.get("status") != "selected":
         print(
-            "No best strategy selected "
-            f"(reason={payload.get('skipReason') or 'unknown'})."
+            payload.get("message")
+            or "No strategy candidate is ready to summarize yet."
         )
         print("Read-only selection: no artifact export, upload, or promotion was run.")
         return 0
 
+    strategy = (
+        payload.get("strategy") if isinstance(payload.get("strategy"), dict) else {}
+    )
     metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
     period = (
         payload.get("backtestPeriod")
         if isinstance(payload.get("backtestPeriod"), dict)
         else {}
     )
-    print(f"Selected strategy: {payload.get('branchId')}/{payload.get('roundId')}")
+    print(f"Selected strategy: {strategy.get('branchId')}/{strategy.get('roundId')}")
     print(
         "Backtest: "
         f"{period.get('start') or 'unknown'} -> {period.get('end') or 'unknown'}"
@@ -815,9 +828,9 @@ def best_strategy_command(args) -> int:
     print("Read-only selection: no artifact export, upload, or promotion was run.")
     print(
         "User reply reminder: use plain language with total return, Sharpe, "
-        "max drawdown, and backtest period; avoid PASS/K/DSR/PositionIC/Edge "
-        "verdict or live quote context unless asked; ask about the session "
-        "review page when a recorded strategy round exists."
+        "max drawdown, and backtest period; describe robustness as confidence "
+        "and limitations; ask about the session review page when a recorded "
+        "strategy round exists."
     )
     return 0
 

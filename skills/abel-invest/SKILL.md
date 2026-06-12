@@ -229,19 +229,18 @@ Completion, reporting, and artifacts:
 - `Completed` is the only normal final-answer state, whether the target was
   reached or the ledger supports unable-to-reach. A completed stop report is one
   exit contract: use
-  `<command_prefix> best-strategy --session <session> --json` for read-only
-  selection, report that command's selected branch/round exactly, and present a
-  compact user-facing result: strategy idea, four key metrics with plain
-  meanings, one short overall judgment, and the session review question when
-  any candidate strategy round has been recorded.
+  `<command_prefix> best-strategy --session <session> --json` as the read-only
+  final-report handoff, report that payload's selected strategy exactly, and
+  present a compact user-facing result: strategy idea, four key metrics with
+  plain meanings, one short overall judgment, and the session review question
+  when any candidate strategy round has been recorded.
 - Keep internal completion evidence out of the default user-facing goal:
-  translate Abel Edge validation into confidence and robustness, and do not lead
-  with gate/PASS/DSR/K/PositionIC/Edge verdict, selection-policy details, file
+  translate validation checks into confidence and limitations, and do not lead
+  with internal validation labels, diagnostic acronyms, selector details, file
   paths, or live quote context unless the user asks for technical details.
 - Do not run `visualize-session` or `export-strategy-artifact` merely to compute
-  the best strategy, and do not manually rank `results.tsv`, `frontier.json`, or
-  branch outputs. The read-only selector already owns near-tie reliability
-  tie-breaks.
+  the stop report, and do not manually rank `results.tsv`, `frontier.json`, or
+  branch outputs. The read-only handoff already owns strategy selection.
 - There is no third reporting state. If still `Exploring`, continue the search;
   only explicit interruption or a blocker justifies a non-completed note, and
   that note must not ask for visualization.

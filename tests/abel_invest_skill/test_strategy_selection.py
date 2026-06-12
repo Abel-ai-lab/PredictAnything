@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from ._memory_helpers import *  # noqa: F401,F403
 
 def test_select_best_pass_strategy_prefers_full_pass_within_sharpe_near_tie(
@@ -235,13 +237,13 @@ def test_best_strategy_report_payload_is_read_only_for_stop_reports(
 
     payload = ni.best_strategy_report_payload(session)
 
-    assert payload["schema"] == "abel-invest.best-strategy/v1"
+    assert payload["schema"] == "abel-invest.best-strategy-report/v1"
     assert payload["status"] == "selected"
-    assert payload["branchId"] == "risk_sized_trend"
-    assert payload["roundId"] == "round-001"
-    assert payload["artifactExported"] is False
-    assert payload["artifactUploadSkipped"] is True
-    assert payload["promotionStarted"] is False
+    assert payload["strategy"] == {
+        "idea": "risk_sized_trend round-001",
+        "branchId": "risk_sized_trend",
+        "roundId": "round-001",
+    }
     assert payload["metrics"]["totalReturn"] == 0.42
     assert payload["metrics"]["sharpe"] == 1.7
     assert payload["metrics"]["maxDrawdown"] == -0.055
@@ -249,7 +251,24 @@ def test_best_strategy_report_payload_is_read_only_for_stop_reports(
         "start": "2020-01-01",
         "end": "2020-12-31",
     }
-    assert payload["selectionPolicy"]["rule"].startswith("sharpe_desc")
+    assert payload["reportGuidance"]["sessionReviewEligible"] is True
+    assert "binary outcome" in payload["reportGuidance"]["validationFraming"]
+    assert "limitations" in payload["robustness"]
+    payload_text = json.dumps(payload)
+    for leaked_key in [
+        "artifactExported",
+        "artifactUploadSkipped",
+        "promotionStarted",
+        "selectionPolicy",
+        "skipReason",
+        "verdict",
+        "score",
+        "passRate",
+        "paths",
+    ]:
+        assert leaked_key not in payload_text
+    for leaked_term in ["PASS", "FAIL", "gate", "Edge verdict"]:
+        assert leaked_term not in payload_text
     assert not (session / "strategy_artifacts").exists()
     assert not (branch / "promotions").exists()
 

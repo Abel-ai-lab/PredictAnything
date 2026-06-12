@@ -259,7 +259,7 @@ def test_select_best_strategy_near_tie_boundary_is_tenth_sharpe(tmp_path):
     assert selection.selected.branch_id == "full-pass-boundary"
 
 
-def test_best_strategy_payload_includes_user_reply_reminder(tmp_path):
+def test_best_strategy_payload_includes_report_guidance(tmp_path):
     session = tmp_path / "research" / "meta" / "session-reminder"
     session.mkdir(parents=True)
     _write_candidate(
@@ -286,12 +286,15 @@ def test_best_strategy_payload_includes_user_reply_reminder(tmp_path):
 
     payload = best_strategy_report_payload(session)
 
-    reminder = payload["userReplyReminder"]
-    assert reminder["sessionReviewEligible"] is True
-    assert "plain language" in reminder["plainLanguage"]
-    assert "PASS" in reminder["technicalDetails"]
-    assert "live quote" in reminder["technicalDetails"]
-    assert "session review page" in reminder["sessionReview"]
+    guidance = payload["reportGuidance"]
+    assert guidance["sessionReviewEligible"] is True
+    assert "plain language" in guidance["summary"]
+    assert "binary outcome" in guidance["validationFraming"]
+    assert "session review page" in guidance["sessionReview"]
+    payload_text = json.dumps(payload)
+    assert "PASS" not in payload_text
+    assert "FAIL" not in payload_text
+    assert "gate" not in payload_text
 
 
 def test_strategy_artifact_skip_line_keeps_session_view_language():

@@ -234,9 +234,9 @@ complete, and the next concrete action. Do not ask for visualization.
 ## Stop Report
 
 Use this section for every `Completed` exit, successful or ledger-supported
-unable-to-reach. Treat the stop report as one exit contract: select the current
-best strategy, explain it in ordinary user language, and ask about session
-visualization when a candidate strategy round exists.
+unable-to-reach. Treat the stop report as one exit contract: use the final
+report handoff, explain the selected strategy in ordinary user language, and
+ask about session visualization when a candidate strategy round exists.
 
 For the session default, run the read-only command:
 
@@ -244,13 +244,13 @@ For the session default, run the read-only command:
 <command_prefix> best-strategy --session research/<ticker>/<exp_id> --json
 ```
 
-This command only selects and reports; it does not export, upload, or promote
-strategy artifacts. Do not run `visualize-session` or
+This command only prepares the report handoff; it does not export, upload, or
+promote strategy artifacts. Do not run `visualize-session` or
 `export-strategy-artifact` merely to compute the best strategy, and do not
 manually walk `results.tsv`, `frontier.json`, or branch folders to invent a
 different ranking. If the user explicitly named a branch or round, use that
-explicit selection. Otherwise report the command's selected branch/round
-exactly; the selector already owns near-tie reliability tie-breaks.
+explicit selection. Otherwise report the command's selected strategy exactly;
+the handoff already owns strategy selection.
 
 Default stop reports should use this shape:
 
@@ -262,9 +262,10 @@ Default stop reports should use this shape:
 4. Next step: if a candidate strategy exists, ask whether to create the session
    review page.
 
-Do not lead with branch/round, gate/PASS, DSR, K, verdict, or selection-policy
-details unless the user asks for technical details. Do not add current price or
-live quote context to a completed backtest report unless the user asks.
+Do not lead with branch/round identifiers, internal validation labels,
+diagnostic acronyms, or selector details unless the user asks for technical
+details. Do not add current price or live quote context to a completed backtest
+report unless the user asks.
 
 Example:
 
@@ -341,7 +342,7 @@ hard blocker remains. Do not pre-audit Abel Invest implementation internals
 before this command produces an actionable request.
 
 Use the entrypoint that matches the user's request. For a read-only stop-report
-selection, use `best-strategy --session <session> --json`; it does not export,
+handoff, use `best-strategy --session <session> --json`; it does not export,
 upload, or promote artifacts. For session visualization or upload, keep using
 `visualize-session --session <session>` so the default strategy artifact
 export/upload path stays attached. For local artifact export or validation
