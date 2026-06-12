@@ -161,8 +161,21 @@ def test_visualize_session_strategy_artifact_is_default_and_opt_out_is_rejected(
     default_args = parser.parse_args(
         ["visualize-session", "--session", "research/tsla/tsla-v1"]
     )
+    explicit_args = parser.parse_args(
+        [
+            "visualize-session",
+            "--session",
+            "research/tsla/tsla-v1",
+            "--strategy",
+            "research/tsla/tsla-v1/branches/momentum_lead",
+            "--round",
+            "round-006",
+        ]
+    )
 
     assert not hasattr(default_args, "without_strategy_artifact")
+    assert explicit_args.strategy == "research/tsla/tsla-v1/branches/momentum_lead"
+    assert explicit_args.round == "round-006"
     with pytest.raises(SystemExit):
         parser.parse_args(
             [
@@ -176,6 +189,7 @@ def test_visualize_session_strategy_artifact_is_default_and_opt_out_is_rejected(
         parser.parse_args(["visualize-session", "--help"])
     help_text = capsys.readouterr().out
     assert "--without-strategy-artifact" not in help_text
+    assert "--strategy" in help_text
     with pytest.raises(SystemExit):
         parser.parse_args(
             [

@@ -67,8 +67,9 @@ def test_public_cli_session_branch_render_status_check_smoke(
     assert "Session:" in output
     assert "Narrative check passed for" in output
     assert "not exploration completion" in output
-    assert '"schema": "abel-invest.best-strategy/v1"' in output
-    assert '"skipReason": "no_validation_strategy"' in output
+    assert '"schema": "abel-invest.best-strategy-report/v1"' in output
+    assert '"status": "not_ready"' in output
+    assert '"message": "No recorded strategy candidate is ready to summarize yet."' in output
 
 
 def test_init_session_grandma_mode_routes_default_branch_to_grandma_profile(

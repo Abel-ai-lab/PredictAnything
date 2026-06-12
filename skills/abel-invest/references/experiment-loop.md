@@ -213,6 +213,9 @@ target. If none holds, stay in `Exploring`, keep searching, and choose the next
 concrete action.
 
 If you can name a concrete next search action, the search is still `Exploring`.
+After every recorded `run-branch`, treat the printed `Decision checkpoint` as
+the immediate control point: either update the path and continue a concrete
+exploration action, or enter final report.
 
 Do not stop by round count, a mediocre candidate, a high-Sharpe near-pass, an
 easy-to-validate low-objective branch, `render` / `status` / `check` success,
@@ -234,9 +237,9 @@ complete, and the next concrete action. Do not ask for visualization.
 ## Stop Report
 
 Use this section for every `Completed` exit, successful or ledger-supported
-unable-to-reach. Treat the stop report as one exit contract: select the current
-best strategy, explain it in ordinary user language, and ask about session
-visualization when a candidate strategy round exists.
+unable-to-reach. Treat the stop report as one exit contract: use the final
+report handoff, explain the selected strategy in ordinary user language, and
+ask about session visualization when the handoff says the session is eligible.
 
 For the session default, run the read-only command:
 
@@ -244,47 +247,19 @@ For the session default, run the read-only command:
 <command_prefix> best-strategy --session research/<ticker>/<exp_id> --json
 ```
 
-This command only selects and reports; it does not export, upload, or promote
-strategy artifacts. Do not run `visualize-session` or
+This command only prepares the report handoff; it does not export, upload, or
+promote strategy artifacts. Do not run `visualize-session` or
 `export-strategy-artifact` merely to compute the best strategy, and do not
 manually walk `results.tsv`, `frontier.json`, or branch folders to invent a
 different ranking. If the user explicitly named a branch or round, use that
-explicit selection. Otherwise report the command's selected branch/round
-exactly; the selector already owns near-tie reliability tie-breaks.
+explicit selection. Otherwise report the command's selected strategy exactly;
+the handoff already owns strategy selection and final-report guidance.
 
-Default stop reports should use this shape:
-
-1. Strategy: name the selected strategy and its core idea in plain language.
-2. Key performance: list exactly four metrics: backtest period, total return,
-   Sharpe, and max drawdown. Add one short plain-language meaning for each.
-3. Overall readout: one warm, clear, non-promotional paragraph explaining why
-   this is the current best available strategy, including any important limits.
-4. Next step: if a candidate strategy exists, ask whether to create the session
-   review page.
-
-Do not lead with branch/round, gate/PASS, DSR, K, verdict, or selection-policy
-details unless the user asks for technical details. Do not add current price or
-live quote context to a completed backtest report unless the user asks.
-
-Example:
-
-```text
-I found the strongest strategy from this session: it uses a focused set of
-related market signals to decide when to hold the target and when to reduce
-exposure.
-
-Key performance:
-- Backtest period: 2021-01-01 to 2026-01-01, the historical window tested.
-- Total return: +120%, meaning the capital a little more than doubled.
-- Sharpe: 2.1, suggesting the returns were strong relative to daily swings.
-- Max drawdown: -11%, the worst pullback along the way.
-
-Overall, this is the strongest result in the session so far: it delivered
-strong growth with a Sharpe profile that makes the return stream look
-meaningfully better than a noisy raw price bet.
-
-Would you like me to create the session review page?
-```
+Do not use a fixed report template. Compose the report from the handoff's
+selected strategy, metrics, robustness notes, and `reportGuidance`. Translate
+robustness into confidence, limitations, and risk; do not lead with internal
+validation labels, diagnostic acronyms, selector details, file paths, current
+price, or live quote context unless the user asks for technical details.
 
 ## Evidence Reading
 
@@ -341,22 +316,23 @@ hard blocker remains. Do not pre-audit Abel Invest implementation internals
 before this command produces an actionable request.
 
 Use the entrypoint that matches the user's request. For a read-only stop-report
-selection, use `best-strategy --session <session> --json`; it does not export,
+handoff, use `best-strategy --session <session> --json`; it does not export,
 upload, or promote artifacts. For session visualization or upload, keep using
 `visualize-session --session <session>` so the default strategy artifact
-export/upload path stays attached. For local artifact export or validation
-probes, use `export-strategy-artifact --session <session>`. For a
-user-specified branch/round, use `promote-strategy --branch <branch> --round
-<round>`. Do not manually traverse `results.tsv` or branch directories to choose
-the best session strategy, and do not run `visualize-session` or
-`export-strategy-artifact` merely to compute it.
+export/upload path stays attached. For a user-specified branch/round, use
+`visualize-session --session <session> --strategy <branch> --round <round>`.
+Keep `export-strategy-artifact` and `promote-strategy` for internal local
+artifact or validation probes. Do not manually traverse `results.tsv` or branch
+directories to choose the best session strategy, and do not run
+`visualize-session` or `export-strategy-artifact` merely to compute it.
 
-If a visualization, export, or promotion command emits a hosted paper
-`paper-contract-request.json`, read the request first and use its
-`reportTemplate`. Open `contractGuide.referencePath` from the active Abel Invest
-skill when the request requires stateful continuation, source edits, or deeper
-gate diagnosis. Edit source only when `sourceEditPolicy` requires or genuinely
-allows it, write `paper-contract-report.json`, and rerun the same command.
+If a visualization command, or an internal export/promotion probe, emits a
+hosted paper `paper-contract-request.json`, read the request first and use its
+`reportTemplate`. Open `contractGuide.referencePath` from the active Abel
+Invest skill when the request requires stateful continuation, source edits, or
+deeper gate diagnosis. Edit source only when `sourceEditPolicy` requires or
+genuinely allows it, write `paper-contract-report.json`, and rerun the same
+command.
 Leave contract-blocked sessions as `action_required` unless the user explicitly
 asks to skip strategy artifacts. Do not start a separate agent process. The
 agent should not hand-assemble the payload or choose a router URL.

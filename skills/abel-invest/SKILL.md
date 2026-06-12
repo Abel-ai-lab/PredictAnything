@@ -226,31 +226,34 @@ Core search invariants:
 
 Completion, reporting, and artifacts:
 
+- After every recorded `run-branch`, follow the printed `Decision checkpoint`.
+  The normal next action is either continue a concrete exploration action or
+  enter final report; do not send a final user report that says exploration is
+  incomplete while also naming the next experiment.
 - `Completed` is the only normal final-answer state, whether the target was
-  reached or the ledger supports unable-to-reach. A completed stop report is one
-  exit contract: use
-  `<command_prefix> best-strategy --session <session> --json` for read-only
-  selection, report that command's selected branch/round exactly, and present a
-  compact user-facing result: strategy idea, four key metrics with plain
-  meanings, one short overall judgment, and the session review question when
-  any candidate strategy round has been recorded.
+  reached or the ledger supports unable-to-reach. A completed stop report uses
+  `<command_prefix> best-strategy --session <session> --json` as the read-only
+  final-report handoff. Follow that payload's report guidance, report its
+  selected strategy exactly, and compose the user-facing result naturally from
+  the selected strategy, metrics, robustness notes, and session review guidance.
 - Keep internal completion evidence out of the default user-facing goal:
-  translate Abel Edge validation into confidence and robustness, and do not lead
-  with gate/PASS/DSR/K/PositionIC/Edge verdict, selection-policy details, file
+  translate validation checks into confidence and limitations, and do not lead
+  with internal validation labels, diagnostic acronyms, selector details, file
   paths, or live quote context unless the user asks for technical details.
 - Do not run `visualize-session` or `export-strategy-artifact` merely to compute
-  the best strategy, and do not manually rank `results.tsv`, `frontier.json`, or
-  branch outputs. The read-only selector already owns near-tie reliability
-  tie-breaks.
+  the stop report, and do not manually rank `results.tsv`, `frontier.json`, or
+  branch outputs. The read-only handoff already owns strategy selection.
 - There is no third reporting state. If still `Exploring`, continue the search;
   only explicit interruption or a blocker justifies a non-completed note, and
   that note must not ask for visualization.
 - Do not create or refresh an online session view automatically. If the user
   agrees or explicitly asks, run
   `<command_prefix> visualize-session --session <session>`.
-- For local artifact export or promotion probes, use the matching CLI command
-  from `experiment-loop.md`; if a hosted paper `paper-contract-request.json`
-  appears, read it first and follow its `reportTemplate` / `contractGuide`.
+- If the user asks to upload or visualize a specific strategy branch/round, run
+  `<command_prefix> visualize-session --session <session> --strategy <branch> --round <round>`.
+  Keep local artifact export and explicit promotion commands for internal debug
+  probes only; if a hosted paper `paper-contract-request.json` appears, read it
+  first and follow its `reportTemplate` / `contractGuide`.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`
   owns API key setup; do not ask for a router URL unless the user is testing a
   non-default router.

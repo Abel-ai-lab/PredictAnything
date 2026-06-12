@@ -47,16 +47,27 @@ from abel_invest.workspace_core.workspace import find_workspace_root
 
 
 STRATEGY_ARTIFACT_SCHEMA = "abel-invest.strategy-artifact/v1"
-BEST_STRATEGY_REPORT_SCHEMA = "abel-invest.best-strategy/v1"
-USER_REPLY_REMINDER = {
-    "plainLanguage": (
-        "Report the selected strategy in plain language with total return, "
-        "Sharpe, max drawdown, and backtest period."
+BEST_STRATEGY_REPORT_SCHEMA = "abel-invest.best-strategy-report/v1"
+REPORT_GUIDANCE = {
+    "purpose": "write_final_user_report",
+    "tone": "plain_language_user_report",
+    "useSelectedStrategyExactly": True,
+    "summary": (
+        "Explain the selected strategy idea in plain language with total return, "
+        "Sharpe, max drawdown, and the backtest period."
     ),
-    "technicalDetails": (
-        "Do not lead with PASS, K, DSR, PositionIC, Edge verdict, selection "
-        "policy, file paths, or live quote context unless the user asks."
+    "validationFraming": (
+        "Describe robustness checks as confidence and limitations rather than "
+        "as a binary outcome."
     ),
+    "doNotInclude": [
+        "PASS/FAIL labels or gate status",
+        "raw validation score",
+        "DSR, K, or search-trial diagnostics",
+        "selector internals or artifact/promotion details",
+        "file paths or live quote context",
+        "free-form next search directions after entering final report",
+    ],
     "sessionReview": (
         "If the session has any recorded strategy round, ask whether to "
         "create the session review page."
@@ -66,7 +77,7 @@ STRATEGY_ARTIFACT_ENTRYPOINT = "strategy/strategy.py"
 STRATEGY_ARTIFACT_CLASS_NAME = "BranchEngine"
 STRATEGY_ARTIFACT_PAPER_MODE = "paper_signal"
 STRATEGY_ARTIFACT_WORKSPACE_KIND = "abel-invest"
-SELECTION_MODE_AUTO_BEST_PASS = "auto_best_validation_by_pass_rate"
+SELECTION_MODE_AUTO_BEST_STRATEGY = "auto_best_strategy"
 SELECTION_MODE_EXPLICIT_BRANCH_ROUND = "explicit_branch_round"
 SELECTION_SCOPE_SESSION = "session"
 SELECTION_SCOPE_BRANCH = "branch"
@@ -84,8 +95,8 @@ SELECTION_MANIFEST_METRIC_ORDER = (
     "max_dd",
 )
 SELECTION_NEAR_TIE_SHARPE_DELTA = 0.1
-SELECTION_RULE_AUTO_BEST_PASS = "sharpe_desc_near_tie_full_pass_v4"
-SELECTION_REASON_AUTO_BEST_PASS = (
+SELECTION_RULE_AUTO_BEST_STRATEGY = "sharpe_desc_near_tie_full_pass_v4"
+SELECTION_REASON_AUTO_BEST_STRATEGY = (
     "Sharpe-first session selector; when Sharpe is within 0.10, use validation "
     "reliability as a near-tie breaker, then annualized return, max-drawdown "
     "magnitude, validation pass rate, and latest recorded round"
@@ -188,7 +199,7 @@ class StrategyArtifactCandidate:
     edge_result: dict[str, Any]
     selection_rank: int
     session_round_index: int = 0
-    selection_mode: str = SELECTION_MODE_AUTO_BEST_PASS
+    selection_mode: str = SELECTION_MODE_AUTO_BEST_STRATEGY
     selection_scope: str = SELECTION_SCOPE_SESSION
 
     @property
@@ -208,12 +219,8 @@ class StrategyArtifactCandidate:
 class StrategySelectionResult:
     selected: StrategyArtifactCandidate | None
     skip_reason: str
-    pass_round_count: int
+    validation_round_count: int
     eligible_count: int
-
-    @property
-    def validation_round_count(self) -> int:
-        return self.pass_round_count
 
     @property
     def selected_branch_id(self) -> str | None:
@@ -224,7 +231,7 @@ class StrategySelectionResult:
         return self.selected.round_id if self.selected is not None else None
 
 
-def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
+def select_best_strategy(session: Path) -> StrategySelectionResult:
     """Select the best ranked hostable validation strategy in one Abel Invest session."""
 
     session = resolve_workspace_arg_path(session).resolve()
@@ -237,7 +244,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
         return StrategySelectionResult(
             selected=None,
             skip_reason="no_validation_strategy",
-            pass_round_count=0,
+            validation_round_count=0,
             eligible_count=0,
         )
 
@@ -260,7 +267,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
         return StrategySelectionResult(
             selected=None,
             skip_reason="no_hostable_validation_strategy",
-            pass_round_count=len(validation_rows),
+            validation_round_count=len(validation_rows),
             eligible_count=0,
         )
 
@@ -268,7 +275,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
     return StrategySelectionResult(
         selected=selected,
         skip_reason="",
-        pass_round_count=len(validation_rows),
+        validation_round_count=len(validation_rows),
         eligible_count=len(candidates),
     )
 
@@ -294,7 +301,7 @@ def select_branch_promotion_candidate(
             return StrategySelectionResult(
                 selected=None,
                 skip_reason="branch_round_not_validation",
-                pass_round_count=len(validation_rows),
+                validation_round_count=len(validation_rows),
                 eligible_count=0,
             )
         target_rows = matched
@@ -304,14 +311,14 @@ def select_branch_promotion_candidate(
             return StrategySelectionResult(
                 selected=None,
                 skip_reason="no_validation_round_in_branch",
-                pass_round_count=0,
+                validation_round_count=0,
                 eligible_count=0,
             )
         if len(target_rows) > 1:
             return StrategySelectionResult(
                 selected=None,
                 skip_reason="ambiguous_branch_promotion_round",
-                pass_round_count=len(target_rows),
+                validation_round_count=len(target_rows),
                 eligible_count=0,
             )
 
@@ -332,50 +339,63 @@ def select_branch_promotion_candidate(
         return StrategySelectionResult(
             selected=None,
             skip_reason="no_hostable_branch_round",
-            pass_round_count=len(validation_rows),
+            validation_round_count=len(validation_rows),
             eligible_count=0,
         )
     selected = _with_rank(candidates[0], selection_rank=1)
     return StrategySelectionResult(
         selected=selected,
         skip_reason="",
-        pass_round_count=len(validation_rows),
+        validation_round_count=len(validation_rows),
         eligible_count=len(candidates),
     )
 
 
-def best_strategy_report_payload(session: Path) -> dict[str, Any]:
-    """Return the read-only best strategy selection for stop reports."""
+def select_strategy_artifact_for_session(
+    session: Path,
+    *,
+    strategy: Path | str | None = None,
+    round_id: str | None = None,
+) -> StrategySelectionResult:
+    """Resolve the strategy artifact candidate for a session upload."""
 
     session = resolve_workspace_arg_path(session).resolve()
-    selection = select_best_pass_strategy(session)
+    normalized_round_id = str(round_id or "").strip() or None
+    if strategy is None or not str(strategy).strip():
+        if normalized_round_id:
+            raise RuntimeError(
+                "--round requires --strategy when selecting a session strategy artifact"
+            )
+        return select_best_strategy(session)
+
+    branch = resolve_workspace_arg_path(str(strategy)).resolve()
+    if not branch.is_dir():
+        raise RuntimeError(f"strategy branch directory is missing: {branch}")
+    branch_session = _session_from_branch(branch).resolve()
+    if branch_session != session:
+        raise RuntimeError(
+            "strategy branch must belong to the session: "
+            f"strategySession={branch_session}; session={session}"
+        )
+    return select_branch_promotion_candidate(branch, round_id=normalized_round_id)
+
+
+def best_strategy_report_payload(session: Path) -> dict[str, Any]:
+    """Return the compact final-report handoff for stop reports."""
+
+    session = resolve_workspace_arg_path(session).resolve()
+    selection = select_best_strategy(session)
     selected = selection.selected
     payload: dict[str, Any] = {
         "schema": BEST_STRATEGY_REPORT_SCHEMA,
-        "session": str(session),
-        "status": "selected" if selected is not None else "skipped",
-        "skipReason": selection.skip_reason,
-        "selectionPolicy": {
-            "scope": SELECTION_SCOPE_SESSION,
-            "rule": SELECTION_RULE_AUTO_BEST_PASS,
-            "reason": SELECTION_REASON_AUTO_BEST_PASS,
-            "metricOrder": list(SELECTION_METRIC_ORDER),
-            "nearTieSharpeDelta": SELECTION_NEAR_TIE_SHARPE_DELTA,
-        },
-        "validationRoundCount": selection.validation_round_count,
-        "eligibleCount": selection.eligible_count,
-        "selectedBranchId": selection.selected_branch_id,
-        "selectedRoundId": selection.selected_round_id,
-        "selection": _selection_payload(selected),
-        "artifactExported": False,
-        "artifactUploadSkipped": True,
-        "promotionStarted": False,
-        "userReplyReminder": {
-            **USER_REPLY_REMINDER,
+        "status": "selected" if selected is not None else "not_ready",
+        "reportGuidance": {
+            **REPORT_GUIDANCE,
             "sessionReviewEligible": selection.validation_round_count > 0,
         },
     }
     if selected is None:
+        payload["message"] = _best_strategy_no_selection_message(selection.skip_reason)
         return payload
 
     metrics = (
@@ -397,20 +417,15 @@ def best_strategy_report_payload(session: Path) -> dict[str, Any]:
     payload.update(
         {
             "ticker": selected.ticker,
-            "branchId": selected.branch_id,
-            "roundId": selected.round_id,
-            "decision": selected.decision,
-            "verdict": _clean(selected.edge_result.get("verdict")),
-            "score": selected.score or _clean(selected.edge_result.get("score")),
-            "description": selected.description,
+            "strategy": {
+                "idea": selected.description,
+                "branchId": selected.branch_id,
+                "roundId": selected.round_id,
+            },
             "metrics": {
                 "totalReturn": total_return,
                 "sharpe": selected.sharpe,
                 "maxDrawdown": selected.max_dd,
-                "loAdjusted": selected.lo_adjusted,
-                "annualReturn": selected.annual_return,
-                "calmar": selected.calmar,
-                "passRate": selected.pass_rate,
             },
             "backtestPeriod": {
                 "start": _clean(effective_window.get("start"))
@@ -418,16 +433,46 @@ def best_strategy_report_payload(session: Path) -> dict[str, Any]:
                 "end": _clean(effective_window.get("end"))
                 or _clean(requested_window.get("end")),
             },
-            "paths": {
-                "branch": str(selected.branch),
-                "engine": str(selected.strategy_source_path),
-                "edgeResult": str(selected.edge_result_path),
-                "edgeReport": str(selected.edge_report_path or ""),
-                "edgeHandoff": str(selected.edge_handoff_path or ""),
-            },
+            "robustness": _best_strategy_robustness_payload(selected),
         }
     )
     return payload
+
+
+def _best_strategy_no_selection_message(skip_reason: str) -> str:
+    if skip_reason == "no_validation_strategy":
+        return "No recorded strategy candidate is ready to summarize yet."
+    if skip_reason == "no_hostable_validation_strategy":
+        return (
+            "Recorded strategy rounds exist, but none currently has enough "
+            "local evidence for a clear final summary."
+        )
+    return "No strategy candidate is ready to summarize yet."
+
+
+def _best_strategy_robustness_payload(
+    selected: StrategyArtifactCandidate,
+) -> dict[str, Any]:
+    verdict = _clean(selected.edge_result.get("verdict")).upper()
+    limitations = ["Backtest evidence is not a live-trading guarantee."]
+    if verdict != "PASS":
+        limitations.append(
+            "Some robustness checks surfaced limitations; present the result "
+            "with caveats."
+        )
+        summary = (
+            "The candidate has useful return/risk evidence, with limitations "
+            "that should be explained clearly."
+        )
+    else:
+        summary = (
+            "The recorded checks look supportive for this candidate, while the "
+            "figures remain backtest evidence."
+        )
+    return {
+        "summary": summary,
+        "limitations": limitations,
+    }
 
 
 def build_strategy_artifact_manifest(
@@ -514,7 +559,7 @@ def build_strategy_artifact_manifest(
             "selectionMode": candidate.selection_mode,
             "selectionScope": candidate.selection_scope,
             "selectionMetricOrder": list(SELECTION_MANIFEST_METRIC_ORDER)
-            if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS
+            if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_STRATEGY
             else [],
             "selectionMetricValues": candidate.selection_metric_values,
             "selectionRank": candidate.selection_rank,
@@ -562,13 +607,20 @@ def build_strategy_artifact_manifest(
 def export_selected_strategy_artifact(
     session: Path,
     *,
+    strategy: Path | str | None = None,
+    round_id: str | None = None,
     output_dir: Path | None = None,
     python_bin: str | None = None,
+    rerun_command: str | None = None,
     runner=subprocess.run,
 ) -> dict[str, Any]:
     """Export the selected hosted strategy artifact locally without uploading it."""
 
-    selection = select_best_pass_strategy(session)
+    selection = select_strategy_artifact_for_session(
+        session,
+        strategy=strategy,
+        round_id=round_id,
+    )
     if selection.selected is None:
         return _artifact_skip_result(selection.skip_reason)
 
@@ -577,6 +629,7 @@ def export_selected_strategy_artifact(
         selection=selection,
         output_dir=output_dir,
         python_bin=python_bin,
+        rerun_command=rerun_command,
         runner=runner,
     )
 
@@ -606,6 +659,7 @@ def promote_branch_strategy(
         selection=selection,
         output_dir=output_dir,
         python_bin=python_bin,
+        rerun_command=None,
         runner=runner,
     )
 
@@ -616,6 +670,7 @@ def _export_strategy_artifact_candidate(
     selection: StrategySelectionResult,
     output_dir: Path | None,
     python_bin: str | None,
+    rerun_command: str | None,
     runner,
 ) -> dict[str, Any]:
     destination = _artifact_output_dir(candidate, output_dir=output_dir)
@@ -648,6 +703,7 @@ def _export_strategy_artifact_candidate(
         candidate,
         destination=destination,
         selection=selection,
+        rerun_command=rerun_command,
     )
     if isinstance(promotion_or_result, dict):
         return promotion_or_result
@@ -719,6 +775,7 @@ def _prepare_promotion_for_export(
     *,
     destination: Path,
     selection: StrategySelectionResult,
+    rerun_command: str | None,
 ) -> PromotionResult | dict[str, Any]:
     try:
         return prepare_promotion(
@@ -751,7 +808,7 @@ def _prepare_promotion_for_export(
                 else {}
             )
             result["reportPath"] = _clean(output.get("reportPath"))
-            result["rerunCommand"] = _promotion_rerun_command(candidate)
+            result["rerunCommand"] = rerun_command or _promotion_rerun_command(candidate)
         gate_path = destination / PROMOTION_GATE_FILENAME
         if gate_path.is_file():
             result["promotionReport"]["gatePath"] = str(gate_path)
@@ -789,19 +846,22 @@ def best_strategy_command(args) -> int:
         return 0
     if payload.get("status") != "selected":
         print(
-            "No best strategy selected "
-            f"(reason={payload.get('skipReason') or 'unknown'})."
+            payload.get("message")
+            or "No strategy candidate is ready to summarize yet."
         )
         print("Read-only selection: no artifact export, upload, or promotion was run.")
         return 0
 
+    strategy = (
+        payload.get("strategy") if isinstance(payload.get("strategy"), dict) else {}
+    )
     metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
     period = (
         payload.get("backtestPeriod")
         if isinstance(payload.get("backtestPeriod"), dict)
         else {}
     )
-    print(f"Selected strategy: {payload.get('branchId')}/{payload.get('roundId')}")
+    print(f"Selected strategy: {strategy.get('branchId')}/{strategy.get('roundId')}")
     print(
         "Backtest: "
         f"{period.get('start') or 'unknown'} -> {period.get('end') or 'unknown'}"
@@ -814,10 +874,12 @@ def best_strategy_command(args) -> int:
     )
     print("Read-only selection: no artifact export, upload, or promotion was run.")
     print(
-        "User reply reminder: use plain language with total return, Sharpe, "
-        "max drawdown, and backtest period; avoid PASS/K/DSR/PositionIC/Edge "
-        "verdict or live quote context unless asked; ask about the session "
-        "review page when a recorded strategy round exists."
+        "Final report harness: report the selected strategy exactly; use plain "
+        "language with total return, Sharpe, max drawdown, and backtest period; "
+        "describe robustness as confidence and limitations; do not include "
+        "PASS/FAIL, gate status, raw score, DSR, K, selector details, file "
+        "paths, live quote context, or free-form next search directions; ask "
+        "about the session review page when a recorded strategy round exists."
     )
     return 0
 
@@ -874,7 +936,7 @@ def _candidate_from_row(
     session: Path,
     branch: Path,
     row: dict[str, str],
-    selection_mode: str = SELECTION_MODE_AUTO_BEST_PASS,
+    selection_mode: str = SELECTION_MODE_AUTO_BEST_STRATEGY,
     selection_scope: str = SELECTION_SCOPE_SESSION,
     session_round_index: int = 0,
 ) -> StrategyArtifactCandidate | None:
@@ -1030,7 +1092,7 @@ def _selection_payload(candidate: StrategyArtifactCandidate | None) -> dict[str,
         return {}
     mode = (
         "auto_best"
-        if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS
+        if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_STRATEGY
         else "explicit"
     )
     return {
@@ -1040,13 +1102,13 @@ def _selection_payload(candidate: StrategyArtifactCandidate | None) -> dict[str,
         "branchId": candidate.branch_id,
         "roundId": candidate.round_id,
         "rank": candidate.selection_rank,
-        "rule": SELECTION_RULE_AUTO_BEST_PASS if mode == "auto_best" else "",
-        "reason": SELECTION_REASON_AUTO_BEST_PASS if mode == "auto_best" else "",
+        "rule": SELECTION_RULE_AUTO_BEST_STRATEGY if mode == "auto_best" else "",
+        "reason": SELECTION_REASON_AUTO_BEST_STRATEGY if mode == "auto_best" else "",
     }
 
 
 def _promotion_rerun_command(candidate: StrategyArtifactCandidate) -> str:
-    if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS:
+    if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_STRATEGY:
         return f"abel-invest export-strategy-artifact --session {candidate.session}"
     command = f"abel-invest promote-strategy --branch {candidate.branch}"
     if candidate.round_id:

@@ -36,8 +36,9 @@ dependencies the scan missed.
      allowed reason is genuinely needed;
    - if `required=true`, edit only `sourcePath`.
 5. Write `paper-contract-report.json` beside the request.
-6. Rerun the same `visualize-session`, `export-strategy-artifact`, or
-   `promote-strategy` command.
+6. Rerun the same `visualize-session` command. If you are doing an internal
+   local debug probe, rerun the same `export-strategy-artifact` or
+   `promote-strategy` command instead.
 
 Use this compact state machine:
 

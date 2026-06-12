@@ -38,7 +38,7 @@ from abel_invest.narrative_core.strategy_artifacts import (
     SELECTION_METRIC_ORDER,
     _cleanup_stale_strategy_artifact_outputs,
     best_strategy_report_payload,
-    select_best_pass_strategy,
+    select_best_strategy,
 )
 
 
@@ -97,7 +97,7 @@ def _write_candidate(
     )
 
 
-def test_select_best_pass_strategy_prefers_full_pass_within_sharpe_near_tie(tmp_path):
+def test_select_best_strategy_prefers_full_pass_within_sharpe_near_tie(tmp_path):
     session = tmp_path / "research" / "meta" / "session-a"
     session.mkdir(parents=True)
     _write_candidate(
@@ -150,7 +150,7 @@ def test_select_best_pass_strategy_prefers_full_pass_within_sharpe_near_tie(tmp_
         ],
     )
 
-    selection = select_best_pass_strategy(session)
+    selection = select_best_strategy(session)
 
     assert selection.selected is not None
     assert selection.selected.branch_id == "full-pass-lower-sharpe"
@@ -205,7 +205,7 @@ def test_select_best_validation_strategy_keeps_high_sharpe_when_gap_is_material(
         ],
     )
 
-    selection = select_best_pass_strategy(session)
+    selection = select_best_strategy(session)
 
     assert selection.selected is not None
     assert selection.selected.branch_id == "higher-sharpe-near-pass"
@@ -253,13 +253,13 @@ def test_select_best_strategy_near_tie_boundary_is_tenth_sharpe(tmp_path):
         ],
     )
 
-    selection = select_best_pass_strategy(session)
+    selection = select_best_strategy(session)
 
     assert selection.selected is not None
     assert selection.selected.branch_id == "full-pass-boundary"
 
 
-def test_best_strategy_payload_includes_user_reply_reminder(tmp_path):
+def test_best_strategy_payload_includes_report_guidance(tmp_path):
     session = tmp_path / "research" / "meta" / "session-reminder"
     session.mkdir(parents=True)
     _write_candidate(
@@ -286,12 +286,24 @@ def test_best_strategy_payload_includes_user_reply_reminder(tmp_path):
 
     payload = best_strategy_report_payload(session)
 
-    reminder = payload["userReplyReminder"]
-    assert reminder["sessionReviewEligible"] is True
-    assert "plain language" in reminder["plainLanguage"]
-    assert "PASS" in reminder["technicalDetails"]
-    assert "live quote" in reminder["technicalDetails"]
-    assert "session review page" in reminder["sessionReview"]
+    guidance = payload["reportGuidance"]
+    assert guidance["purpose"] == "write_final_user_report"
+    assert guidance["useSelectedStrategyExactly"] is True
+    assert guidance["sessionReviewEligible"] is True
+    assert "plain language" in guidance["summary"]
+    assert "binary outcome" in guidance["validationFraming"]
+    assert "PASS/FAIL labels or gate status" in guidance["doNotInclude"]
+    assert "DSR, K, or search-trial diagnostics" in guidance["doNotInclude"]
+    assert (
+        "free-form next search directions after entering final report"
+        in guidance["doNotInclude"]
+    )
+    assert "session review page" in guidance["sessionReview"]
+    payload_without_guidance = {**payload, "reportGuidance": {}}
+    payload_text = json.dumps(payload_without_guidance)
+    assert "PASS" not in payload_text
+    assert "FAIL" not in payload_text
+    assert "gate" not in payload_text
 
 
 def test_strategy_artifact_skip_line_keeps_session_view_language():

@@ -352,6 +352,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Interpreter used to run Abel-edge artifact helpers (defaults to workspace python).",
     )
+    visualize_session.add_argument(
+        "--strategy",
+        default=None,
+        help=(
+            "Optional strategy branch directory to upload with the session view "
+            "instead of the auto-selected best session strategy."
+        ),
+    )
+    visualize_session.add_argument(
+        "--round",
+        default=None,
+        help=(
+            "Strategy round id for --strategy. Required when the strategy branch "
+            "has multiple validation rounds."
+        ),
+    )
 
     best_strategy = sub.add_parser(
         "best-strategy",
@@ -374,8 +390,8 @@ def build_parser() -> argparse.ArgumentParser:
     export_strategy_artifact = sub.add_parser(
         "export-strategy-artifact",
         help=(
-            "Export the CLI-selected best hostable validation strategy artifact "
-            "for a session without uploading it"
+            "Internal/debug: export the CLI-selected best hostable validation "
+            "strategy artifact for a session without uploading it"
         ),
     )
     export_strategy_artifact.add_argument(
@@ -399,7 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     promote_strategy = sub.add_parser(
         "promote-strategy",
-        help="Promote an explicit branch/round into a paper-ready artifact",
+        help="Internal/debug: export an explicit branch/round into a paper-ready artifact",
     )
     promote_strategy.add_argument("--branch", required=True)
     promote_strategy.add_argument(

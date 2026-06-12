@@ -1,16 +1,32 @@
-from abel_invest.narrative_core.command_handlers.branch import STATE_SELF_CHECK_LINES
+from abel_invest.narrative_core.command_handlers.branch import (
+    print_round_decision_checkpoint,
+)
 from abel_invest.narrative_core.evidence.frontier import (
     render_frontier_markdown,
     render_session_frontier_summary,
 )
 
 
-def test_run_branch_self_check_keeps_failures_diagnostic():
-    joined = "\n".join(STATE_SELF_CHECK_LINES)
+def test_run_branch_decision_checkpoint_has_two_normal_paths(tmp_path, capsys):
+    session = tmp_path / "research" / "aapl" / "aapl-v1"
+    branch = session / "branches" / "graph-v1"
+    branch.mkdir(parents=True)
 
-    assert "Edge failures as diagnostics" in joined
-    assert "higher-ceiling Sharpe/return" in joined
-    assert "only repairing gates" in joined
+    print_round_decision_checkpoint(
+        session=session,
+        branch=branch,
+        round_id="round-001",
+    )
+
+    output = capsys.readouterr().out
+    assert "Decision checkpoint:" in output
+    assert "Choose exactly one next action." in output
+    assert "Continue exploration:" in output
+    assert "Final report:" in output
+    assert "best-strategy --session" in output
+    assert "exploration is incomplete" in output
+    assert "while also naming the next experiment" in output
+    assert "continue/pivot/stop" not in output
 
 
 def test_frontier_markdown_says_coverage_is_not_exhaustion():
