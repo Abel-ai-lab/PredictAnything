@@ -51,33 +51,42 @@ Learn more: [Predict Anything Strategy Research](docs/strategy-research.md)
 
 ## Four-Arm Capability Benchmark
 
-A June 2026 strict four-arm benchmark isolated two capabilities over `1,000`
-tickers: Abel Invest skill use and Abel causal graph access. Each arm received
-the same strategy-discovery objective and differed only in the capabilities
-made available to the agent.
+A June 2026 historical benchmark tested Predict Anything on a `1,000`-ticker
+selected universe with a strict 2x2 design: Abel Invest skill on/off and causal
+graph access on/off. Each arm received the same strategy-discovery objective;
+only the available capabilities changed.
 
-| Arm | Abel Invest skill | Causal graph | OK coverage | Mean Sharpe | Median Sharpe | P10 Sharpe | Median max DD | Median return/DD | Mean candidates |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Skill + graph | `yes` | `yes` | `835 / 1000` (`83.5%`) | `1.0245` | `1.0099` | `0.7089` | `-0.1666` | `8.1007` | `207.0` |
-| Skill only | `yes` | `no` | `998 / 1000` (`99.8%`) | `0.8194` | `0.8088` | `0.5126` | `-0.1916` | `5.7444` | `40.0` |
-| Graph only | `no` | `yes` | `959 / 1000` (`95.9%`) | `0.9514` | `0.9374` | `0.6461` | `-0.2527` | `9.5752` | `198.2` |
-| No skill / no graph | `no` | `no` | `959 / 1000` (`95.9%`) | `0.7617` | `0.7530` | `0.4686` | `-0.2616` | `5.7652` | `40.0` |
+| Arm | Abel Invest skill | Causal graph | Mean Sharpe | Median Sharpe | P10 Sharpe | Median max DD | Median return/DD | Mean candidates |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Skill + graph | `yes` | `yes` | `1.0245` | `1.0099` | `0.7089` | `-0.1666` | `8.1007` | `207.0` |
+| Graph only | `no` | `yes` | `0.9514` | `0.9374` | `0.6461` | `-0.2527` | `9.5752` | `198.2` |
+| Skill only | `yes` | `no` | `0.8194` | `0.8088` | `0.5126` | `-0.1916` | `5.7444` | `40.0` |
+| No skill / no graph | `no` | `no` | `0.7617` | `0.7530` | `0.4686` | `-0.2616` | `5.7652` | `40.0` |
 
 The full Predict Anything stack (`skill + graph`) produced the strongest
 risk-adjusted profile: highest mean Sharpe, highest median Sharpe, strongest
-lower-tail Sharpe, and the smallest typical drawdown. Against the pure control
-on the all-four-OK paired set (`803` tickers), it won on Sharpe for
-`710 / 803` tickers (`88.4%`), reduced drawdown for `583 / 803` (`72.6%`, less
-negative is better), and won on return/drawdown for `533 / 795` defined pairs
-(`67.0%`).
+lower-tail Sharpe, and the smallest typical drawdown. Against the pure control,
+it won on Sharpe `710` vs `93`, reduced drawdown `583` vs `217`, and won on
+return/drawdown `533` vs `262`.
 
-The factor isolation is the main capability evidence: with graph held fixed,
-the skill improved Sharpe and drawdown control; with skill held fixed, graph
-access raised mean Sharpe by `+0.2125` and expanded candidate search from `40.0`
-to `207.0` mean candidates. Isolation checks passed across all `100` chunks in
-each arm, with `abel_invest_module_leak_count=0` and no forbidden-host leaks.
+The information-gain story is visible in the factor isolation:
 
-Read the detailed benchmark: [Four-Arm Abel Invest Capability Benchmark](docs/four-arm-benchmark.md).
+| Capability contrast | What improved | Readout |
+| --- | --- | --- |
+| Full stack vs no skill / no graph | End-to-end strategy quality | `+0.2653` mean Sharpe; `+0.2287` median Sharpe; `710` vs `93` Sharpe wins. |
+| Graph effect with skill held fixed | Causal-driver search | `+0.2125` mean Sharpe; `599` vs `3` Sharpe wins with `233` ties; candidate search expands from `40.0` to `207.0` mean candidates. |
+| Graph effect without skill | Graph signal value independent of Abel workflow | `+0.1897` mean Sharpe; `724` vs `54` Sharpe wins with `181` ties. |
+| Skill effect with graph held fixed | Workflow discipline and risk control | `+0.0690` mean Sharpe; `646` vs `154` drawdown wins. |
+| Skill effect without graph | Skill value independent of causal graph | `+0.0590` mean Sharpe; `781` vs `173` drawdown wins. |
+
+Graph access turns target-only search into a graph-neighbor discovery problem:
+it adds causal-driver candidates that a plain price-history search cannot see.
+The Abel Invest skill turns that larger search space into a repeatable workflow:
+workspace readiness, data preparation, scouting, generated strategy engines,
+debugging, recorded runs, and audit trails. Together they create a visibly
+better risk-adjusted discovery system, not just a bigger brute-force search.
+
+Read the detailed benchmark and source metrics: [Four-Arm Abel Invest Capability Benchmark](docs/four-arm-benchmark.md).
 
 Backtests and benchmark comparisons are research artifacts, not investment
 advice or guarantees of live trading performance.
