@@ -1,6 +1,6 @@
 [project]
 name = "abel-invest"
-version = "3.7.2"
+version = "3.7.3"
 description = "Abel strategy research skill for strategy discovery, causal-driver analysis, and investment strategy development."
 keywords = ["abel", "strategy-research", "strategy-discovery", "causal-ai", "investment-strategies", "ai-agents"]
 requires-python = ">=3.11"
