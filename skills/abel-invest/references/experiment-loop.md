@@ -213,6 +213,9 @@ target. If none holds, stay in `Exploring`, keep searching, and choose the next
 concrete action.
 
 If you can name a concrete next search action, the search is still `Exploring`.
+After every recorded `run-branch`, treat the printed `Decision checkpoint` as
+the immediate control point: either update the path and continue a concrete
+exploration action, or enter final report.
 
 Do not stop by round count, a mediocre candidate, a high-Sharpe near-pass, an
 easy-to-validate low-objective branch, `render` / `status` / `check` success,
@@ -236,7 +239,7 @@ complete, and the next concrete action. Do not ask for visualization.
 Use this section for every `Completed` exit, successful or ledger-supported
 unable-to-reach. Treat the stop report as one exit contract: use the final
 report handoff, explain the selected strategy in ordinary user language, and
-ask about session visualization when a candidate strategy round exists.
+ask about session visualization when the handoff says the session is eligible.
 
 For the session default, run the read-only command:
 
@@ -250,42 +253,13 @@ promote strategy artifacts. Do not run `visualize-session` or
 manually walk `results.tsv`, `frontier.json`, or branch folders to invent a
 different ranking. If the user explicitly named a branch or round, use that
 explicit selection. Otherwise report the command's selected strategy exactly;
-the handoff already owns strategy selection.
+the handoff already owns strategy selection and final-report guidance.
 
-Default stop reports should use this shape:
-
-1. Strategy: name the selected strategy and its core idea in plain language.
-2. Key performance: list exactly four metrics: backtest period, total return,
-   Sharpe, and max drawdown. Add one short plain-language meaning for each.
-3. Overall readout: one warm, clear, non-promotional paragraph explaining why
-   this is the current best available strategy, including any important limits.
-4. Next step: if a candidate strategy exists, ask whether to create the session
-   review page.
-
-Do not lead with branch/round identifiers, internal validation labels,
-diagnostic acronyms, or selector details unless the user asks for technical
-details. Do not add current price or live quote context to a completed backtest
-report unless the user asks.
-
-Example:
-
-```text
-I found the strongest strategy from this session: it uses a focused set of
-related market signals to decide when to hold the target and when to reduce
-exposure.
-
-Key performance:
-- Backtest period: 2021-01-01 to 2026-01-01, the historical window tested.
-- Total return: +120%, meaning the capital a little more than doubled.
-- Sharpe: 2.1, suggesting the returns were strong relative to daily swings.
-- Max drawdown: -11%, the worst pullback along the way.
-
-Overall, this is the strongest result in the session so far: it delivered
-strong growth with a Sharpe profile that makes the return stream look
-meaningfully better than a noisy raw price bet.
-
-Would you like me to create the session review page?
-```
+Do not use a fixed report template. Compose the report from the handoff's
+selected strategy, metrics, robustness notes, and `reportGuidance`. Translate
+robustness into confidence, limitations, and risk; do not lead with internal
+validation labels, diagnostic acronyms, selector details, file paths, current
+price, or live quote context unless the user asks for technical details.
 
 ## Evidence Reading
 
