@@ -4,6 +4,29 @@ All notable changes to `causal-abel` will be documented in this file.
 
 This project follows a repo-level release log so agents can summarize user-visible changes across GitHub and ClawHub-facing revisions.
 
+## [1.4.4] - 2026-06-12
+
+### Added
+
+- Added the Abel Ask Data API helper and shared `abel-common` Data API client for catalog, schema, records, and auth-status access through the Abel gateway.
+- Added Abel Ask Data API usage guidance covering auth discovery, production/SIT endpoint selection, pagination, response inspection, and the hard stop when the visible catalog is empty.
+- Added explicit Abel Invest session visualization for a selected strategy branch and round through `visualize-session --strategy <branch> --round <round>`, while preserving the router-compatible hosted artifact manifest shape.
+- Added an Abel Invest final-report handoff through the read-only `best-strategy --json` selector so user-facing reports can use the same strategy choice and metrics that the CLI exposes.
+- Added a `run-branch` decision checkpoint that asks agents to choose between more concrete exploration and entering the final report path.
+
+### Changed
+
+- Updated Abel Invest to version `3.7.3`.
+- Softened Abel Invest first-look scout timing guidance from a hard budget feel into an expected-duration cue, while still telling agents to let a progressing scout finish naturally before choosing what to validate.
+- Renamed active selector language from `best_pass` toward `best_strategy` so the user-facing report path does not overstate PASS as the only meaningful outcome.
+- Refined Abel Invest workspace, branch-context, and experiment-loop guidance around graph-informed construction, CLI checkpoints, compact final reports, explicit strategy upload, and final-report fidelity to the selected strategy artifact.
+
+### Fixed
+
+- Tightened Abel Ask prompt and Data API tests so agents use catalog-visible datasets only and stop before schema or records calls when the catalog is empty.
+- Removed deprecated branch dashboard bundle upload paths from the active Abel Invest flow, keeping export and promote commands as documented internal/debug paths.
+- Tightened Abel Invest dashboard upload, strategy artifact, bootstrap, CLI guidance, branch context, and strategy selection tests around scout timing, explicit strategy uploads, and final-report handoff behavior.
+
 ## [1.4.3] - 2026-06-06
 
 ### Added
