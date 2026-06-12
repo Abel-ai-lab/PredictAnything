@@ -351,6 +351,35 @@ def select_branch_promotion_candidate(
     )
 
 
+def select_strategy_artifact_for_session(
+    session: Path,
+    *,
+    strategy: Path | str | None = None,
+    round_id: str | None = None,
+) -> StrategySelectionResult:
+    """Resolve the strategy artifact candidate for a session upload."""
+
+    session = resolve_workspace_arg_path(session).resolve()
+    normalized_round_id = str(round_id or "").strip() or None
+    if strategy is None or not str(strategy).strip():
+        if normalized_round_id:
+            raise RuntimeError(
+                "--round requires --strategy when selecting a session strategy artifact"
+            )
+        return select_best_strategy(session)
+
+    branch = resolve_workspace_arg_path(str(strategy)).resolve()
+    if not branch.is_dir():
+        raise RuntimeError(f"strategy branch directory is missing: {branch}")
+    branch_session = _session_from_branch(branch).resolve()
+    if branch_session != session:
+        raise RuntimeError(
+            "strategy branch must belong to the session: "
+            f"strategySession={branch_session}; session={session}"
+        )
+    return select_branch_promotion_candidate(branch, round_id=normalized_round_id)
+
+
 def best_strategy_report_payload(session: Path) -> dict[str, Any]:
     """Return the compact final-report handoff for stop reports."""
 
@@ -578,13 +607,20 @@ def build_strategy_artifact_manifest(
 def export_selected_strategy_artifact(
     session: Path,
     *,
+    strategy: Path | str | None = None,
+    round_id: str | None = None,
     output_dir: Path | None = None,
     python_bin: str | None = None,
+    rerun_command: str | None = None,
     runner=subprocess.run,
 ) -> dict[str, Any]:
     """Export the selected hosted strategy artifact locally without uploading it."""
 
-    selection = select_best_strategy(session)
+    selection = select_strategy_artifact_for_session(
+        session,
+        strategy=strategy,
+        round_id=round_id,
+    )
     if selection.selected is None:
         return _artifact_skip_result(selection.skip_reason)
 
@@ -593,6 +629,7 @@ def export_selected_strategy_artifact(
         selection=selection,
         output_dir=output_dir,
         python_bin=python_bin,
+        rerun_command=rerun_command,
         runner=runner,
     )
 
@@ -622,6 +659,7 @@ def promote_branch_strategy(
         selection=selection,
         output_dir=output_dir,
         python_bin=python_bin,
+        rerun_command=None,
         runner=runner,
     )
 
@@ -632,6 +670,7 @@ def _export_strategy_artifact_candidate(
     selection: StrategySelectionResult,
     output_dir: Path | None,
     python_bin: str | None,
+    rerun_command: str | None,
     runner,
 ) -> dict[str, Any]:
     destination = _artifact_output_dir(candidate, output_dir=output_dir)
@@ -664,6 +703,7 @@ def _export_strategy_artifact_candidate(
         candidate,
         destination=destination,
         selection=selection,
+        rerun_command=rerun_command,
     )
     if isinstance(promotion_or_result, dict):
         return promotion_or_result
@@ -735,6 +775,7 @@ def _prepare_promotion_for_export(
     *,
     destination: Path,
     selection: StrategySelectionResult,
+    rerun_command: str | None,
 ) -> PromotionResult | dict[str, Any]:
     try:
         return prepare_promotion(
@@ -767,7 +808,7 @@ def _prepare_promotion_for_export(
                 else {}
             )
             result["reportPath"] = _clean(output.get("reportPath"))
-            result["rerunCommand"] = _promotion_rerun_command(candidate)
+            result["rerunCommand"] = rerun_command or _promotion_rerun_command(candidate)
         gate_path = destination / PROMOTION_GATE_FILENAME
         if gate_path.is_file():
             result["promotionReport"]["gatePath"] = str(gate_path)

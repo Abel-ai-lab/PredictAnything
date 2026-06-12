@@ -514,7 +514,7 @@ def test_export_selected_strategy_artifact_skips_without_validation(
     }
 
 
-def test_upload_strategy_artifact_for_session_returns_upload_summary(
+def test_prepared_strategy_artifact_upload_returns_upload_summary(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
@@ -578,15 +578,18 @@ def test_upload_strategy_artifact_for_session_returns_upload_summary(
                 b'"admissionStatus": "queued", "strategyId": null}}'
             )
 
-    result = ni.upload_strategy_artifact_for_session(
-        local_session=session,
+    export_result = ni.export_selected_strategy_artifact(
+        session,
+        output_dir=tmp_path / "exported-artifact",
+        python_bin="python-test",
+        runner=fake_runner,
+    )
+    result = ni.upload_prepared_strategy_artifact_for_session(
         narrative_result={"data": {"sessionId": "sess_1", "uploadId": "narrative_1"}},
         base_url="https://router.example",
         api_key="secret-key",
-        output_dir=tmp_path / "exported-artifact",
-        python_bin="python-test",
+        export_result=export_result,
         opener=lambda request, timeout: _Response(),
-        runner=fake_runner,
     )
 
     assert result["artifactUploadFailed"] is False

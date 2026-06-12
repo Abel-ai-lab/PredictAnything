@@ -692,6 +692,71 @@ def test_export_selected_strategy_artifact_nulls_inapplicable_metrics(
     assert artifact_edge_metrics["loss_years"] is None
 
 
+def test_select_strategy_artifact_for_session_uses_explicit_branch_round(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    best_branch = ni.init_branch_dir(session, "auto_best")
+    explicit_branch = ni.init_branch_dir(session, "momentum_lead")
+    _write_strategy_artifact_inputs(best_branch)
+    _write_strategy_artifact_inputs(explicit_branch)
+    _write_strategy_result_row(
+        session,
+        best_branch,
+        round_id="round-001",
+        verdict="PASS",
+        sharpe=1.20,
+        lo_adj=1.10,
+        max_dd=-0.0800,
+    )
+    _write_strategy_result_row(
+        session,
+        explicit_branch,
+        round_id="round-006",
+        verdict="PASS",
+        sharpe=0.85,
+        lo_adj=0.80,
+        max_dd=-0.1200,
+    )
+
+    result = ni.select_strategy_artifact_for_session(
+        session,
+        strategy=explicit_branch,
+        round_id="round-006",
+    )
+
+    assert result.selected is not None
+    assert result.selected_branch_id == "momentum_lead"
+    assert result.selected_round_id == "round-006"
+    assert result.selected.selection_mode == "explicit_branch_round"
+    assert result.selected.selection_scope == "branch"
+    assert result.selected.selection_rank == 1
+
+
+def test_select_strategy_artifact_for_session_rejects_cross_session_branch(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    other_session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
+    other_branch = ni.init_branch_dir(other_session, "momentum_lead")
+
+    with pytest.raises(RuntimeError, match="must belong to the session"):
+        ni.select_strategy_artifact_for_session(
+            session,
+            strategy=other_branch,
+            round_id="round-006",
+        )
+
+
+def test_select_strategy_artifact_for_session_requires_strategy_for_round(
+    tmp_path: Path,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+
+    with pytest.raises(RuntimeError, match="--round requires --strategy"):
+        ni.select_strategy_artifact_for_session(session, round_id="round-006")
+
+
 def test_promote_branch_strategy_uses_explicit_branch_round(
     tmp_path: Path,
 ) -> None:
