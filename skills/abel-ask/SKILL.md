@@ -54,6 +54,13 @@ Most `candidate_discovery`, `life_investment_decision`, and
 `general_causal_read` requests are `proxy_routed`. A ticker can still be
 `proxy_routed` when it is only a proxy inside a broader question.
 
+## Data API
+
+When supplemental structured data is needed, read
+`references/data-api-usage.md` and use `scripts/data_api.py`. The script calls
+the Abel gateway with `Authorization: Bearer <api-key>` and discovers the
+current key's available datasets through the catalog endpoint.
+
 ## 2. Work The Question
 
 - For proxy-routed questions, generate the obvious mechanism, a second-order
