@@ -250,10 +250,21 @@ def test_best_strategy_report_payload_is_read_only_for_stop_reports(
         "start": "2020-01-01",
         "end": "2020-12-31",
     }
-    assert payload["reportGuidance"]["sessionReviewEligible"] is True
-    assert "binary outcome" in payload["reportGuidance"]["validationFraming"]
+    guidance = payload["reportGuidance"]
+    assert guidance["purpose"] == "write_final_user_report"
+    assert guidance["useSelectedStrategyExactly"] is True
+    assert guidance["sessionReviewEligible"] is True
+    assert "binary outcome" in guidance["validationFraming"]
+    assert "PASS/FAIL labels or gate status" in guidance["doNotInclude"]
+    assert "raw validation score" in guidance["doNotInclude"]
+    assert "DSR, K, or search-trial diagnostics" in guidance["doNotInclude"]
+    assert (
+        "free-form next search directions after entering final report"
+        in guidance["doNotInclude"]
+    )
     assert "limitations" in payload["robustness"]
-    payload_text = json.dumps(payload)
+    payload_without_guidance = {**payload, "reportGuidance": {}}
+    payload_text = json.dumps(payload_without_guidance)
     for leaked_key in [
         "artifactExported",
         "artifactUploadSkipped",

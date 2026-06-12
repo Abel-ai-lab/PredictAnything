@@ -49,7 +49,9 @@ from abel_invest.workspace_core.workspace import find_workspace_root
 STRATEGY_ARTIFACT_SCHEMA = "abel-invest.strategy-artifact/v1"
 BEST_STRATEGY_REPORT_SCHEMA = "abel-invest.best-strategy-report/v1"
 REPORT_GUIDANCE = {
+    "purpose": "write_final_user_report",
     "tone": "plain_language_user_report",
+    "useSelectedStrategyExactly": True,
     "summary": (
         "Explain the selected strategy idea in plain language with total return, "
         "Sharpe, max drawdown, and the backtest period."
@@ -58,6 +60,14 @@ REPORT_GUIDANCE = {
         "Describe robustness checks as confidence and limitations rather than "
         "as a binary outcome."
     ),
+    "doNotInclude": [
+        "PASS/FAIL labels or gate status",
+        "raw validation score",
+        "DSR, K, or search-trial diagnostics",
+        "selector internals or artifact/promotion details",
+        "file paths or live quote context",
+        "free-form next search directions after entering final report",
+    ],
     "sessionReview": (
         "If the session has any recorded strategy round, ask whether to "
         "create the session review page."
@@ -823,10 +833,12 @@ def best_strategy_command(args) -> int:
     )
     print("Read-only selection: no artifact export, upload, or promotion was run.")
     print(
-        "User reply reminder: use plain language with total return, Sharpe, "
-        "max drawdown, and backtest period; describe robustness as confidence "
-        "and limitations; ask about the session review page when a recorded "
-        "strategy round exists."
+        "Final report harness: report the selected strategy exactly; use plain "
+        "language with total return, Sharpe, max drawdown, and backtest period; "
+        "describe robustness as confidence and limitations; do not include "
+        "PASS/FAIL, gate status, raw score, DSR, K, selector details, file "
+        "paths, live quote context, or free-form next search directions; ask "
+        "about the session review page when a recorded strategy round exists."
     )
     return 0
 

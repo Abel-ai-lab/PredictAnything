@@ -287,11 +287,20 @@ def test_best_strategy_payload_includes_report_guidance(tmp_path):
     payload = best_strategy_report_payload(session)
 
     guidance = payload["reportGuidance"]
+    assert guidance["purpose"] == "write_final_user_report"
+    assert guidance["useSelectedStrategyExactly"] is True
     assert guidance["sessionReviewEligible"] is True
     assert "plain language" in guidance["summary"]
     assert "binary outcome" in guidance["validationFraming"]
+    assert "PASS/FAIL labels or gate status" in guidance["doNotInclude"]
+    assert "DSR, K, or search-trial diagnostics" in guidance["doNotInclude"]
+    assert (
+        "free-form next search directions after entering final report"
+        in guidance["doNotInclude"]
+    )
     assert "session review page" in guidance["sessionReview"]
-    payload_text = json.dumps(payload)
+    payload_without_guidance = {**payload, "reportGuidance": {}}
+    payload_text = json.dumps(payload_without_guidance)
     assert "PASS" not in payload_text
     assert "FAIL" not in payload_text
     assert "gate" not in payload_text
