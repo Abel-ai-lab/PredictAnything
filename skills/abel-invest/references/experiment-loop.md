@@ -344,19 +344,20 @@ Use the entrypoint that matches the user's request. For a read-only stop-report
 selection, use `best-strategy --session <session> --json`; it does not export,
 upload, or promote artifacts. For session visualization or upload, keep using
 `visualize-session --session <session>` so the default strategy artifact
-export/upload path stays attached. For local artifact export or validation
-probes, use `export-strategy-artifact --session <session>`. For a
-user-specified branch/round, use `promote-strategy --branch <branch> --round
-<round>`. Do not manually traverse `results.tsv` or branch directories to choose
-the best session strategy, and do not run `visualize-session` or
-`export-strategy-artifact` merely to compute it.
+export/upload path stays attached. For a user-specified branch/round, use
+`visualize-session --session <session> --strategy <branch> --round <round>`.
+Keep `export-strategy-artifact` and `promote-strategy` for internal local
+artifact or validation probes. Do not manually traverse `results.tsv` or branch
+directories to choose the best session strategy, and do not run
+`visualize-session` or `export-strategy-artifact` merely to compute it.
 
-If a visualization, export, or promotion command emits a hosted paper
-`paper-contract-request.json`, read the request first and use its
-`reportTemplate`. Open `contractGuide.referencePath` from the active Abel Invest
-skill when the request requires stateful continuation, source edits, or deeper
-gate diagnosis. Edit source only when `sourceEditPolicy` requires or genuinely
-allows it, write `paper-contract-report.json`, and rerun the same command.
+If a visualization command, or an internal export/promotion probe, emits a
+hosted paper `paper-contract-request.json`, read the request first and use its
+`reportTemplate`. Open `contractGuide.referencePath` from the active Abel
+Invest skill when the request requires stateful continuation, source edits, or
+deeper gate diagnosis. Edit source only when `sourceEditPolicy` requires or
+genuinely allows it, write `paper-contract-report.json`, and rerun the same
+command.
 Leave contract-blocked sessions as `action_required` unless the user explicitly
 asks to skip strategy artifacts. Do not start a separate agent process. The
 agent should not hand-assemble the payload or choose a router URL.

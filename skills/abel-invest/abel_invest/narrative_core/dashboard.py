@@ -43,11 +43,8 @@ from abel_invest.narrative_core.io import read_env_file_values
 from abel_invest.narrative_core.session_lifecycle import resolve_workspace_arg_path
 from abel_invest.narrative_core.strategy_artifact_upload import (
     _strategy_artifact_preupload_error,
-    post_strategy_artifact_upload,
     render_strategy_artifact_upload_lines,
-    strategy_artifact_client_request_id,
     upload_prepared_strategy_artifact_for_session,
-    upload_strategy_artifact_for_session,
 )
 from abel_invest.narrative_core.strategy_artifacts import export_selected_strategy_artifact
 from abel_invest.workspace_core.edge_runtime import resolve_runtime_auth_env_file
@@ -131,12 +128,21 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
     workspace_root = find_workspace_root(session)
     base_url = resolve_skill_dashboard_base_url()
     api_key = resolve_skill_dashboard_api_key(args.api_key, workspace_root=workspace_root)
+    strategy = getattr(args, "strategy", None)
+    round_id = getattr(args, "round", None)
     artifact_export_result = export_selected_strategy_artifact(
         session,
+        strategy=strategy,
+        round_id=round_id,
         output_dir=Path(args.artifact_output_dir)
         if getattr(args, "artifact_output_dir", None)
         else None,
         python_bin=getattr(args, "python_bin", None),
+        rerun_command=_visualize_session_rerun_command(
+            session=session,
+            strategy=strategy,
+            round_id=round_id,
+        ),
     )
     skipped = artifact_export_result.get("artifactUploadSkipped")
     skip_reason = artifact_export_result.get("skipReason")
@@ -151,7 +157,6 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
     artifact_result = None
     if artifact_export_result is not None:
         artifact_result = upload_prepared_strategy_artifact_for_session(
-            local_session=session,
             narrative_result=result,
             base_url=base_url,
             api_key=api_key,
@@ -159,6 +164,22 @@ def upload_skill_dashboard_session(args: argparse.Namespace) -> int:
         )
     print(render_skill_dashboard_session_upload_result(result, artifact_result=artifact_result))
     return 0
+
+
+def _visualize_session_rerun_command(
+    *,
+    session: Path,
+    strategy: str | None,
+    round_id: str | None,
+) -> str:
+    command = f"abel-invest visualize-session --session {session}"
+    if not strategy or not str(strategy).strip():
+        return command
+    command += f" --strategy {strategy}"
+    normalized_round = str(round_id or "").strip()
+    if normalized_round:
+        command += f" --round {normalized_round}"
+    return command
 
 
 def render_skill_dashboard_session_upload_result(

@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from abel_invest.narrative_core.strategy_artifacts import export_selected_strategy_artifact
 from abel_invest.narrative_core.upload_transport import build_multipart_form_data
 
 STRATEGY_DETAIL_ENTRY_TIP = (
@@ -73,41 +71,6 @@ def post_strategy_artifact_upload(
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Strategy artifact upload failed: HTTP {exc.code}: {detail}") from exc
     return json.loads(raw)
-
-
-def upload_strategy_artifact_for_session(
-    *,
-    local_session: Path,
-    narrative_result: dict,
-    base_url: str,
-    api_key: str,
-    output_dir: Path | None = None,
-    python_bin: str | None = None,
-    opener=urlopen,
-    runner=None,
-) -> dict:
-    data = narrative_result.get("data") if isinstance(narrative_result.get("data"), dict) else {}
-    hosted_session_id = str(data.get("sessionId") or data.get("id") or "").strip()
-    if not hosted_session_id:
-        return {
-            "artifactExported": False,
-            "artifactUploadSkipped": True,
-            "skipReason": "hosted_session_id_missing",
-        }
-    export_result = export_selected_strategy_artifact(
-        local_session,
-        output_dir=output_dir,
-        python_bin=python_bin,
-        runner=runner or subprocess.run,
-    )
-    return upload_prepared_strategy_artifact_for_session(
-        local_session=local_session,
-        narrative_result=narrative_result,
-        base_url=base_url,
-        api_key=api_key,
-        export_result=export_result,
-        opener=opener,
-    )
 
 
 def _strategy_artifact_preupload_error(export_result: dict) -> str:
@@ -225,14 +188,12 @@ def _contract_request_scalar(value: object) -> str:
 
 def upload_prepared_strategy_artifact_for_session(
     *,
-    local_session: Path,
     narrative_result: dict,
     base_url: str,
     api_key: str,
     export_result: dict,
     opener=urlopen,
 ) -> dict:
-    del local_session
     data = narrative_result.get("data") if isinstance(narrative_result.get("data"), dict) else {}
     hosted_session_id = str(data.get("sessionId") or data.get("id") or "").strip()
     source_upload_id = str(data.get("uploadId") or data.get("sourceUploadId") or "").strip()

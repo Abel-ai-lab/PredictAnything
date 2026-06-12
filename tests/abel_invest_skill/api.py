@@ -45,7 +45,6 @@ from abel_invest.narrative_core.strategy_artifact_upload import (
     render_strategy_artifact_upload_lines,
     strategy_artifact_client_request_id,
     upload_prepared_strategy_artifact_for_session,
-    upload_strategy_artifact_for_session,
 )
 from abel_invest.narrative_core.upload_transport import (
     build_multipart_form_data,
@@ -57,6 +56,7 @@ from abel_invest.narrative_core.strategy_artifacts import (
     promote_branch_strategy,
     select_branch_promotion_candidate,
     select_best_pass_strategy,
+    select_strategy_artifact_for_session,
 )
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts
 from abel_invest.narrative_core.io import append_tsv_row

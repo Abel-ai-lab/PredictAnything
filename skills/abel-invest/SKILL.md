@@ -248,9 +248,11 @@ Completion, reporting, and artifacts:
 - Do not create or refresh an online session view automatically. If the user
   agrees or explicitly asks, run
   `<command_prefix> visualize-session --session <session>`.
-- For local artifact export or promotion probes, use the matching CLI command
-  from `experiment-loop.md`; if a hosted paper `paper-contract-request.json`
-  appears, read it first and follow its `reportTemplate` / `contractGuide`.
+- If the user asks to upload or visualize a specific strategy branch/round, run
+  `<command_prefix> visualize-session --session <session> --strategy <branch> --round <round>`.
+  Keep local artifact export and explicit promotion commands for internal debug
+  probes only; if a hosted paper `paper-contract-request.json` appears, read it
+  first and follow its `reportTemplate` / `contractGuide`.
 - The default Abel router base URL is `https://api.abel.ai/router/`. `abel-auth`
   owns API key setup; do not ask for a router URL unless the user is testing a
   non-default router.

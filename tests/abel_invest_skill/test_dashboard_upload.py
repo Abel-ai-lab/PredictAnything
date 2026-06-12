@@ -17,7 +17,6 @@ from abel_invest.narrative_core.strategy_artifact_upload import (
     post_strategy_artifact_upload,
     strategy_artifact_client_request_id,
     upload_prepared_strategy_artifact_for_session,
-    upload_strategy_artifact_for_session,
 )
 
 
@@ -154,21 +153,26 @@ def test_post_skill_dashboard_session_sends_to_session_endpoint() -> None:
     assert timeout == 60
 
 
-def test_strategy_artifact_upload_skips_without_hosted_session_id(tmp_path: Path) -> None:
-    def unexpected_runner(*args, **kwargs):
-        raise AssertionError("export should not run without a hosted session id")
-
-    result = upload_strategy_artifact_for_session(
-        local_session=tmp_path,
+def test_prepared_strategy_artifact_upload_skips_without_hosted_session_id(
+    tmp_path: Path,
+) -> None:
+    result = upload_prepared_strategy_artifact_for_session(
         narrative_result={"data": {}},
         base_url="https://router.example",
         api_key="secret-key",
-        runner=unexpected_runner,
+        export_result={
+            "artifactExported": True,
+            "artifactUploadSkipped": False,
+            "manifestPath": str(tmp_path / "manifest.json"),
+            "artifactPath": str(tmp_path / "artifact.zip"),
+        },
     )
 
     assert result == {
         "artifactExported": False,
         "artifactUploadSkipped": True,
+        "manifestPath": str(tmp_path / "manifest.json"),
+        "artifactPath": str(tmp_path / "artifact.zip"),
         "skipReason": "hosted_session_id_missing",
     }
 
@@ -195,7 +199,6 @@ def test_strategy_artifact_upload_failure_keeps_export_context(tmp_path: Path) -
         raise OSError("network down")
 
     result = upload_prepared_strategy_artifact_for_session(
-        local_session=tmp_path,
         narrative_result={"data": {"sessionId": "sess_1", "uploadId": "narrative_1"}},
         base_url="https://router.example",
         api_key="secret-key",
@@ -303,6 +306,7 @@ def test_visualize_session_uploads_strategy_artifact_by_default(
 ) -> None:
     session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
     calls = []
+    export_kwargs = []
 
     monkeypatch.setitem(
         ni.upload_skill_dashboard_session.__globals__,
@@ -312,6 +316,7 @@ def test_visualize_session_uploads_strategy_artifact_by_default(
 
     def fake_export(*args, **kwargs):
         calls.append("export")
+        export_kwargs.append(kwargs)
         return {
             "artifactExported": True,
             "artifactUploadSkipped": False,
@@ -360,11 +365,98 @@ def test_visualize_session_uploads_strategy_artifact_by_default(
     )
 
     assert calls == ["export", "post_session", "upload_artifact"]
+    assert export_kwargs[0]["strategy"] is None
+    assert export_kwargs[0]["round_id"] is None
+    assert (
+        export_kwargs[0]["rerun_command"]
+        == f"abel-invest visualize-session --session {session.resolve()}"
+    )
     output = capsys.readouterr().out
     assert "Strategy artifact uploaded: upload_1" in output
     assert "admission=queued" in output
     assert "router admission continues asynchronously" in output
     assert "Session strategies near the bottom" in output
+
+
+def test_visualize_session_uploads_explicit_strategy_artifact_after_session(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session = ni.init_session_dir("TSLA", "tsla-v1", tmp_path / "research")
+    branch = ni.init_branch_dir(session, "momentum_lead")
+    captured = {}
+
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "resolve_skill_dashboard_base_url",
+        lambda: "https://router.example",
+    )
+
+    def fake_export(session_arg, **kwargs):
+        captured["session"] = session_arg
+        captured["kwargs"] = kwargs
+        return {
+            "artifactExported": True,
+            "artifactUploadSkipped": False,
+            "manifestPath": str(tmp_path / "manifest.json"),
+            "artifactPath": str(tmp_path / "artifact.zip"),
+            "selectedBranchId": branch.name,
+            "selectedRoundId": "round-006",
+        }
+
+    def fake_post_session(**kwargs):
+        return {
+            "data": {
+                "sessionId": "sess_1",
+                "uploadId": "upload_1",
+                "openUrl": "https://app.example/sess_1",
+            }
+        }
+
+    def fake_prepared_upload(**kwargs):
+        assert kwargs["export_result"]["selectedBranchId"] == branch.name
+        return {"artifactUploadId": "artifact_1", "admissionStatus": "queued"}
+
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "export_selected_strategy_artifact",
+        fake_export,
+    )
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "post_skill_dashboard_session",
+        fake_post_session,
+    )
+    monkeypatch.setitem(
+        ni.upload_skill_dashboard_session.__globals__,
+        "upload_prepared_strategy_artifact_for_session",
+        fake_prepared_upload,
+    )
+
+    ni.upload_skill_dashboard_session(
+        Namespace(
+            session=str(session),
+            api_key="secret-key",
+            output_json=None,
+            dry_run=False,
+            artifact_output_dir=None,
+            python_bin=None,
+            strategy=str(branch),
+            round="round-006",
+        )
+    )
+
+    assert captured["session"] == session.resolve()
+    assert captured["kwargs"]["strategy"] == str(branch)
+    assert captured["kwargs"]["round_id"] == "round-006"
+    expected_rerun_command = (
+        f"abel-invest visualize-session --session {session.resolve()} "
+        f"--strategy {branch} --round round-006"
+    )
+    assert (
+        captured["kwargs"]["rerun_command"]
+        == expected_rerun_command
+    )
 
 
 def test_visualize_session_aborts_before_upload_when_agent_paper_contract_fails(
