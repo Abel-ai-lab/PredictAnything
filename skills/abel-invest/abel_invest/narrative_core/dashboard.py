@@ -11,10 +11,8 @@ from urllib.request import Request, urlopen
 
 from abel_invest.narrative_core.contracts.constants import DEFAULT_ABEL_ROUTER_BASE_URL
 from abel_invest.narrative_core.dashboard_payload import (
-    _first_branch_event_time,
     _first_session_event_time,
     _normalize_dashboard_locale,
-    build_skill_dashboard_bundle,
     build_skill_dashboard_exploration_map,
     build_skill_dashboard_session_bundle,
     dashboard_branch_target_asset,
@@ -24,18 +22,11 @@ from abel_invest.narrative_core.dashboard_payload import (
     dashboard_round_is_candidate,
     dashboard_session_status,
     dashboard_session_target_node,
-    exploration_path_block_summary,
-    exploration_path_entry_blocks,
-    first_round_id_from_refs,
     indexed_skill_dashboard_rounds,
-    path_reference_matches_branch,
     require_timezone_aware_iso,
     resolve_dashboard_session_path,
     session_round_order,
-    skill_dashboard_branch_insights,
     skill_dashboard_branch_payload,
-    skill_dashboard_episodes,
-    skill_dashboard_rounds,
     skill_dashboard_session_episodes,
     skill_dashboard_session_insights,
 )
@@ -49,36 +40,6 @@ from abel_invest.narrative_core.strategy_artifact_upload import (
 from abel_invest.narrative_core.strategy_artifacts import export_selected_strategy_artifact
 from abel_invest.workspace_core.edge_runtime import resolve_runtime_auth_env_file
 from abel_invest.workspace_core.workspace import find_workspace_root
-
-
-def post_skill_dashboard_bundle(
-    *,
-    base_url: str,
-    api_key: str,
-    bundle: dict,
-    opener=urlopen,
-    timeout: int = 60,
-) -> dict:
-    normalized_base_url = str(base_url or "").strip().rstrip("/")
-    if not normalized_base_url:
-        raise RuntimeError("Missing Abel router base URL")
-    normalized_api_key = str(api_key or "").strip()
-    if not normalized_api_key:
-        raise RuntimeError("Missing Abel API key")
-    body = json.dumps(bundle, ensure_ascii=False).encode("utf-8")
-    request = Request(
-        f"{normalized_base_url}/web/skill-dashboard/bundles",
-        data=body,
-        headers={"Content-Type": "application/json", "api-key": normalized_api_key},
-        method="POST",
-    )
-    try:
-        with opener(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Skill dashboard upload failed: HTTP {exc.code}: {detail}") from exc
-    return json.loads(raw)
 
 
 def post_skill_dashboard_session(

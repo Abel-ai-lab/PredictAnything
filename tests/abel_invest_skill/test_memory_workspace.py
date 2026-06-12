@@ -199,13 +199,15 @@ def test_run_branch_round_updates_ledger_and_agent_context(
         )
     )
     round_output = capsys.readouterr().out
-    assert "From here:" in round_output
+    assert "Decision checkpoint:" in round_output
+    assert "Choose exactly one next action." in round_output
+    assert "Continue exploration:" in round_output
+    assert "Final report:" in round_output
     assert "exploration_path.md" in round_output
-    assert "before another recorded round" in round_output
-    assert "State self-check:" in round_output
-    assert "stay in Exploring and take the next concrete search action" in round_output
-    assert "ledger-supported unable-to-reach" in round_output
-    assert "run best-strategy before the final answer" in round_output
+    assert "ledger:graph-v1:round-001" in round_output
+    assert "best-strategy --session" in round_output
+    assert "exploration is incomplete" in round_output
+    assert "while also naming the next experiment" in round_output
 
     ledger = json.loads((session / ni.EVIDENCE_LEDGER_FILENAME).read_text(encoding="utf-8"))
     context = json.loads((branch / "outputs" / "round-001-alpha-context.json").read_text(encoding="utf-8"))
@@ -227,141 +229,6 @@ def test_run_branch_round_updates_ledger_and_agent_context(
     assert ni.check_session(session, strict=False) == 0
     assert ni.check_session(session, strict=True) == 1
     assert ni.path_coverage_warning_lines(session) == []
-
-
-def test_build_skill_dashboard_bundle_uses_current_evidence_surfaces(tmp_path: Path) -> None:
-    session = ni.init_session_dir("TSLA", "tsla-dashboard", tmp_path / "research")
-    branch = ni.init_branch_dir(session, "graph-v1")
-    ni.write_branch_state(branch, {"created_at": "2026-04-24T01:00:00+00:00"})
-    spec = ni.load_branch_spec(branch)
-    spec.update(
-        {
-            "hypothesis": "AAPL driver strength leads TSLA next-day risk appetite.",
-            "evidence_intent": "candidate",
-            "input_claim": "graph_supported",
-            "mechanism_family": "driver_momentum",
-            "invalidation_condition": "No AAPL reads or negative holdout IC.",
-            "selected_inputs": ["AAPL"],
-        }
-    )
-    ni.write_branch_spec(branch, spec)
-
-    result_path = branch / "outputs" / "round-001-edge-result.json"
-    report_path = branch / "outputs" / "round-001-edge-validation.md"
-    handoff_path = branch / "outputs" / "round-001-edge-handoff.json"
-    result_path.write_text(json.dumps(_candidate_result_payload()), encoding="utf-8")
-    report_path.write_text("# validation\n", encoding="utf-8")
-    handoff_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
-    round_note = branch / "rounds" / "round-001.md"
-    round_note.write_text(
-        "\n".join(
-            [
-                "# round-001",
-                "- candidate_note: `AAPL driver strength leads TSLA next-day risk appetite.`",
-                "- expected_signal: `positive cross-asset lead`",
-                "- changed_dimensions: `drivers`",
-                "- summary: `candidate evidence round`",
-                "- next_step: `inspect dashboard bundle`",
-                f"- result_path: `{result_path.relative_to(session)}`",
-                f"- report_path: `{report_path.relative_to(session)}`",
-                f"- handoff_path: `{handoff_path.relative_to(session)}`",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    ni.append_tsv_row(
-        branch / "results.tsv",
-        ni.RESULTS_HEADER,
-        {
-            "exp_id": session.name,
-            "ticker": "TSLA",
-            "branch_id": branch.name,
-            "round_id": "round-001",
-            "decision": "keep",
-            "lo_adj": "2.400",
-            "ic": "0.0300",
-            "omega": "1.500",
-            "sharpe": "2.100",
-            "max_dd": "-0.0800",
-            "pnl": "42.0",
-            "K": "1",
-            "score": "7/7",
-            "verdict": "PASS",
-            "mode": "explore",
-            "description": "causal driver vote",
-            "result_path": str(result_path.relative_to(session)),
-            "report_path": str(report_path.relative_to(session)),
-            "handoff_path": str(handoff_path.relative_to(session)),
-        },
-    )
-    ni.append_tsv_row(
-        session / "events.tsv",
-        ni.EVENTS_HEADER,
-        {
-            "timestamp": "2026-04-24T01:05:00+00:00",
-            "event": "round_recorded",
-            "branch_id": branch.name,
-            "round_id": "round-001",
-            "mode": "explore",
-            "verdict": "PASS",
-            "decision": "keep",
-            "description": "causal driver vote",
-            "artifact_path": str(result_path.relative_to(session)),
-        },
-    )
-    ni.render_session(session)
-    (session / "exploration_path.md").write_text(
-        "# Exploration Path\n\n"
-        "## Entries\n\n"
-        "### graph-v1 round-001\n\n"
-        "- ledger: `ledger:graph-v1:round-001`\n"
-        "- path: causal driver vote\n"
-        "- why: Driver concentration matters more than raw parent count.\n",
-        encoding="utf-8",
-    )
-
-    bundle = ni.build_skill_dashboard_bundle(
-        branch,
-        uploaded_at="2026-04-24T01:30:00+00:00",
-    )
-
-    assert bundle["sessionId"] == "tsla-dashboard"
-    assert bundle["branchId"] == "graph-v1"
-    assert bundle["startAt"] == "2026-04-24T01:00:00+00:00"
-    assert bundle["endAt"] == "2026-04-24T01:30:00+00:00"
-    assert set(bundle["payload"]) == {
-        "session",
-        "branch",
-        "rounds",
-        "branchInsights",
-        "episodes",
-    }
-    assert bundle["payload"]["branch"]["selectedInputs"] == ["AAPL"]
-    assert bundle["payload"]["branch"]["latestEvidenceLabel"] == "candidate_causal_evidence"
-    assert bundle["payload"]["session"]["inputRealization"] == {
-        "declared_graph_supported_rounds": 1,
-        "realized_graph_supported_rounds": 1,
-        "graph_input_read_gap_count": 0,
-        "graph_input_read_gap_rows": [],
-    }
-    assert bundle["payload"]["session"]["pathCoverage"] == {
-        "recorded_round_count": 1,
-        "covered_round_count": 1,
-        "path_coverage_complete": True,
-        "missing_path_rounds": [],
-    }
-    assert bundle["payload"]["rounds"][0]["roundId"] == "round-001"
-    assert bundle["payload"]["rounds"][0]["branchId"] == "graph-v1"
-    assert bundle["payload"]["rounds"][0]["branchRoundIndex"] == 1
-    assert bundle["payload"]["rounds"][0]["sessionRoundIndex"] == 1
-    assert bundle["payload"]["rounds"][0]["evidenceLabel"] == "candidate_causal_evidence"
-    assert bundle["payload"]["rounds"][0]["inputRealization"]["realized_input_claim"] == "graph_supported"
-    assert any(
-        "Driver concentration matters" in item["summary"]
-        for item in bundle["payload"]["branchInsights"]
-    )
-    assert "replaySnapshot" not in bundle["payload"]
-    assert "promotion" not in bundle["payload"]
 
 
 def test_build_skill_dashboard_session_bundle_aggregates_branches_and_rounds(tmp_path: Path) -> None:

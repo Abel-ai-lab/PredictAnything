@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
+
 from ._memory_helpers import *  # noqa: F401,F403
 
-def test_select_best_pass_strategy_prefers_full_pass_within_sharpe_near_tie(
+def test_select_best_strategy_prefers_full_pass_within_sharpe_near_tie(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
@@ -55,11 +57,10 @@ def test_select_best_pass_strategy_prefers_full_pass_within_sharpe_near_tie(
         calmar=0.5,
     )
 
-    result = ni.select_best_pass_strategy(session)
+    result = ni.select_best_strategy(session)
 
     assert result.skip_reason == ""
     assert result.validation_round_count == 4
-    assert result.pass_round_count == 4
     assert result.eligible_count == 4
     assert result.selected_branch_id == "momentum_lead"
     assert result.selected_round_id == "round-010"
@@ -71,7 +72,7 @@ def test_select_best_pass_strategy_prefers_full_pass_within_sharpe_near_tie(
     assert result.selected.selection_metric_values["pass_rate"] == 1.0
 
 
-def test_select_best_pass_strategy_keeps_top_sharpe_when_gap_exceeds_tenth(
+def test_select_best_strategy_keeps_top_sharpe_when_gap_exceeds_tenth(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
@@ -100,7 +101,7 @@ def test_select_best_pass_strategy_keeps_top_sharpe_when_gap_exceeds_tenth(
         annual_return=0.31,
     )
 
-    result = ni.select_best_pass_strategy(session)
+    result = ni.select_best_strategy(session)
 
     assert result.selected_branch_id == "near_pass_top"
     assert result.selected is not None
@@ -108,7 +109,7 @@ def test_select_best_pass_strategy_keeps_top_sharpe_when_gap_exceeds_tenth(
     assert result.selected.selection_metric_values["pass_rate"] == 8 / 9
 
 
-def test_select_best_pass_strategy_sorts_by_sharpe_return_drawdown_then_latest(
+def test_select_best_strategy_sorts_by_sharpe_return_drawdown_then_latest(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
@@ -153,14 +154,14 @@ def test_select_best_pass_strategy_sorts_by_sharpe_return_drawdown_then_latest(
             },
         )
 
-    result = ni.select_best_pass_strategy(session)
+    result = ni.select_best_strategy(session)
 
     assert result.selected_branch_id == "later"
     assert result.selected is not None
     assert result.selected.session_round_index == 5
 
 
-def test_select_best_pass_strategy_can_host_discarded_fail_validation_rounds(
+def test_select_best_strategy_can_host_discarded_fail_validation_rounds(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("AAPL", "aapl-v1", tmp_path / "research")
@@ -203,7 +204,7 @@ def test_select_best_pass_strategy_can_host_discarded_fail_validation_rounds(
             },
         )
 
-    result = ni.select_best_pass_strategy(session)
+    result = ni.select_best_strategy(session)
 
     assert result.skip_reason == ""
     assert result.validation_round_count == 2
@@ -235,13 +236,13 @@ def test_best_strategy_report_payload_is_read_only_for_stop_reports(
 
     payload = ni.best_strategy_report_payload(session)
 
-    assert payload["schema"] == "abel-invest.best-strategy/v1"
+    assert payload["schema"] == "abel-invest.best-strategy-report/v1"
     assert payload["status"] == "selected"
-    assert payload["branchId"] == "risk_sized_trend"
-    assert payload["roundId"] == "round-001"
-    assert payload["artifactExported"] is False
-    assert payload["artifactUploadSkipped"] is True
-    assert payload["promotionStarted"] is False
+    assert payload["strategy"] == {
+        "idea": "risk_sized_trend round-001",
+        "branchId": "risk_sized_trend",
+        "roundId": "round-001",
+    }
     assert payload["metrics"]["totalReturn"] == 0.42
     assert payload["metrics"]["sharpe"] == 1.7
     assert payload["metrics"]["maxDrawdown"] == -0.055
@@ -249,12 +250,40 @@ def test_best_strategy_report_payload_is_read_only_for_stop_reports(
         "start": "2020-01-01",
         "end": "2020-12-31",
     }
-    assert payload["selectionPolicy"]["rule"].startswith("sharpe_desc")
+    guidance = payload["reportGuidance"]
+    assert guidance["purpose"] == "write_final_user_report"
+    assert guidance["useSelectedStrategyExactly"] is True
+    assert guidance["sessionReviewEligible"] is True
+    assert "binary outcome" in guidance["validationFraming"]
+    assert "PASS/FAIL labels or gate status" in guidance["doNotInclude"]
+    assert "raw validation score" in guidance["doNotInclude"]
+    assert "DSR, K, or search-trial diagnostics" in guidance["doNotInclude"]
+    assert (
+        "free-form next search directions after entering final report"
+        in guidance["doNotInclude"]
+    )
+    assert "limitations" in payload["robustness"]
+    payload_without_guidance = {**payload, "reportGuidance": {}}
+    payload_text = json.dumps(payload_without_guidance)
+    for leaked_key in [
+        "artifactExported",
+        "artifactUploadSkipped",
+        "promotionStarted",
+        "selectionPolicy",
+        "skipReason",
+        "verdict",
+        "score",
+        "passRate",
+        "paths",
+    ]:
+        assert leaked_key not in payload_text
+    for leaked_term in ["PASS", "FAIL", "gate", "Edge verdict"]:
+        assert leaked_term not in payload_text
     assert not (session / "strategy_artifacts").exists()
     assert not (branch / "promotions").exists()
 
 
-def test_select_best_pass_strategy_returns_skip_when_no_validation(tmp_path: Path) -> None:
+def test_select_best_strategy_returns_skip_when_no_validation(tmp_path: Path) -> None:
     session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
     branch = ni.init_branch_dir(session, "regime_switch")
     _write_strategy_result_row(
@@ -267,15 +296,15 @@ def test_select_best_pass_strategy_returns_skip_when_no_validation(tmp_path: Pat
         max_dd=-0.1654,
     )
 
-    result = ni.select_best_pass_strategy(session)
+    result = ni.select_best_strategy(session)
 
     assert result.selected is None
     assert result.skip_reason == "no_validation_strategy"
-    assert result.pass_round_count == 0
+    assert result.validation_round_count == 0
     assert result.eligible_count == 0
 
 
-def test_select_best_pass_strategy_skips_unhostable_validation_rounds(
+def test_select_best_strategy_skips_unhostable_validation_rounds(
     tmp_path: Path,
 ) -> None:
     session = ni.init_session_dir("MSFT", "msft-v1", tmp_path / "research")
@@ -306,11 +335,11 @@ def test_select_best_pass_strategy_skips_unhostable_validation_rounds(
         },
     )
 
-    result = ni.select_best_pass_strategy(session)
+    result = ni.select_best_strategy(session)
 
     assert result.selected is None
     assert result.skip_reason == "no_hostable_validation_strategy"
-    assert result.pass_round_count == 1
+    assert result.validation_round_count == 1
     assert result.eligible_count == 0
 
 
@@ -336,7 +365,7 @@ def test_build_strategy_artifact_manifest_uses_router_contract_fields(
         encoding="utf-8",
     )
 
-    selection = ni.select_best_pass_strategy(session)
+    selection = ni.select_best_strategy(session)
     assert selection.selected is not None
     manifest = ni.build_strategy_artifact_manifest(
         selection.selected,
@@ -354,7 +383,7 @@ def test_build_strategy_artifact_manifest_uses_router_contract_fields(
         "ticker": "TSLA",
         "branchId": "momentum_lead",
         "roundId": "round-006",
-        "selectionMode": "auto_best_validation_by_pass_rate",
+        "selectionMode": "auto_best_strategy",
         "selectionScope": "session",
         "selectionMetricOrder": ["pass_rate", "sharpe", "calmar", "max_dd"],
         "selectionMetricValues": {
@@ -464,7 +493,7 @@ def test_build_strategy_artifact_manifest_requires_trade_log(
         max_dd=-0.1278,
     )
 
-    selection = ni.select_best_pass_strategy(session)
+    selection = ni.select_best_strategy(session)
     assert selection.selected is not None
     with pytest.raises(RuntimeError, match="edge/trade-log.csv"):
         ni.build_strategy_artifact_manifest(
@@ -557,7 +586,7 @@ def test_export_selected_strategy_artifact_writes_local_bundle(
     ]
     assert (
         manifest["source"]["selectionMode"]
-        == "auto_best_validation_by_pass_rate"
+        == "auto_best_strategy"
     )
     assert manifest["source"]["selectionScope"] == "session"
     assert manifest["promotion"]["mode"] == "agent_paper_contract"

@@ -289,19 +289,21 @@ Then run the branch preflight and recorded round:
 ./.venv/bin/abel-invest run-branch --branch research/tsla/tsla-v1/branches/<chosen-branch> -d "candidate search result"
 ```
 
-After every recorded round, keep `exploration_path.md` covered with ledger ref,
-chosen path, compact reason, Edge feedback, and artifact refs before another
-recorded round.
+After every recorded round, follow the `Decision checkpoint` printed by
+`run-branch`: either update `exploration_path.md` with ledger ref, chosen path,
+compact reason, Edge feedback, and artifact refs before continuing a concrete
+exploration action, or enter final report.
 
 When exploration enters Completed, if at least one real candidate strategy round
-has been recorded, summarize the best strategy with the read-only selector:
+has been recorded, summarize the selected strategy with the read-only final
+report handoff:
 
 ```bash
 ./.venv/bin/abel-invest best-strategy --session research/tsla/tsla-v1 --json
 ```
 
-This command is read-only: it selects the current best session strategy without
-exporting, uploading, or promoting artifacts.
+This command is read-only: it prepares the stop-report payload and report
+guidance without exporting, uploading, or promoting artifacts.
 
 Then ask the user whether to create a session review page. Only after getting
 agreement, run:
@@ -324,9 +326,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - target-only candidates are baselines, seeds, ablations, and competitors for
   measuring graph-derived marginal contribution, not the default main lane when
   graph-derived data is live and unsearched
-- every recorded round requires an `exploration_path.md` entry with ledger ref,
-  chosen path, compact reason, Edge feedback, and artifact refs before the next
-  recorded round
+- every recorded round ends with a `Decision checkpoint`; continue only after
+  `exploration_path.md` is covered, or enter final report with `best-strategy`
 - every next Edge run should be chosen after reading `exploration_path.md` and
   the latest Edge result; `run-branch` appends a concise entry there
 
@@ -350,9 +351,8 @@ Use that path as orientation, not as a rigid script. The important boundary is:
 - `prepare-branch` should run before a recorded round
 - `frontier.md` reports input realization: declared graph-supported inputs only
   count as realized when the engine reads prepared graph inputs
-- `best-strategy` is the read-only entrypoint for stop reports: it selects the
-  current best session strategy, including near-tie reliability tie-breaks,
-  without exporting, uploading, or promoting artifacts
+- `best-strategy` is the read-only entrypoint for stop reports: it prepares the
+  final-report handoff without exporting, uploading, or promoting artifacts
 - `visualize-session` is the default composite entrypoint for session
   visualization: it creates an online session view and, when a hostable
   validation strategy is available, includes selected strategy artifact
@@ -469,7 +469,9 @@ file-organization fact, not as proof of search breadth. Use `exploration_path.md
 as the single human-facing exploration log: record each chosen path, compact
 reason, Edge feedback, and ledger ref. Read `exploration_path.md` and the latest
 Edge result before choosing the next Edge run; after Edge feedback, keep the
-path updated. Check path coverage before starting another round. Check input
+path updated. After every recorded round, follow the `Decision checkpoint`
+printed by `run-branch`: either continue a concrete exploration action or enter
+final report. Check path coverage before starting another round. Check input
 realization before claiming graph-derived contribution. Stay in Exploring until
 the objective is met or the ledger supports unable-to-reach; if a concrete next
 search action remains, keep Exploring. Treat Edge failures as diagnostics, not
@@ -480,12 +482,13 @@ If interrupted or blocked, do not enter Completed or ask for visualization.
 the online session view automatically; a recorded candidate strategy round makes
 the session eligible for visualization, but visualization is not a required step
 after every round. When exploration enters Completed, use
-`best-strategy --session <session> --json` to select the best strategy for the
-stop report; it is read-only and does not export, upload, or promote artifacts.
-Report its selected branch/round exactly instead of manually walking
-`results.tsv` or branch folders to choose the best session strategy. Ask the
-user whether to create a session review page if a recorded candidate exists. If
-the user agrees or explicitly asks to publish the session review page, run
+`best-strategy --session <session> --json` as the final-report handoff; it is
+read-only and does not export, upload, or promote artifacts. Follow its
+`reportGuidance` and report its selected strategy exactly instead of manually
+walking `results.tsv` or branch folders to choose the best session strategy.
+Ask the user whether to create a session review page if the handoff says the
+session is eligible. If the user agrees or explicitly asks to publish the
+session review page, run
 `visualize-session --session <session>` before inspecting Abel Invest
 implementation internals. It builds the view from the session folder and, when
 available, includes selected strategy artifact upload/promotion; if no hostable

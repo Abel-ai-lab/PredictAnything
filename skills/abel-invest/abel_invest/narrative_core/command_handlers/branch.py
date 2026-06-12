@@ -107,24 +107,33 @@ SELECTION_TRIALS_AUDIT_WARNING = (
 )
 
 
-STATE_SELF_CHECK_LINES = (
-    "State self-check:",
-    "  If the objective is unmet and exhaustion is not ledger-supported, stay in Exploring and take the next concrete search action.",
-    "  Treat Edge failures as diagnostics, not the next objective; keep seeking higher-ceiling Sharpe/return instead of only repairing gates into conservative branches.",
-    "  If a concrete next action remains, do not stop; if ledger-supported unable-to-reach, enter Completed and run best-strategy before the final answer.",
-    "  Use an incomplete note only for interruption or blockers.",
-)
-
-
 def selection_trials_audit_warning(selection_trials: int) -> str | None:
     if selection_trials <= 1:
         return None
     return SELECTION_TRIALS_AUDIT_WARNING
 
 
-def print_state_self_check() -> None:
-    for line in STATE_SELF_CHECK_LINES:
-        print(line)
+def print_round_decision_checkpoint(
+    *,
+    session: Path,
+    branch: Path,
+    round_id: str,
+) -> None:
+    command_prefix = command_prefix_for_path(branch)
+    print("Decision checkpoint:")
+    print("  Choose exactly one next action.")
+    print(
+        f"  1. Continue exploration: update {session / EXPLORATION_PATH_FILENAME} "
+        f"with ledger:{branch.name}:{round_id}, then run the next concrete experiment/debug/branch action."
+    )
+    print(
+        "  2. Final report: if the objective is met or the ledger supports "
+        f"stopping, run `{command_prefix} best-strategy --session {session} --json`."
+    )
+    print(
+        "  Do not send a final user report that says exploration is incomplete "
+        "while also naming the next experiment."
+    )
 
 
 def prepare_branch_inputs(args: argparse.Namespace) -> int:
@@ -652,15 +661,7 @@ def run_branch_round(args: argparse.Namespace) -> int:
         ],
     )
     print("")
-    print("From here:")
-    print(
-        f"  update {session / EXPLORATION_PATH_FILENAME} with ledger:{branch.name}:{round_id} "
-        "before another recorded round"
-    )
-    print(f"  read {session / EXPLORATION_PATH_FILENAME} and frontier.md before choosing continue/pivot/stop")
-    print(f"  if continuing this branch, run abel-invest debug-branch --branch {branch} before the next recorded round")
-    print("")
-    print_state_self_check()
+    print_round_decision_checkpoint(session=session, branch=branch, round_id=round_id)
     return 0
 
 
