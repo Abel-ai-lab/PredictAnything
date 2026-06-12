@@ -67,7 +67,7 @@ STRATEGY_ARTIFACT_ENTRYPOINT = "strategy/strategy.py"
 STRATEGY_ARTIFACT_CLASS_NAME = "BranchEngine"
 STRATEGY_ARTIFACT_PAPER_MODE = "paper_signal"
 STRATEGY_ARTIFACT_WORKSPACE_KIND = "abel-invest"
-SELECTION_MODE_AUTO_BEST_PASS = "auto_best_validation_by_pass_rate"
+SELECTION_MODE_AUTO_BEST_STRATEGY = "auto_best_strategy"
 SELECTION_MODE_EXPLICIT_BRANCH_ROUND = "explicit_branch_round"
 SELECTION_SCOPE_SESSION = "session"
 SELECTION_SCOPE_BRANCH = "branch"
@@ -85,8 +85,8 @@ SELECTION_MANIFEST_METRIC_ORDER = (
     "max_dd",
 )
 SELECTION_NEAR_TIE_SHARPE_DELTA = 0.1
-SELECTION_RULE_AUTO_BEST_PASS = "sharpe_desc_near_tie_full_pass_v4"
-SELECTION_REASON_AUTO_BEST_PASS = (
+SELECTION_RULE_AUTO_BEST_STRATEGY = "sharpe_desc_near_tie_full_pass_v4"
+SELECTION_REASON_AUTO_BEST_STRATEGY = (
     "Sharpe-first session selector; when Sharpe is within 0.10, use validation "
     "reliability as a near-tie breaker, then annualized return, max-drawdown "
     "magnitude, validation pass rate, and latest recorded round"
@@ -189,7 +189,7 @@ class StrategyArtifactCandidate:
     edge_result: dict[str, Any]
     selection_rank: int
     session_round_index: int = 0
-    selection_mode: str = SELECTION_MODE_AUTO_BEST_PASS
+    selection_mode: str = SELECTION_MODE_AUTO_BEST_STRATEGY
     selection_scope: str = SELECTION_SCOPE_SESSION
 
     @property
@@ -209,12 +209,8 @@ class StrategyArtifactCandidate:
 class StrategySelectionResult:
     selected: StrategyArtifactCandidate | None
     skip_reason: str
-    pass_round_count: int
+    validation_round_count: int
     eligible_count: int
-
-    @property
-    def validation_round_count(self) -> int:
-        return self.pass_round_count
 
     @property
     def selected_branch_id(self) -> str | None:
@@ -225,7 +221,7 @@ class StrategySelectionResult:
         return self.selected.round_id if self.selected is not None else None
 
 
-def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
+def select_best_strategy(session: Path) -> StrategySelectionResult:
     """Select the best ranked hostable validation strategy in one Abel Invest session."""
 
     session = resolve_workspace_arg_path(session).resolve()
@@ -238,7 +234,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
         return StrategySelectionResult(
             selected=None,
             skip_reason="no_validation_strategy",
-            pass_round_count=0,
+            validation_round_count=0,
             eligible_count=0,
         )
 
@@ -261,7 +257,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
         return StrategySelectionResult(
             selected=None,
             skip_reason="no_hostable_validation_strategy",
-            pass_round_count=len(validation_rows),
+            validation_round_count=len(validation_rows),
             eligible_count=0,
         )
 
@@ -269,7 +265,7 @@ def select_best_pass_strategy(session: Path) -> StrategySelectionResult:
     return StrategySelectionResult(
         selected=selected,
         skip_reason="",
-        pass_round_count=len(validation_rows),
+        validation_round_count=len(validation_rows),
         eligible_count=len(candidates),
     )
 
@@ -295,7 +291,7 @@ def select_branch_promotion_candidate(
             return StrategySelectionResult(
                 selected=None,
                 skip_reason="branch_round_not_validation",
-                pass_round_count=len(validation_rows),
+                validation_round_count=len(validation_rows),
                 eligible_count=0,
             )
         target_rows = matched
@@ -305,14 +301,14 @@ def select_branch_promotion_candidate(
             return StrategySelectionResult(
                 selected=None,
                 skip_reason="no_validation_round_in_branch",
-                pass_round_count=0,
+                validation_round_count=0,
                 eligible_count=0,
             )
         if len(target_rows) > 1:
             return StrategySelectionResult(
                 selected=None,
                 skip_reason="ambiguous_branch_promotion_round",
-                pass_round_count=len(target_rows),
+                validation_round_count=len(target_rows),
                 eligible_count=0,
             )
 
@@ -333,14 +329,14 @@ def select_branch_promotion_candidate(
         return StrategySelectionResult(
             selected=None,
             skip_reason="no_hostable_branch_round",
-            pass_round_count=len(validation_rows),
+            validation_round_count=len(validation_rows),
             eligible_count=0,
         )
     selected = _with_rank(candidates[0], selection_rank=1)
     return StrategySelectionResult(
         selected=selected,
         skip_reason="",
-        pass_round_count=len(validation_rows),
+        validation_round_count=len(validation_rows),
         eligible_count=len(candidates),
     )
 
@@ -349,7 +345,7 @@ def best_strategy_report_payload(session: Path) -> dict[str, Any]:
     """Return the compact final-report handoff for stop reports."""
 
     session = resolve_workspace_arg_path(session).resolve()
-    selection = select_best_pass_strategy(session)
+    selection = select_best_strategy(session)
     selected = selection.selected
     payload: dict[str, Any] = {
         "schema": BEST_STRATEGY_REPORT_SCHEMA,
@@ -524,7 +520,7 @@ def build_strategy_artifact_manifest(
             "selectionMode": candidate.selection_mode,
             "selectionScope": candidate.selection_scope,
             "selectionMetricOrder": list(SELECTION_MANIFEST_METRIC_ORDER)
-            if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS
+            if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_STRATEGY
             else [],
             "selectionMetricValues": candidate.selection_metric_values,
             "selectionRank": candidate.selection_rank,
@@ -578,7 +574,7 @@ def export_selected_strategy_artifact(
 ) -> dict[str, Any]:
     """Export the selected hosted strategy artifact locally without uploading it."""
 
-    selection = select_best_pass_strategy(session)
+    selection = select_best_strategy(session)
     if selection.selected is None:
         return _artifact_skip_result(selection.skip_reason)
 
@@ -887,7 +883,7 @@ def _candidate_from_row(
     session: Path,
     branch: Path,
     row: dict[str, str],
-    selection_mode: str = SELECTION_MODE_AUTO_BEST_PASS,
+    selection_mode: str = SELECTION_MODE_AUTO_BEST_STRATEGY,
     selection_scope: str = SELECTION_SCOPE_SESSION,
     session_round_index: int = 0,
 ) -> StrategyArtifactCandidate | None:
@@ -1043,7 +1039,7 @@ def _selection_payload(candidate: StrategyArtifactCandidate | None) -> dict[str,
         return {}
     mode = (
         "auto_best"
-        if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS
+        if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_STRATEGY
         else "explicit"
     )
     return {
@@ -1053,13 +1049,13 @@ def _selection_payload(candidate: StrategyArtifactCandidate | None) -> dict[str,
         "branchId": candidate.branch_id,
         "roundId": candidate.round_id,
         "rank": candidate.selection_rank,
-        "rule": SELECTION_RULE_AUTO_BEST_PASS if mode == "auto_best" else "",
-        "reason": SELECTION_REASON_AUTO_BEST_PASS if mode == "auto_best" else "",
+        "rule": SELECTION_RULE_AUTO_BEST_STRATEGY if mode == "auto_best" else "",
+        "reason": SELECTION_REASON_AUTO_BEST_STRATEGY if mode == "auto_best" else "",
     }
 
 
 def _promotion_rerun_command(candidate: StrategyArtifactCandidate) -> str:
-    if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_PASS:
+    if candidate.selection_mode == SELECTION_MODE_AUTO_BEST_STRATEGY:
         return f"abel-invest export-strategy-artifact --session {candidate.session}"
     command = f"abel-invest promote-strategy --branch {candidate.branch}"
     if candidate.round_id:

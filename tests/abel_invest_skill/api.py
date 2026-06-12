@@ -54,7 +54,7 @@ from abel_invest.narrative_core.strategy_artifacts import (
     export_selected_strategy_artifact,
     promote_branch_strategy,
     select_branch_promotion_candidate,
-    select_best_pass_strategy,
+    select_best_strategy,
 )
 from abel_invest.narrative_core.evidence.evidence import evidence_runtime_facts
 from abel_invest.narrative_core.io import append_tsv_row
